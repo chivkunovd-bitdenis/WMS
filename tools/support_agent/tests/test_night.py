@@ -897,62 +897,106 @@ def test_modified_contract_source_runs_and_continues_to_independent_review(
     assert not env.llm.calls
 
 
-def test_contract_rename_runs_destination_and_missing_test_needs_executable_replacement(
+def test_contract_rename_chains_and_added_test_paths_run_without_count_floor(
     env: Any, tmp_path: Path,
 ) -> None:
     runner, tid, root = _tester_repo(env, tmp_path)
     old_path = "backend/tests/test_old.py"
     new_path = "backend/tests/test_new.py"
-    (root / old_path).unlink(missing_ok=True)
-    (root / new_path).write_text("def test_rule(): assert True\n")
+    added_final = "backend/tests/test_added_final.py"
+    existing = "backend/tests/test_existing.py"
+    for path in (new_path, added_final, existing):
+        (root / path).write_text("def test_rule(): assert True\n")
     task = runner._state(tid)["tasks"]["WMS-700"]
-    task.update(tests=[old_path], contract_commit="a" * 40,
+    task.update(tests=[old_path, existing], contract_commit="a" * 40,
                 contract_hashes={old_path: "old-digest"})
     original_git = runner.hotfix.git
 
     def renamed_git(*args: str, cwd: str | Path | None = None) -> str:
-        if args[:2] == ("log", "--first-parent"):
-            return "b" * 40
-        if args[:2] == ("diff-tree", "--no-commit-id"):
-            return f"R100\t{old_path}\t{new_path}\n"
+        if args[:2] == ("diff", "--no-renames"):
+            # Net tree view covers old→middle→new and added→renamed chains.
+            return f"A\t{new_path}\nA\t{added_final}\nM\t{existing}\n"
         return original_git(*args, cwd=cwd)
 
     runner.hotfix.git = renamed_git  # type: ignore[method-assign]
     runner._refresh_contract_tests(task)
     runner._assert_contract(task)
-    assert task["tests"] == [new_path]
+    assert set(task["tests"]) == {new_path, added_final, existing}
     assert task["contract_changed"] is True
     assert runner._run_contract(task) == []
-    assert any(call[0] == "test" and "tests/test_new.py" in call[1]
-               for call in runner.hotfix.calls)
+    tested = next(call[1] for call in runner.hotfix.calls if call[0] == "test")
+    assert {"tests/test_new.py", "tests/test_added_final.py", "tests/test_existing.py"} <= set(tested)
 
     fixture_path = "backend/tests/fixtures/sample.json"
     (root / fixture_path).parent.mkdir(parents=True, exist_ok=True)
     (root / fixture_path).write_text("{}\n")
 
     def fixture_git(*args: str, cwd: str | Path | None = None) -> str:
-        if args[:2] == ("log", "--first-parent"):
-            return "b" * 40
-        if args[:2] == ("diff-tree", "--no-commit-id"):
-            return f"A\t{fixture_path}\n"
+        if args[:2] == ("diff", "--no-renames"):
+            return f"A\t{fixture_path}\nM\t{existing}\n"
         return original_git(*args, cwd=cwd)
 
     runner.hotfix.git = fixture_git  # type: ignore[method-assign]
     runner._refresh_contract_tests(task)
     runner._assert_contract(task)
     assert task["contract_paths_changed"] is True and task["contract_changed"] is True
-    assert task["tests"] == [new_path]
+    assert set(task["tests"]) == {new_path, added_final, existing}
+
+    peer = "backend/tests/test_peer.py"
+    (root / peer).write_text("def test_peer(): assert True\n")
+    (root / new_path).unlink()
+    task["tests"] = [new_path, peer]
+
+    def consolidated_git(*args: str, cwd: str | Path | None = None) -> str:
+        if args[:2] == ("diff", "--no-renames"):
+            return f"D\t{new_path}\nM\t{peer}\n"
+        return original_git(*args, cwd=cwd)
+
+    runner.hotfix.git = consolidated_git  # type: ignore[method-assign]
+    runner._refresh_contract_tests(task)
+    assert task["tests"] == [peer]
+    (root / peer).unlink()
 
     def deleted_git(*args: str, cwd: str | Path | None = None) -> str:
-        if args[:2] == ("log", "--first-parent"):
-            return "b" * 40
-        if args[:2] == ("diff-tree", "--no-commit-id"):
-            return f"D\t{new_path}\nA\tbackend/tests/conftest.py\n"
+        if args[:2] == ("diff", "--no-renames"):
+            return f"D\t{peer}\nA\tbackend/tests/conftest.py\n"
         return original_git(*args, cwd=cwd)
 
     runner.hotfix.git = deleted_git  # type: ignore[method-assign]
-    with pytest.raises(StepFailed, match="без замены"):
+    with pytest.raises(StepFailed, match="не содержит исполняемых тестов"):
         runner._refresh_contract_tests(task)
+
+
+def test_task_checks_preserves_fixture_change_for_review(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    test_path = "backend/tests/test_frozen.py"
+    fixture_path = "backend/tests/fixtures/sample.json"
+    test_file = root / test_path
+    test_file.write_text("def test_rule(): assert True\n")
+    fixture = root / fixture_path
+    fixture.parent.mkdir(parents=True, exist_ok=True)
+    fixture.write_text("{}\n")
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", tests=[test_path], contract_commit="a" * 40,
+                contract_hashes=runner._hashes(task, [test_path]))
+    runner._save(tid, state)
+    original_git = runner.hotfix.git
+
+    def fixture_git(*args: str, cwd: str | Path | None = None) -> str:
+        if args[:2] == ("diff", "--no-renames"):
+            return f"A\t{fixture_path}\n"
+        return original_git(*args, cwd=cwd)
+
+    runner.hotfix.git = fixture_git  # type: ignore[method-assign]
+    runner._sync_task_base = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    runner._run_contract = lambda _task: []  # type: ignore[method-assign]
+
+    state = runner._state(tid)
+    runner._task_checks(tid, state, state["tasks"]["WMS-700"])
+
+    saved = runner._state(tid)["tasks"]["WMS-700"]
+    assert saved["step"] == "review" and saved["contract_changed"] is True
 
 
 def test_independent_review_is_prompted_to_check_changed_test_behavior(env: Any, tmp_path: Path) -> None:

@@ -435,7 +435,6 @@ class NightRunner:
                                                     f"{reason}"))
             self._save(tid, state)
             return
-        task["contract_changed"] = self._hashes(task, task.get("tests") or []) != task.get("contract_hashes")
         task["step"] = "review"
         self._save(tid, state)
 
@@ -931,65 +930,37 @@ class NightRunner:
     def _refresh_contract_tests(self, task: dict[str, Any]) -> None:
         """Run the current test paths after an ordinary reviewed test/fixture edit.
 
-        Keep unchanged contract paths, follow Git-detected renames, and include
-        newly added executable tests from task commits. First-parent non-merge
-        commits exclude unrelated tests imported by an updated trusted etalon.
-        A deleted executable contract without a replacement still stops before
-        local checks; final CI enforces current mandatory cases and review checks
-        that their behavior remains.
+        Keep original paths still present in HEAD and include current executable
+        paths added or changed since the test contract. Disabling rename detection
+        makes the destination of a rename an ordinary added path. A deleted
+        contract with no executable tests left still stops before local checks.
         """
         contract_commit = str(task.get("contract_commit") or "")
         if not re.fullmatch(r"[0-9a-fA-F]{40,64}", contract_commit):
             return
-        commits = self.hotfix.git(
-            "log", "--first-parent", "--no-merges", "--format=%H",
-            f"{contract_commit}..HEAD", cwd=task["path"],
-        ).splitlines()
+        result = self.hotfix.git(
+            "diff", "--no-renames", "--name-status", contract_commit, "HEAD", "--",
+            cwd=task["path"],
+        )
         original = list(dict.fromkeys(str(path) for path in task.get("tests") or []))
-        existing = set(original)
-        replacements: dict[str, str] = {}
-        added: list[str] = []
-        deleted_executable: list[str] = []
+        deleted: set[str] = set()
+        added_or_changed: set[str] = set()
         changed_test_paths = False
-        for commit in commits:
-            result = self.hotfix.git(
-                "diff-tree", "--no-commit-id", "--name-status", "--find-renames",
-                "-r", commit, cwd=task["path"],
-            )
-            for line in result.splitlines():
-                fields = line.split("\t")
-                if not fields:
-                    continue
-                status = fields[0]
-                changed_test_paths = changed_test_paths or any(
-                    TEST_PATH_RE.search(path) for path in fields[1:]
-                )
-                if status.startswith("R") and len(fields) == 3:
-                    old, new = fields[1:]
-                    if old in existing:
-                        replacements[old] = new
-                elif status == "D" and len(fields) == 2:
-                    old = fields[1]
-                    if old in existing and self._executable_test(old):
-                        deleted_executable.append(old)
-                elif status == "A" and len(fields) == 2:
-                    new = fields[1]
-                    if self._executable_test(new):
-                        added.append(new)
-
-        if len(added) < len(deleted_executable):
-            raise StepFailed(
-                "контрактный тест удалён без замены; сохрани обязательное поведение "
-                "в текущих тестах"
-            )
+        for line in result.splitlines():
+            fields = line.split("\t")
+            if len(fields) != 2:
+                continue
+            status, path = fields
+            changed_test_paths = changed_test_paths or bool(TEST_PATH_RE.search(path))
+            if status in ("A", "M", "C") and self._executable_test(path):
+                added_or_changed.add(path)
+            elif status == "D":
+                deleted.add(path)
 
         root = Path(task["path"])
         refreshed: list[str] = []
-        for path in original:
-            current = replacements.get(path, path)
-            if self._safe_rel(current) and (root / current).is_file():
-                refreshed.append(current)
-        for path in added:
+        paths = [path for path in original if path not in deleted] + sorted(added_or_changed)
+        for path in paths:
             if self._safe_rel(path) and (root / path).is_file():
                 refreshed.append(path)
         refreshed = list(dict.fromkeys(refreshed))
