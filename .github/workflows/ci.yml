@@ -534,6 +534,13 @@ jobs:
           python-version: "3.11"
       - name: Install infrastructure test dependencies
         run: python -m pip install pytest pytest-xdist
+      - name: Install nightly controller test dependencies
+        run: python -m pip install -r tools/support_agent/requirements.txt
+      - name: Execute named nightly controller contracts
+        run: >-
+          PYTHONPATH=tools/support_agent python -m pytest -q
+          tools/support_agent/tests/test_night.py
+          --junitxml="$RUNNER_TEMP/night-controller.xml"
       - name: Verify whole candidate against the accepted product reference
         run: python scripts/ci/product_scope.py --root . --trusted-ref bb9cb79979f8d00bba217bd97654b6afcb2ad8a0
       - name: Infrastructure tests (not business guards)
@@ -570,6 +577,7 @@ jobs:
             ${{ runner.temp }}/product-scope-receipt.json
             ${{ runner.temp }}/ci-shards.xml
             ${{ runner.temp }}/docgate-687.xml
+            ${{ runner.temp }}/night-controller.xml
           if-no-files-found: error
           retention-days: 14
       - name: Verify against the checker and manifest from trusted BASE
@@ -638,6 +646,9 @@ jobs:
     if: always()
     timeout-minutes: 5
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -646,46 +657,59 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Select reports from successful executions in this run
+        id: select
+        if: always() && needs.scope.outputs.run_full == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python scripts/ci/select_process_artifacts.py --output "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
-        if: needs.scope.outputs.run_full == 'true'
+        id: download-backend
+        if: always() && steps.select.outcome == 'success' && needs.scope.outputs.run_full == 'true'
         with:
-          name: backend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ steps.select.outputs.backend }}
           path: ${{ runner.temp }}/process-proof
       - uses: actions/download-artifact@v4
-        if: needs.scope.outputs.run_full == 'true'
+        id: download-frontend
+        if: always() && steps.select.outcome == 'success' && needs.scope.outputs.run_full == 'true'
         with:
-          name: frontend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ steps.select.outputs.frontend_build }}
           path: ${{ runner.temp }}/process-proof
       - uses: actions/download-artifact@v4
-        if: needs.scope.outputs.run_full == 'true'
+        id: download-windows
+        if: always() && steps.select.outcome == 'success' && needs.scope.outputs.run_full == 'true'
         with:
-          name: printer-windows-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ steps.select.outputs.printer_windows }}
           path: ${{ runner.temp }}/process-proof
       - uses: actions/download-artifact@v4
-        if: needs.scope.outputs.run_full == 'true'
+        id: download-print
+        if: always() && steps.select.outcome == 'success' && needs.scope.outputs.run_full == 'true'
         with:
-          name: release-print-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ steps.select.outputs.print_regressions }}
           path: ${{ runner.temp }}/process-proof/print
       - uses: actions/download-artifact@v4
-        if: needs.scope.outputs.run_full == 'true'
+        id: download-guards
+        if: always() && steps.select.outcome == 'success' && needs.scope.outputs.run_full == 'true'
         with:
-          name: guard-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ steps.select.outputs.guards }}
           path: ${{ runner.temp }}/process-proof
       - uses: actions/download-artifact@v4
-        if: needs.scope.outputs.run_full == 'true'
+        id: download-wms686
+        if: always() && steps.select.outcome == 'success' && needs.scope.outputs.run_full == 'true'
         with:
-          name: wms686-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ steps.select.outputs.wms686_mockup }}
           path: ${{ runner.temp }}/process-proof
       - name: Verify every required named case and bind evidence to this attempt
         env:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
           CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        if: needs.scope.outputs.run_full == 'true'
+        if: always() && steps.select.outcome == 'success' && needs.scope.outputs.run_full == 'true' && steps.download-backend.outcome == 'success' && steps.download-frontend.outcome == 'success' && steps.download-windows.outcome == 'success' && steps.download-print.outcome == 'success' && steps.download-guards.outcome == 'success' && steps.download-wms686.outcome == 'success'
         run: |
           set -euo pipefail
           python scripts/ci/build_process_proof.py --root "$GITHUB_WORKSPACE" --reports "$RUNNER_TEMP/process-proof" --base "$BASE_SHA"
       - name: Bind prose-only candidate and skip unchanged-code suite evidence
-        if: needs.scope.outputs.run_full != 'true'
+        if: always() && needs.scope.outputs.run_full != 'true'
         env:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
           CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

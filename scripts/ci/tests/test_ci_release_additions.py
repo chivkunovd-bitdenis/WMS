@@ -4,6 +4,8 @@ import re
 import unittest
 from pathlib import Path
 
+from scripts.ci.select_process_artifacts import PRODUCERS, SelectionError, select_artifacts
+
 ROOT = Path(__file__).resolve().parents[3]
 SOURCE_BINDING = ROOT / 'scripts/ci/tests/fixtures/wms652_source_binding_transition.json'
 WMS686_RECEIPT = ROOT / 'scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json'
@@ -43,7 +45,9 @@ class ReleaseCommandContracts(unittest.TestCase):
         self.assertIn(receipt['tap_report'].replace('$RUNNER_TEMP', '${{ runner.temp }}'), job)
         self.assertIn('if-no-files-found: error', job)
         self.assertRegex(proof, rf'needs: \[[^\]]*\b{receipt["required_job"]}\b[^\]]*\]')
-        artifact_name = f"name: {receipt['artifact']}"
+        artifact_name = f"name: ${{{{ steps.select.outputs.wms686_mockup }}}}"
+        if artifact_name not in proof:
+            artifact_name = f"name: {receipt['artifact']}"
         self.assertIn(artifact_name, proof)
         download = proof.split(artifact_name, 1)[1].split('- uses:', 1)[0]
         self.assertIn(f"path: {receipt['proof_download_path']}", download)
@@ -135,7 +139,128 @@ class ReleaseCommandContracts(unittest.TestCase):
         self.assertIn('${{ runner.temp }}/frontend-all.json', artifact)
         self.assertIn('${{ runner.temp }}/wms517-mac.tap', artifact)
         proof = raw.split('\n  process-proof:\n', 1)[1]
-        self.assertIn('name: frontend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}', proof)
+        self.assertIn('name: ${{ steps.select.outputs.frontend_build }}', proof)
+
+    def test_nightly_controller_report_is_uploaded_and_required_by_manifest(self):
+        raw = (ROOT/'.github/workflows/ci.yml').read_text()
+        guards = raw.split('\n  guards:\n', 1)[1].split('\n  printer-windows:\n', 1)[0]
+        self.assertIn('tools/support_agent/tests/test_night.py', guards)
+        self.assertIn('--junitxml="$RUNNER_TEMP/night-controller.xml"', guards)
+        self.assertIn('${{ runner.temp }}/night-controller.xml', guards)
+        policy = json.loads((ROOT/'guards/PROCESS_CONTRACTS.json').read_text())
+        suite = policy['suites']['night-controller']
+        self.assertEqual(suite['report'], 'night-controller.xml')
+        self.assertTrue(suite['exact'])
+        self.assertTrue(suite['cases'])
+        self.assertEqual(len(suite['cases']), len(set(suite['cases'])))
+        self.assertTrue(all(case.startswith('tests.test_night::') for case in suite['cases']))
+
+    def test_actual_workflow_selects_exact_attempt_artifacts_with_read_only_api(self):
+        raw = (ROOT/'.github/workflows/ci.yml').read_text()
+        proof = raw.split('\n  process-proof:\n', 1)[1]
+        self.assertIn('actions: read', proof)
+        self.assertIn('scripts/ci/select_process_artifacts.py', proof)
+        self.assertIn('name: ${{ steps.select.outputs.backend }}', proof)
+        self.assertNotIn('name: backend-executed-contracts-${{ github.sha }}', proof)
+        self.assertEqual(proof.count("steps.select.outcome == 'success'"), 7)
+        for download in ['download-backend', 'download-frontend', 'download-windows',
+                         'download-print', 'download-guards', 'download-wms686']:
+            self.assertIn(f'steps.{download}.outcome == \'success\'', proof)
+
+    def _partial_rerun_fixture(self):
+        run_id, current_attempt = 777, 2
+        tested_sha = 'a' * 40
+        candidate_sha = 'b' * 40
+        old = {'started_at': '2026-10-08T09:43:55Z', 'completed_at': '2026-10-08T09:44:28Z',
+               'status': 'completed', 'conclusion': 'success'}
+        recent = {'started_at': '2026-10-08T09:59:15Z', 'completed_at': '2026-10-08T10:09:20Z',
+                  'status': 'completed', 'conclusion': 'success'}
+        attempts = [[], []]
+        artifacts = []
+        for name, prefix in PRODUCERS.items():
+            job1 = {**old, 'name': name, 'run_id': run_id, 'head_sha': candidate_sha,
+                    'run_attempt': 1}
+            job2 = {**(recent if name == 'print-regressions' else old), 'name': name,
+                    'run_id': run_id, 'head_sha': candidate_sha, 'run_attempt': 2}
+            attempts[0].append(job1)
+            attempts[1].append(job2)
+            selected_attempt = 2 if name == 'print-regressions' else 1
+            executed = recent if selected_attempt == 2 else old
+            artifacts.append({
+                'name': f'{prefix}-{tested_sha}-{run_id}-{selected_attempt}',
+                'expired': False,
+                'created_at': executed['completed_at'],
+                'workflow_run': {'id': run_id, 'head_sha': candidate_sha},
+            })
+        return dict(run_id=run_id, current_attempt=current_attempt, tested_sha=tested_sha,
+                    candidate_sha=candidate_sha, run={'id': run_id, 'head_sha': candidate_sha},
+                    job_attempts=attempts, artifacts=artifacts)
+
+    def test_partial_rerun_selects_mixed_successful_attempts_from_same_run(self):
+        fixture = self._partial_rerun_fixture()
+        selected = select_artifacts(**fixture)
+        self.assertTrue(selected['backend'].endswith('-777-1'))
+        self.assertTrue(selected['print-regressions'].endswith('-777-2'))
+
+    def test_partial_rerun_never_falls_back_when_repeated_job_report_is_missing(self):
+        fixture = self._partial_rerun_fixture()
+        fixture['artifacts'] = [a for a in fixture['artifacts']
+                                if not a['name'].startswith('release-print-')]
+        with self.assertRaisesRegex(SelectionError, 'Missing or ambiguous report'):
+            select_artifacts(**fixture)
+
+    def test_partial_rerun_rejects_failed_skipped_or_cancelled_latest_job(self):
+        for conclusion in ['failure', 'skipped', 'cancelled']:
+            with self.subTest(conclusion=conclusion):
+                fixture = self._partial_rerun_fixture()
+                job = next(job for job in fixture['job_attempts'][1]
+                           if job['name'] == 'print-regressions')
+                job['conclusion'] = conclusion
+                if conclusion != 'skipped':
+                    job['status'] = 'completed'
+                with self.assertRaisesRegex(SelectionError, 'did not succeed'):
+                    select_artifacts(**fixture)
+
+    def test_partial_rerun_rejects_cross_run_or_cross_sha_artifacts(self):
+        for field, value in [('id', 778), ('head_sha', 'c' * 40)]:
+            with self.subTest(field=field):
+                fixture = self._partial_rerun_fixture()
+                fixture['artifacts'][0]['workflow_run'][field] = value
+                with self.assertRaisesRegex(SelectionError, 'does not belong'):
+                    select_artifacts(**fixture)
+        fixture = self._partial_rerun_fixture()
+        fixture['run']['head_sha'] = 'c' * 40
+        with self.assertRaisesRegex(SelectionError, 'identity mismatch'):
+            select_artifacts(**fixture)
+
+    def test_cancelled_attempt_without_runner_can_be_replaced_by_successful_retry(self):
+        fixture = self._partial_rerun_fixture()
+        jobs = fixture['job_attempts']
+        for job in jobs[0]:
+            job.update(started_at=None, completed_at=None, status='completed', conclusion='cancelled')
+        for artifact in fixture['artifacts']:
+            parts = artifact['name'].rsplit('-', 1)
+            artifact['name'] = f'{parts[0]}-2'
+            artifact['created_at'] = '2026-10-08T10:09:20Z'
+        for job in jobs[1]:
+            job.update(started_at='2026-10-08T09:59:15Z',
+                       completed_at='2026-10-08T10:09:20Z')
+        selected = select_artifacts(**fixture)
+        self.assertTrue(all(value.endswith('-777-2') for value in selected.values()))
+
+    def test_latest_job_identity_or_pending_status_refuses_report(self):
+        for field, value in [('run_id', 778), ('head_sha', 'c' * 40), ('run_attempt', 1)]:
+            with self.subTest(field=field):
+                fixture = self._partial_rerun_fixture()
+                fixture['job_attempts'][1][0][field] = value
+                with self.assertRaisesRegex(SelectionError, 'job identity mismatch'):
+                    select_artifacts(**fixture)
+        fixture = self._partial_rerun_fixture()
+        job = next(job for job in fixture['job_attempts'][1]
+                   if job['name'] == 'print-regressions')
+        job.update(status='in_progress', conclusion=None, completed_at=None)
+        with self.assertRaisesRegex(SelectionError, 'did not succeed'):
+            select_artifacts(**fixture)
 
 
 if __name__ == '__main__':
