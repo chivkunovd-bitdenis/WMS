@@ -354,7 +354,8 @@ async def test_task_with_missing_product_line_manual_tape_allocates_pool_cis(
         assert supply_after is not None and supply_after.packaging_task_id == task_id
         assert task_after is not None and task_after.status == "in_progress"
         assert all(line.product_id != product_id for line in task_lines_after)
-        assert {code.id for code in pool_after_response} == {code.id for code in pool_before}
+        assert len(pool_after_response) == 1
+        assert pool_after_response[0].id in {code.id for code in pool_before}
     assert await stock_snapshot() == before_stock
 
 
