@@ -397,6 +397,8 @@ def reconcile_unconfirmed_native_delivery(journal: CaseJournal, store: Store, ow
             'чтобы не продублировать; проверьте исходный Telegram-чат клиента.'
         )
     status = CaseJournal._current_status(card)
+    if status in {'answer_sent', 'analysis_done'}:
+        status = 'working'
     journal.update_card(
         owner_bot, owner_chat_id, linked['topic_id'], linked['chat_id'],
         statuses={status: True}, event=event, event_key=event_key,
