@@ -637,6 +637,8 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
   function screen() {
     const generation = { current: 1 }
     const writeSeq = { current: 0 }
+    const freshWorkspaceGeneration = { current: null as number | null }
+    const pendingInitialWorkspace = { current: null as { generation: number; snapshot: unknown } | null }
     const shownSupplyId = { current: 'supply-1' as string | null }
     const onScreen = snapshot('pending', 'initial')
     const seen = {
@@ -664,7 +666,9 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
       'setError', 'setBusy', 'normalizeDeliveryError', 'setDeliveryError',
       'setDeliveryErrorsOpen', 'setExpandedDeliveryErrorGroups', 'fbsErrorText',
       'fbsStageAfterWorkspaceRefresh', 'visualStage',
-      'open', 'supplyId', 'token', 'authHeaders', `${asJs('load', helpers.load)}; return load`) as (
+      'open', 'supplyId', 'token', 'authHeaders', 'freshWorkspaceGeneration',
+      'workspaceOpenGeneration', 'pendingInitialWorkspace',
+      `${asJs('load', helpers.load)}; return load`) as (
       ...args: unknown[]) => (silent?: boolean, onApplied?: (fresh: unknown) => void) => Promise<unknown>)(
       () => {
         journal.push('GET')
@@ -673,6 +677,7 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
       beginWorkspaceWrite, setWorkspace, setStage, setError, setBusy, normalizeDeliveryError,
       () => undefined, () => undefined, () => undefined, same, keepStage, same,
       true, 'supply-1', 'synthetic', () => ({}),
+      freshWorkspaceGeneration, generation, pendingInitialWorkspace,
     )
     const refreshAfterLostRace = (new Function('load',
       `${asJs('refreshAfterLostRace', helpers.refreshAfterLostRace)}; return refreshAfterLostRace`) as (

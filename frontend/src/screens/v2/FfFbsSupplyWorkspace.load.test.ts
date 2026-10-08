@@ -42,6 +42,8 @@ function deferred() {
 function fixture(savedStages = new Map<string, string>()) {
   const generation = { current: 1 }
   const writeSeq = { current: 0 }
+  const freshWorkspaceGeneration = { current: null as number | null }
+  const pendingInitialWorkspace = { current: null as { generation: number; snapshot: unknown } | null }
   // Поставка, чей состав на экране, идёт следом за применённым снимком — так же,
   // как её ведёт эффект экрана.
   const shownSupplyId = { current: null as string | null }
@@ -65,7 +67,8 @@ function fixture(savedStages = new Map<string, string>()) {
     'setWorkspace', 'setStage', 'setError', 'setBusy', 'normalizeDeliveryError',
     'setDeliveryError', 'setDeliveryErrorsOpen', 'setExpandedDeliveryErrorGroups', 'fbsErrorText',
     'fbsStageAfterWorkspaceRefresh', 'visualStage', 'open', 'supplyId', 'token',
-    'authHeaders', 'readFbsWorkspaceStage', `${callbackJs}; return load`) as (...args: unknown[]) => (
+    'authHeaders', 'readFbsWorkspaceStage', 'freshWorkspaceGeneration', 'workspaceOpenGeneration',
+    'pendingInitialWorkspace', `${callbackJs}; return load`) as (...args: unknown[]) => (
       silent?: boolean, onApplied?: (applied: unknown) => void) => Promise<unknown>
   const load = (id: string) => callbackFactory(
     (_token: string, _headers: unknown, supplyId: string) => {
@@ -78,6 +81,7 @@ function fixture(savedStages = new Map<string, string>()) {
     (message: string) => message, (_marketplace: string, _old: string, next: string) => next,
     (stage: string) => stage, true, id, 'synthetic', () => ({}),
     (supplyId: string) => savedStages.get(supplyId) ?? null,
+    freshWorkspaceGeneration, generation, pendingInitialWorkspace,
   )
   return { generation, writeSeq, pending, visible, load }
 }
