@@ -253,6 +253,83 @@ def test_unknown_native_send_outcome_is_recorded_on_linked_card_immediately(tmp_
     assert "не подтвержд" in tg.edits[-1][2].lower()
 
 
+@pytest.mark.parametrize("terminal_status", ["answer_sent", "analysis_done"])
+def test_unknown_native_send_reopens_terminal_card_without_duplicate_event(
+    tmp_path, terminal_status,
+):
+    from types import SimpleNamespace
+
+    from support_agent.telegram import TelegramError, reconcile_unconfirmed_native_delivery
+
+    class CardsTelegram:
+        def __init__(self):
+            self.sent = []
+            self.edits = []
+
+        def send_message(self, chat_id, text, reply_to=None):
+            self.sent.append((chat_id, text, reply_to))
+            if chat_id == CLIENT_CHAT:
+                raise TelegramError("unknown", "simulated_terminal_card_send_timeout")
+            return "owner-card-92"
+
+        def edit_message(self, chat_id, message_id, text):
+            self.edits.append((chat_id, message_id, text))
+
+    cfg = make_config(tmp_path)
+    cfg.agent.visible_moderator = True
+    cfg.agent.client_replies_enabled = True
+    cfg.agent.history_dir = str(tmp_path / "history")
+    bridge = NativeBridge(cfg)
+    bridge.store.set_binding(
+        CLIENT_CHAT, {"tenant_id": "tenant-test", "tenant_name": "Тест"}, bound_by="owner"
+    )
+    tg = CardsTelegram()
+    topic_id = f"native:unknown-after-{terminal_status}"
+    card = bridge.journal.update_card(
+        tg, cfg.telegram.owner_chat_id, topic_id, CLIENT_CHAT,
+        title="Разбор запроса", statuses={terminal_status: True},
+        event="Предыдущий разбор завершён", event_key=f"incoming:{terminal_status}",
+    )
+    assert card["current_status"] == terminal_status
+    bots = Bots(tg, tg, cfg.telegram.owner_chat_id)
+    bridge._delivery = lambda: SimpleNamespace(store=bridge.store, bots=bots)
+
+    result = bridge.send(
+        CLIENT_CHAT, "Подтверждённый ответ", key=f"unknown-{terminal_status}",
+        topic_id=topic_id,
+    )
+    stable_key = f"native-send:unknown-{terminal_status}"
+    outbox = bridge.store.outbox_by_key(stable_key)
+    saved_card = bridge.store.kv_get(f"case_card:{topic_id}")
+    event_key = f"unconfirmed:{outbox['id']}"
+    unconfirmed = [event for event in saved_card["events"] if event["key"] == event_key]
+    assert result["status"] == outbox["status"] == "unknown"
+    assert outbox["attempts"] == 1
+    assert len([item for item in tg.sent if item[0] == CLIENT_CHAT]) == 1
+    assert len(unconfirmed) == 1
+    assert "не подтвержд" in unconfirmed[0]["text"].lower()
+    assert "повтор" in unconfirmed[0]["text"].lower()
+    assert "Ответ отправлен клиенту" not in unconfirmed[0]["text"]
+    assert saved_card["current_status"] == "working"
+    assert saved_card["statuses"]["working"] is True
+    assert saved_card["statuses"].get(terminal_status) is not True
+    assert saved_card["number"] == card["number"]
+    assert saved_card["message_id"] == card["message_id"]
+
+    reconcile_unconfirmed_native_delivery(
+        bridge.journal, bridge.store, tg, cfg.telegram.owner_chat_id,
+        bridge.store.outbox_by_key(stable_key),
+    )
+
+    replayed_card = bridge.store.kv_get(f"case_card:{topic_id}")
+    replayed_events = [event for event in replayed_card["events"] if event["key"] == event_key]
+    assert len(replayed_events) == 1
+    assert replayed_card["current_status"] == "working"
+    assert replayed_card["statuses"]["working"] is True
+    assert replayed_card["statuses"].get(terminal_status) is not True
+    assert len([item for item in tg.sent if item[0] == CLIENT_CHAT]) == 1
+
+
 def test_sent_native_answer_is_reconciled_to_card_after_crash(tmp_path, monkeypatch):
     from itertools import count
     from types import SimpleNamespace
