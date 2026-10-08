@@ -88,13 +88,7 @@
       "id": "grouped-manual-html-then-real-native-handler",
       "result": "SCOPED_PASS_WHOLE_CASE_FAIL",
       "evidence": "run-b6d23148/group-manual-native-verified/group-native-evidence-join.json",
-      "note": "Scoped manual-HTML/native dispatch segment passed: 2 successful UI scans, 6 receipt/PNG joins, A exhausted probe 409 without mutation, stock/pool stable. Enclosing whole-process runner later failed a separate cargo-box action with HTTP 403 missing_marketplace_token; do not mark the grouped journey accepted."
-    },
-    {
-      "id": "native-qr-warning-continuation-a-then-b",
-      "result": "PASS_BOUNDED_SYNTHETIC_PROVIDER",
-      "evidence": "run-b6d23148/qr-only-continuity-native-api/native/continuation/decoded-continuity-contract.json",
-      "note": "A printed-sticker QR was scanned after the first A intent; no A replay job was submitted and the exact pool snapshot was unchanged across that rescan. Existing A marking/code/order binding identity stayed fixed; the explicit synthetic provider sync changed only its status unknown\u2192accepted. A subsequent true product barcode selected B; entering B full current CIS led to one B QR receipt and packed state. Both orders were packed. Final neutral DOM is after reload, not proven same-page during the earlier premature disabled-button wait. Provider acceptance/readback was synthetic; no outbound marketplace call is proven."
+      "note": "Scoped manual-HTML/native dispatch segment passed: 2 successful UI scans, 6 receipt/PNG joins, A exhausted probe 409 without mutation, stock/pool stable. Enclosing whole-process runner later failed a separate cargo-box action with HTTP 403 missing_marketplace_token; do not mark the grouped journey accepted. Manual tape output records now carry the supply ID parsed from the actual endpoint and verify it matches the returned marking; deterministic regenerated provider PNGs are checked in with the verifier outputs."
     }
   ],
   "evidence_directory": "run-b6d23148",

@@ -51,11 +51,16 @@ if (manualTapeRequests.length !== 2 || manualHtmlCodes.length !== 4) {
 const manualTapeGroups = manualTapeRequests.map(tape => {
   const expected = tape.response.orders[0].printed_codes[0].cis_code;
   const orderId = tape.response.orders[0].order_id;
+  const tapeSupplyId = tape.path.match(/fbs-supplies\/([^/]+)\/order-print-tape/)?.[1];
+  const returnedSupplyId = tape.response.orders[0].printed_codes[0].supply_id;
   const outputs = manualHtmlCodes.splice(0, 2);
   if (tape.status !== 200 || tape.response.order_errors?.length || outputs.length !== 2 || outputs.some(output => output.decoded !== expected)) {
     throw Error(`Manual HTML tape does not contain two exact copies of the CIS returned for order ${orderId}`);
   }
-  return { order_id: orderId, supply_id: tape.body.order_ids[0], copies_requested: tape.body.layout_json.units[0].copies,
+  if (!tapeSupplyId || tapeSupplyId !== returnedSupplyId || !tape.body.order_ids.includes(orderId)) {
+    throw Error(`Manual tape supply/order provenance mismatch for order ${orderId}`);
+  }
+  return { order_id: orderId, supply_id: tapeSupplyId, returned_marking_supply_id: returnedSupplyId, copies_requested: tape.body.layout_json.units[0].copies,
     returned_marking: tape.response.orders[0].printed_codes[0], rendered_outputs: outputs };
 });
 const manualPdfPaths = ['supply_ids-bare-manual-1-render.pdf', 'supply_ids-bare-manual-after-task-render.pdf'];

@@ -4,7 +4,8 @@
   "manual_tape_html_outputs": [
     {
       "order_id": "cacb29b5-6c11-4e09-b756-94b0aca76b65",
-      "supply_id": "cacb29b5-6c11-4e09-b756-94b0aca76b65",
+      "supply_id": "51ecfac5-4413-4021-9fe7-29c60a983d40",
+      "returned_marking_supply_id": "51ecfac5-4413-4021-9fe7-29c60a983d40",
       "copies_requested": 2,
       "returned_marking": {
         "marking_id": "2742ea8e-df03-42b7-8bed-c8cec5c3f99b",
@@ -29,7 +30,8 @@
     },
     {
       "order_id": "c62c3d6f-24f8-4909-8f23-f4013788a5fb",
-      "supply_id": "c62c3d6f-24f8-4909-8f23-f4013788a5fb",
+      "supply_id": "202a8db8-4fdb-478b-af3d-650af9bb4c70",
+      "returned_marking_supply_id": "202a8db8-4fdb-478b-af3d-650af9bb4c70",
       "copies_requested": 2,
       "returned_marking": {
         "marking_id": "731238d0-e835-46db-ba69-9e294e38f594",
