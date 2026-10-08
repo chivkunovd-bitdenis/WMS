@@ -177,19 +177,31 @@ def pull_request_docs_only(get, root, number, expected_count):
     if type(expected_count) is not int or expected_count <= 0 or expected_count > 3000:
         return False
     paths, seen = [], set()
+    file_count = 0
     for page in range(1, 31):
         batch = get(f'{root}/pulls/{number}/files?{urlencode({"per_page": 100, "page": page})}')
         if not isinstance(batch, list) or not batch:
             break
         for row in batch:
             path = row.get('filename') if isinstance(row, dict) else None
-            if not isinstance(path, str) or not path or path in seen:
+            if not isinstance(path, str) or not path:
                 raise ValueError('Pull request changed-file list is malformed or duplicated')
-            seen.add(path)
-            paths.append(path)
-        if len(paths) >= expected_count:
+            previous = row.get('previous_filename')
+            if row.get('status') == 'renamed' and previous is None:
+                return False
+            if previous is not None and (not isinstance(previous, str) or not previous):
+                raise ValueError('Pull request rename source is malformed')
+            for changed_path in (path, previous):
+                if changed_path is None:
+                    continue
+                if changed_path in seen:
+                    raise ValueError('Pull request changed-file list is malformed or duplicated')
+                seen.add(changed_path)
+                paths.append(changed_path)
+            file_count += 1
+        if file_count >= expected_count:
             break
-    if len(paths) != expected_count:
+    if file_count != expected_count:
         raise ValueError('Pull request changed-file list is incomplete')
     return all(is_prose_path(path) for path in paths)
 

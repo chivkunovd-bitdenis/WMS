@@ -55,7 +55,8 @@ class AnchorFixture:
                 self.pr['head']['sha'] = 'd'*40
             return copy.deepcopy(self.pr)
         if '/pulls/7/files' in route:
-            return [{'filename': path} for path in self.changed_files]
+            return [path if isinstance(path, dict) else {'filename': path}
+                    for path in self.changed_files]
         if '/contents/guards/PROCESS_CONTRACTS.json' in route:
             ref = parse_qs(urlparse(path).query)['ref'][0]
             if ref == B:
@@ -98,6 +99,18 @@ class TrustedProcessCheckTests(unittest.TestCase):
         ]
         self.assertTrue(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
         self.f.changed_files = ['docs/evidence/WMS-704/fixture.json']
+        self.assertFalse(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
+
+    def test_renames_require_both_paths_to_be_docs_only(self):
+        self.f.changed_files = [{'filename': 'docs/removed-runtime.md',
+                                 'previous_filename': 'backend/app/services/runtime.py',
+                                 'status': 'renamed'}]
+        self.assertFalse(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
+        self.f.changed_files = [{'filename': 'docs/new-name.md',
+                                 'previous_filename': 'docs/old-name.md',
+                                 'status': 'renamed'}]
+        self.assertTrue(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
+        self.f.changed_files = [{'filename': 'docs/renamed.md', 'status': 'renamed'}]
         self.assertFalse(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
 
     def test_docs_only_can_skip_heavy_jobs_but_requires_light_checks_and_proof(self):
