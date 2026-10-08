@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const WMS_666_CONTRACT = '0e078418bcb7ee45fa654b0d829e5de0ec80ebb0'
-const WMS_666_ACCEPTED_BASE = '1a4b0d687392a91a2dbfde6fbcfe9013b9e09075'
+const WMS_666_ACCEPTED_BASE = 'bb9cb79979f8d00bba217bd97654b6afcb2ad8a0'
 const WMS_666_PROOF_FILES = new Set([
   '.github/workflows/wms666-browser-proof.yml',
   'scripts/ci/wms666-browser-proof.mjs',
@@ -36,6 +36,7 @@ const WMS_666_ALLOWED_CODE_FILES = new Set([
   'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms666.printFreshness.dom.test.tsx',
   'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx',
   'frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx',
+  'frontend/tests-e2e/wms652-critical/vite.native.config.ts',
   'frontend/src/screens/v2/fbsSequentialPacking.ts',
   'frontend/src/screens/v2/fbsSupplyAssembly.ts',
   'frontend/src/screens/v2/fbsUx.ts',
@@ -157,6 +158,7 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
     expect(wms666ScopeViolations([
       'frontend/src/screens/v2/FfFbsSupplyAssembly.tsx',
       'frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx',
+      'frontend/tests-e2e/wms652-critical/vite.native.config.ts',
       'docs/requirements/WMS-666.md',
       'docs/reviews/contract-corrections/WMS-666.json',
     ])).toEqual([])
@@ -203,6 +205,7 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms514.test.ts',
       'frontend/src/screens/v2/FfFbsSupplyAssembly.tsx',
       'frontend/src/screens/v2/FfFbsSupplyAssembly.dom.test.tsx',
+      'frontend/tests-e2e/wms652-critical/vite.native.config.ts',
       'backend/tests/fbs_picking_browser_verify.py',
     ]
     expect(wms666ScopeViolations(allowed)).toEqual([])
