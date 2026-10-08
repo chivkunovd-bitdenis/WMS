@@ -285,7 +285,8 @@
     "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "615e82d1b6dd98ca4117ae6c0fd3f3f503bc3eceaab2fea0562b61bd1b3de969",
     "frontend/src/components/MarkingPrintDialog.availability.dom.test.tsx": "f969581a0f8fd33eb582943a835388cc2bbede6a6260c54298e18bef76e2b117",
     "frontend/src/components/MarkingPrintDialog.partialAck.wms666.dom.test.tsx": "68740029acf66dff96190979c075e2c1a8caeccb37c212b72780d10e42621cc0",
-    "backend/tests/test_wms635_kiz_no_wb_wait.py": "08f38c25b29acef0a5ccbd5164dcd792d29204a47978ab99527a1c1e2f49c644"
+    "backend/tests/test_wms635_kiz_no_wb_wait.py": "08f38c25b29acef0a5ccbd5164dcd792d29204a47978ab99527a1c1e2f49c644",
+    "backend/tests/test_wms546_marking_verdicts.py": "23f8240bc9b2ea447656db646d28c1696ad0a858751c8bba9db77f6ccef45cdb"
   },
   "suites": {
     "backend-fbs": {
@@ -872,6 +873,8 @@
         "tests.test_wms517_sales_regressions::test_new_request_resumes_saved_claim_without_fresh_sales[reconciling]",
         "tests.test_wms517_sales_regressions::test_shared_redis_limits_two_public_callers_and_retry_after",
         "tests.test_wms517_sales_waiting_rate::test_waiting_reader_rechecks_shared_retry_after_before_http",
+        "tests.test_wms546_marking_verdicts::test_c5_background_cycle_is_read_only_across_wb_answers[missing_kind]",
+        "tests.test_wms546_marking_verdicts::test_c5_background_cycle_is_read_only_across_wb_answers[other_value]",
         "tests.test_wms586_acceptance_act_contract::test_321_long_rows_no_loss_or_empty_tail[pdf]",
         "tests.test_wms586_acceptance_act_contract::test_321_long_rows_no_loss_or_empty_tail[xlsx]",
         "tests.test_wms586_acceptance_act_contract::test_closed_statuses_and_empty_act[done-pdf]",
