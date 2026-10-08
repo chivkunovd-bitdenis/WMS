@@ -1,6 +1,7 @@
 """Archive and Telegram limits, using local materials and no external sends."""
 from __future__ import annotations
 
+import errno
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -73,6 +74,105 @@ def test_single_card_edits_drops_oldest_visible_events_and_keeps_complete_journa
                                  event_key='step:11')
     assert replay['number'] == 1 and len(tg.sent) == 1 and len(tg.edits) == 11
     assert journal.find_topic('1004') == 'native:817'
+
+
+def test_card_render_separates_facts_and_shows_one_current_status(tmp_path):
+    store, tg = Store(tmp_path / 'state.db'), Cards()
+    journal = CaseJournal(store, tmp_path / 'history')
+    facts = [
+        'WB: заказ доступен в WMS',
+        'Товары WB: 12',
+        'Ozon: рабочая поставка',
+        'Заказы Ozon: 3',
+        'Проверено: заказ найден в WMS',
+        'Выяснено: подбор ещё не начат',
+        'Не подтверждено: причина не установлена',
+        'Следующий шаг: продолжить проверку',
+    ]
+    card = journal.update_card(
+        tg, 900, 'native:format', 10,
+        title='Проверка поставки ' * 24,
+        summary='\n'.join(facts),
+        statuses={'working': True},
+    )
+
+    lines = journal.render(card).splitlines()
+    assert all(fact in lines for fact in facts)
+    assert len(card['title']) > 220
+    status_labels = (
+        'Взято в работу', 'Анализ завершён', 'Ответ клиенту отправлен',
+        'Нужно уточнение владельца', 'Нужна разработка', 'Нужно исправление процесса',
+        'Задача нужна', 'Задача заведена',
+    )
+    status_lines = [line for line in lines if any(label in line for label in status_labels)]
+    assert len(status_lines) == 1
+    assert 'Взято в работу' in status_lines[0]
+
+
+def test_journal_enospc_keeps_sqlite_event_and_edits_existing_card(tmp_path, monkeypatch):
+    store, tg = Store(tmp_path / 'state.db'), Cards()
+    journal = CaseJournal(store, tmp_path / 'history')
+    card = journal.update_card(
+        tg, 900, 'native:enospc', 10, title='Проверить ответ',
+        statuses={'working': True}, event='Разбор начат', event_key='begin',
+    )
+    message_id = add(store, 41, text='Нужно проверить поставку')
+    assert store.row('SELECT id FROM messages WHERE id=?', (message_id,)) is not None
+
+    def disk_full(_fd):
+        raise OSError(errno.ENOSPC, 'No space left on device')
+
+    monkeypatch.setattr('support_agent.case_journal.os.fsync', disk_full)
+    updated = journal.update_card(
+        tg, 900, 'native:enospc', 10,
+        event='Подтверждённый ответ клиенту', event_key='answer:41',
+    )
+
+    saved = store.kv_get('case_card:native:enospc')
+    assert store.row('SELECT id FROM messages WHERE id=?', (message_id,)) is not None
+    assert any(event['key'] == 'answer:41' for event in saved['events'])
+    assert updated['message_id'] == card['message_id']
+    assert len(tg.sent) == 1
+    assert tg.edits[-1][1] == card['message_id']
+    assert 'Подтверждённый ответ клиенту' in tg.edits[-1][2]
+
+
+def test_overview_enospc_does_not_block_sqlite_event_or_same_card_edit(tmp_path, monkeypatch):
+    store, tg = Store(tmp_path / 'state.db'), Cards()
+    journal = CaseJournal(store, tmp_path / 'history')
+    card = journal.update_card(
+        tg, 900, 'native:overview-enospc', 10, title='Проверить ответ',
+        statuses={'working': True}, event='Разбор начат', event_key='begin',
+    )
+    original_write_overview = journal._write_overview
+    attempts = 0
+
+    def fail_once():
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError(errno.ENOSPC, 'No space left on device')
+        original_write_overview()
+
+    monkeypatch.setattr(journal, '_write_overview', fail_once)
+    updated = journal.update_card(
+        tg, 900, 'native:overview-enospc', 10,
+        event='Подтверждённый ответ клиенту', event_key='answer:overview',
+    )
+
+    saved = store.kv_get('case_card:native:overview-enospc')
+    assert sum(event['key'] == 'answer:overview' for event in saved['events']) == 1
+    assert updated['message_id'] == card['message_id']
+    assert len(tg.sent) == 1
+    assert len(tg.edits) == 1
+    assert tg.edits[0][1] == card['message_id']
+    assert 'Подтверждённый ответ клиенту' in tg.edits[0][2]
+
+    replay = journal.update_card(
+        tg, 900, 'native:overview-enospc', 10,
+        event='Подтверждённый ответ клиенту', event_key='answer:overview',
+    )
+    assert sum(event['key'] == 'answer:overview' for event in replay['events']) == 1
 
 
 def test_unknown_card_creation_does_not_duplicate_after_restart(tmp_path):
