@@ -242,6 +242,114 @@ async def test_creation_preserves_completed_sticker_chunk_after_timeout_and_retr
 
 
 @pytest.mark.asyncio
+async def test_creation_commits_returned_sticker_response_after_prefetch_deadline(
+    async_client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.services.fbs_stock_publish_service import drain_background_stock_publish_tasks
+    from tests.test_fbs_supply_from_orders import (
+        _create_product,
+        _create_ready_order,
+    )
+    from tests.test_fbs_supply_from_orders import (
+        _register_ff_admin as register,
+    )
+    from tests.test_fbs_supply_from_orders import (
+        _setup_seller_with_token as setup,
+    )
+
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+    headers, suffix = await register(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant = uuid.UUID(me.json()["tenant_id"])
+    seller, warehouse, location = await setup(async_client, headers, suffix)
+    product = await _create_product(async_client, headers, seller, sku=f"commit-deadline-{suffix}")
+    order_id = await _create_ready_order(
+        tenant,
+        uuid.UUID(seller),
+        uuid.UUID(warehouse),
+        uuid.UUID(location),
+        product,
+        order_id=666779001,
+    )
+    await drain_background_stock_publish_tasks()
+    deadline = 0.25
+    monkeypatch.setattr(
+        "app.services.fbs_supply_service.CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS", deadline
+    )
+    calls: list[list[int]] = []
+    response_returned = False
+    delayed_commit_started = False
+    delayed_commit_finished = False
+    real_commit = AsyncSession.commit
+
+    async def stickers(client, *, api_token, order_ids, **kwargs):
+        nonlocal response_returned
+        calls.append(list(order_ids))
+        response_returned = True
+        return [{
+            "orderId": 666779001,
+            "partA": "5877994",
+            "partB": "0283",
+            "barcode": "*fixture666-deadline",
+            "file": base64.b64encode(PNG).decode(),
+        }]
+
+    async def delayed_commit(session: AsyncSession) -> None:
+        nonlocal delayed_commit_started, delayed_commit_finished
+        if response_returned and not delayed_commit_started and any(
+            isinstance(row, FbsOrder)
+            and row.id == order_id
+            and row.sticker_code == "5877994 0283"
+            for row in session.identity_map.values()
+        ):
+            # Delay only persistence of the already received original response.
+            # Creation and read-only preparation retain their actual commits.
+            delayed_commit_started = True
+            await asyncio.sleep(deadline * 2)
+            await real_commit(session)
+            delayed_commit_finished = True
+        else:
+            await real_commit(session)
+
+    monkeypatch.setattr(
+        "app.services.fbs_print_asset_service.fetch_marketplace_order_stickers", stickers
+    )
+    monkeypatch.setattr(AsyncSession, "commit", delayed_commit)
+    body = {
+        "name": "Keep received stickers across commit deadline",
+        "order_ids": [str(order_id)],
+        "planned_delivery_type": "warehouse_sc",
+        "idempotency_key": str(uuid.uuid4()),
+    }
+    response = await async_client.post(
+        "/operations/fbs-supplies/from-orders", headers=headers, json=body
+    )
+    assert response.status_code == 201, response.text
+    assert response_returned and delayed_commit_started
+    assert calls == [[666779001]]
+    result = response.json()
+    sticker = result["orders"][0]["sticker"]
+    assert sticker["code"] == "5877994 0283"
+    assert delayed_commit_finished
+    content = await async_client.get(sticker["asset_url"], headers=headers)
+    assert content.status_code == 200 and content.content == PNG
+    async with SessionLocal() as independent:
+        saved = await independent.get(FbsOrder, order_id)
+        assert saved is not None and saved.sticker_code == "5877994 0283"
+        assert str(saved.supply_id) == result["supply"]["id"]
+    repeated = await async_client.post(
+        "/operations/fbs-supplies/from-orders", headers=headers, json=body
+    )
+    assert repeated.status_code == 201, repeated.text
+    assert repeated.json()["supply"]["id"] == result["supply"]["id"]
+    assert repeated.json()["orders"][0]["sticker"]["code"] == "5877994 0283"
+    assert calls == [[666779001]]
+
+
+@pytest.mark.asyncio
 async def test_packing_request_calls_wb_and_returns_saved_sticker_content(
     async_client: httpx.AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
