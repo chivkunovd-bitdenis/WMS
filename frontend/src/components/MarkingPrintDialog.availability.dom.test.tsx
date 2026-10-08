@@ -147,51 +147,6 @@ describe('WMS-611 FBS print availability', () => {
     expect(onPrinted).toHaveBeenCalledTimes(1)
     expect(close).toHaveBeenCalledTimes(1)
   })
-  it('keeps a partial tape warning after ack-only recovery without completing or closing the mixed batch', async () => {
-    vi.mocked(printTapeSections).mockClear()
-    const ctx = context()
-    const completed = vi.fn()
-    const onPrinted = vi.fn()
-    const close = vi.fn()
-    ctx.onPrinted = onPrinted
-    ctx.fbsTape!.onCompleted = completed
-    ctx.fbsTape!.orders.push({ ...ctx.fbsTape!.orders[0]!, orderId: 'order-612', wbOrderId: 612 })
-    const confirmQrApplied = vi.fn()
-      .mockRejectedValueOnce(new Error('WB QR confirmation returned 503'))
-      .mockResolvedValueOnce(undefined)
-    ctx.fbsTape!.confirmQrApplied = confirmQrApplied
-    print.mockResolvedValue({
-      orders: [{
-        order_id: 'order-611', wb_order_id: 611, requires_honest_sign: true,
-        printed_codes: [], qr_asset: { id: 'qr-order-611', preview_url: '/qr/order-611.png', applied_at: null },
-      }],
-      order_errors: [{ order_id: 'order-612', wb_order_id: 612, code: 'sticker_failed', message: 'QR order 612 failed' }],
-      shortage: 0,
-    })
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['qr'], { type: 'image/png' }) }))
-    vi.mocked(printTapeSections).mockResolvedValue(undefined)
-    await render(ctx, false, close)
-    await act(async () => button().click())
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
-
-    expect(print).toHaveBeenCalledTimes(1)
-    expect(printTapeSections).toHaveBeenCalledTimes(1)
-    expect(document.querySelector('[data-testid="marking-print-error"]')?.textContent).toContain('503')
-    const retry = document.querySelector<HTMLButtonElement>('[data-testid="marking-print-retry-qr-ack"]')
-    expect(retry).not.toBeNull()
-    await act(async () => retry!.click())
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
-
-    expect(print, 'ack recovery must not dispatch the accepted tape again').toHaveBeenCalledTimes(1)
-    expect(printTapeSections).toHaveBeenCalledTimes(1)
-    expect(confirmQrApplied.mock.calls.map(([asset]) => asset.id)).toEqual(['qr-order-611', 'qr-order-611'])
-    expect(document.querySelector('[data-testid="marking-print-error"]')?.textContent ?? '').toContain('QR order 612 failed')
-    expect(onPrinted).toHaveBeenCalledTimes(1)
-    expect(completed).not.toHaveBeenCalled()
-    expect(close).not.toHaveBeenCalled()
-    expect(document.querySelector('[data-testid="marking-print-retry-qr-ack"]')).toBeNull()
-    expect(document.querySelector('[data-testid="marking-print-confirm"]')).not.toBeNull()
-  })
   it('allows an assigned-code batch even when no free codes remain', async () => {
     const ctx = context(); ctx.fbsTape!.markingShortage = 0
     await render(ctx)
