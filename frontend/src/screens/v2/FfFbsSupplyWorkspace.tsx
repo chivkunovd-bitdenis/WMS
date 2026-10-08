@@ -835,10 +835,12 @@ export function FfFbsSupplyWorkspace({
   const registerSequentialScanner = assemblyFrame?.registerScanner
   const unifiedStickerAttempts = useRef(new Set<string>())
   const ordinaryPreparationAttempt = useRef(false)
+  // Preparation attempts belong to one opened supply. Changing tabs must not
+  // repeat a failed request; the existing Alert offers the explicit retry.
   useEffect(() => {
     unifiedStickerAttempts.current.clear()
     ordinaryPreparationAttempt.current = false
-  }, [open, supplyId, stage])
+  }, [open, supplyId])
   useEffect(() => {
     if (!supplyId || !registerSequentialScanner || !sequentialScanner) return
     registerSequentialScanner(supplyId, sequentialScanner)
