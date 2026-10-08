@@ -547,7 +547,7 @@ jobs:
           tools/support_agent/tests/test_night.py
           --junitxml="$RUNNER_TEMP/night-controller.xml"
       - name: Verify whole candidate against the accepted product reference
-        run: python scripts/ci/product_scope.py --root . --trusted-ref 322bb46d96178fc25f007aaf2807c9ce7dfe9bc0
+        run: python scripts/ci/product_scope.py --root . --trusted-ref a32306cfe8a37e063711fd77ab1246b9ade836ee
       - name: Infrastructure tests (not business guards)
         run: |
           python -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v

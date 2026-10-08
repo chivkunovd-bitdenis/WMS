@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "reviewed_source": "322bb46d96178fc25f007aaf2807c9ce7dfe9bc0",
-  "previous_source": "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
+  "reviewed_source": "a32306cfe8a37e063711fd77ab1246b9ade836ee",
+  "previous_source": "322bb46d96178fc25f007aaf2807c9ce7dfe9bc0",
   "unreviewed_candidate_source": "f71b99c0f19bdbf48e8e0b95b62aefe8709307fc",
   "self_selecting_references": [
     "HEAD",
     "${GITHUB_SHA}"
   ],
-  "independent_acceptance_record": "4e7fcfdfc376c5b2623eaf370cd35d4dd29580c9"
+  "independent_acceptance_record": "146532cc7e5634535f5ea5ea333bc21fa4d3e653"
 }
