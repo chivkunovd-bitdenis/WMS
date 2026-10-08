@@ -81,6 +81,40 @@
         "previous_review_model": "gpt-6-astra",
         "previous_evidence": "docs/evidence/WMS-666/wms666-task-scope-astra-review-20261006.md"
       }
+    },
+    {
+      "contract_commit": "28a7999fefd886de41f6ffda5b05b69cd49aa496",
+      "correction_commit": "ec44815fe063611723c2794781ff8b1a9288bf52",
+      "files": [
+        "frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx",
+        "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts"
+      ],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "report": "docs/evidence/WMS-666/independent-review-1008/renderer-contract-correction-ec44815.md",
+        "report_commit": "0c3d1666fe7c10652da98cb44b14d31041fd7ba3"
+      }
+    },
+    {
+      "contract_commit": "28a7999fefd886de41f6ffda5b05b69cd49aa496",
+      "correction_commit": "b2699f0d3488b4f54ad73c7f069659bc6f68c04b",
+      "upstream_correction_commit": "fa4087f73770d553dc9f178ec086b11deb93c50d",
+      "files": [
+        "frontend/src/components/MarkingPrintDialog.availability.dom.test.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms514.test.ts"
+      ],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "28a7999fefd886de41f6ffda5b05b69cd49aa496",
+        "correction_commit": "fa4087f73770d553dc9f178ec086b11deb93c50d",
+        "evidence": "docs/evidence/WMS-666/independent-review-1008/retry-contract-correction-fa4087.md",
+        "evidence_commit": "62dd91c80107f9f6575fa16a6715555c1efb36cd",
+        "summary": "Focused correction only: clear the tape spy between independent scenarios and use the current retry closure/guarded retry payload. Assertions and expected dispatch count remain unchanged."
+      }
     }
   ]
 }

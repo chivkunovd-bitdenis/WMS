@@ -1,0 +1,20 @@
+{
+  "task": "WMS-517",
+  "corrections": [
+    {
+      "contract_commit": "d0e60d16c120894b8234802260fff82e356ee3e1",
+      "correction_commit": "9d252003bed648255740a822bc4a43dc975118aa",
+      "files": [
+        "frontend/src/screens/v2/SellerKizWithdrawalScreen.incident07Oct.dom.test.tsx"
+      ],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "report": "docs/evidence/WMS-517/incident-20261007/review.md",
+        "report_commit": "ac028c2d3f462c9c2ff7e91afbaa3e090767617e"
+      },
+      "note": "Existing published test-first additions for IC15 and manual refresh versus polling; the complete original test file is preserved as an exact prefix. No test or product file changed during release reconciliation."
+    }
+  ]
+}

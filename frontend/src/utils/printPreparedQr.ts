@@ -5,6 +5,8 @@ export type PreparedQrInput = {
   idempotencyKey: string
   widthMm: number
   heightMm: number
+  /** Executed when the native transport dequeues this copy, after all rendering. */
+  beforeDispatch?: () => Promise<void>
 }
 
 /** Direct OS queue receipt; no browser print dialog and no physical-paper claim. */

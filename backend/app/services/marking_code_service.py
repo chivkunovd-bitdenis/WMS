@@ -3328,6 +3328,11 @@ async def print_codes_for_product(
     layout: PrintLayout | dict[str, object] | None = None,
     allow_partial: bool = False,
     duplicate_copies: int | None = None,
+    force_required: bool = False,
+    commit: bool = True,
+    source_process: str = MARKING_SOURCE_CATALOG,
+    document_number: str | None = None,
+    packaging_task_line: PackagingTaskLine | None = None,
 ) -> PrintMarkingCodesResult:
     if quantity < 1:
         raise MarkingCodeServiceError("invalid_print_quantity")
@@ -3338,7 +3343,7 @@ async def print_codes_for_product(
     product = await get_product(session, tenant_id, product_id)
     if product is None:
         raise MarkingCodeServiceError("product_not_found")
-    if not product.requires_honest_sign:
+    if not product.requires_honest_sign and not force_required:
         raise MarkingCodeServiceError("marking_not_required")
     if product.seller_id is None:
         raise MarkingCodeServiceError("product_seller_missing")
@@ -3368,7 +3373,8 @@ async def print_codes_for_product(
     shortage = max(0, quantity - available)
 
     if shortage > 0 and not allow_partial:
-        await session.rollback()
+        if commit:
+            await session.rollback()
         return PrintMarkingCodesResult(
             packaging_task_line_id=CATALOG_PRINT_LINE_SENTINEL,
             quantity=0,
@@ -3381,7 +3387,8 @@ async def print_codes_for_product(
 
     print_quantity = available if shortage > 0 else quantity
     if print_quantity < 1:
-        await session.rollback()
+        if commit:
+            await session.rollback()
         return PrintMarkingCodesResult(
             packaging_task_line_id=CATALOG_PRINT_LINE_SENTINEL,
             quantity=0,
@@ -3402,6 +3409,8 @@ async def print_codes_for_product(
     for code in codes[:print_quantity]:
         code.status = STATUS_PRINTED
         code.product_id = product.id
+        if packaging_task_line is not None:
+            code.packaging_task_line_id = packaging_task_line.id
         code.printed_at = now
         code.printed_by_user_id = acting_user_id
         code.reserved_by_user_id = None
@@ -3411,13 +3420,16 @@ async def print_codes_for_product(
             code=code,
             event_type=EVENT_PRINTED,
             actor=acting_user_id,
-            document_number=None,
-            packaging_task=None,
+            document_number=document_number,
+            packaging_task=packaging_task_line,
             copies=event_copies,
-            source_process=MARKING_SOURCE_CATALOG,
+            source_process=source_process,
         )
 
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
 
     printed_slice = codes[:print_quantity]
     return PrintMarkingCodesResult(

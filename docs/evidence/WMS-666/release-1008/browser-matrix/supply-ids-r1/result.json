@@ -1,0 +1,49 @@
+{
+  "sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "cases": [
+    {
+      "id": "WMS666.actualPool[supply_ids;normal]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;delete-before-claim]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;delete-after-claim]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;replace-before-claim]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;replace-after-claim]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;manual-then-delete-scan]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;rapid-scans]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;flags-after-claim]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;multi-seller]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;controls]",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC_WB_AND_PRINT;REAL_LOCAL_API_POSTGRES",
+  "currentCase": "WMS666.actualPool[supply_ids;controls]",
+  "productSha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc"
+}

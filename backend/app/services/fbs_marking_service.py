@@ -1010,6 +1010,18 @@ async def _sync_order_meta_from_wb(
     for marking in markings:
         meta_detail = details_by_kind.get(marking.kind)
         current = current_order_marking(markings, marking.kind, include_rejected=True)
+        if (
+            current is marking
+            and marking.kind == MARKING_KIND_SGTIN
+            and marking.meta_status == META_STATUS_REJECTED
+            and (meta_detail is None or not meta_detail.value)
+            and await _kiz_write_refused_by_wb(session, marking)
+        ):
+            # WMS-635 R-A5c: an omitted or empty SGTIN in a complete WB row
+            # does not undo a final refusal of the current local binding. Keep
+            # the rejection until the operator replaces/removes it or WB
+            # explicitly returns a value; other missing kinds remain unknown.
+            continue
         # A returned row is successful only when WB returned the expected kind.
         # A status entry for a value is not enough: treating it as fresh metadata
         # would mask a partial response and could incorrectly advance the local
@@ -1017,17 +1029,6 @@ async def _sync_order_meta_from_wb(
         if marking.kind not in returned_kinds:
             marking.meta_status = META_STATUS_UNKNOWN
             marking.check_status = CHECK_STATUS_ERROR
-            continue
-        if (
-            meta_detail is not None and current is marking
-            and marking.kind == MARKING_KIND_SGTIN and not meta_detail.value
-            and marking.meta_status == META_STATUS_REJECTED
-            and await _kiz_write_refused_by_wb(session, marking)
-        ):
-            # WMS-635 R4.3: WB finally refused this KIZ, so its metadata stays
-            # empty. An empty read is no news: the red «WB не принял ЧЗ» verdict
-            # stays until the operator replaces or removes the code, or WB itself
-            # shows the code (a non-empty answer is applied below as usual).
             continue
         if meta_detail is not None and current is marking:
             # Preserve every received WB detail, including unknown decisions, so a

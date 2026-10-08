@@ -1,0 +1,23 @@
+source_sha=b6d23148f1571d08d13d83c6179c385e2f6a1efc
+database=sqlite+aiosqlite:///:memory: (isolated SQLAlchemy StaticPool; WMS_TEST_DATABASE_URL)
+command=PYTHONPATH=backend pytest -q -p no:cacheprovider -n 0 backend/tests/test_wms666_workspace_marking_pool.py backend/tests/test_wms666_ozon_quantity_print_bindings.py backend/tests/test_wms666_rejected_exact_reprint_validation.py
+
+.............                                                            [100%]
+=============================== warnings summary ===============================
+backend/app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-release-1008/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+13 passed, 6 warnings in 11.28s

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./FfFbsSupplyWorkspace.tsx', import.meta.url), 'utf8')
+const printSource = readFileSync(new URL('../../utils/printMarkingCodeLabel.ts', import.meta.url), 'utf8')
 
 describe('WMS-514 · scan classification and silent print wiring', () => {
   it('renders exactly the three requested WB controls with mutually exclusive CHZ modes', () => {
@@ -103,6 +104,64 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     expect(idleScan).toContain('claimFbsScanAutoPrintTarget(')
     expect(idleScan).toContain('markFbsScanAutoPrintTargetStarted(')
     expect(idleScan).toContain('releaseFbsScanAutoPrintTargetClaim(')
+  })
+
+  it('WMS-666 P1 passes exact claimed binding validation to the final scan print dispatch', () => {
+    const idleScan = source.slice(
+      source.indexOf('const scanIdleCode = useCallback'),
+      source.indexOf('const scanKizCode = useCallback'),
+    )
+    const chzStart = idleScan.indexOf('if (plan.printChz && !result.requires_honest_sign)')
+    const reprintStart = idleScan.indexOf('if (waitingForReprintKiz)', chzStart)
+    const chzDispatch = idleScan.slice(chzStart, reprintStart)
+    const tapePrinter = printSource.slice(printSource.indexOf('export async function printMarkingCodeTape('))
+
+    expect(chzStart).toBeGreaterThan(-1)
+    expect(reprintStart).toBeGreaterThan(chzStart)
+    expect(chzDispatch).toContain('const validateCurrentBinding = async () => validateFbsPrintBindings(token, [{')
+    expect(chzDispatch).toContain('beforeDispatch: validateCurrentBinding')
+    expect(chzDispatch).toContain('order_id: result.order_id')
+    expect(chzDispatch).toContain('supply_id: printed.supply_id')
+    expect(chzDispatch).toContain('marking_id: printed.marking_id')
+    expect(chzDispatch).toContain('cis_code: kiz')
+    expect(tapePrinter).toContain('await buildMarkingTapeSections(')
+    expect(tapePrinter).toContain('printTapeSections(sections, options?.labelSize, options?.beforeDispatch)')
+  })
+
+  it('WMS-666 prepares a bare WB assembly group before the first scan and uses product KIZ requirements', () => {
+    const preparation = source.slice(
+      source.indexOf('// WMS-666: prepare missing WB stickers on picking and packing entry.'),
+      source.indexOf('const openAddOrders = async () =>'),
+    )
+    expect(preparation).toContain('assemblyFrame?.visible')
+    expect(preparation).toContain('registerSequentialScanner')
+    expect(preparation).not.toContain('const prepare = !assemblyFrame &&')
+    expect(source).toContain('order.product.requires_honest_sign')
+  })
+
+  it('WMS-666 offers an explicit same-workspace retry after prepare sticker request failure', () => {
+    const preparation = source.slice(
+      source.indexOf('// WMS-666: prepare missing WB stickers on picking and packing entry.'),
+      source.indexOf('const openAddOrders = async () =>'),
+    )
+    expect(preparation).toContain('ensureFbsStickers(token, authHeaders, workspace, missing.map((order) => order.id))')
+    expect(preparation).toContain('setRetryAction(() => () =>')
+    expect(preparation).toContain('if (write.isCurrent()) void run(retryOperation, \'\', undefined, onRetrySuccess)')
+    expect(preparation).toContain('const current = await fetchFbsWorkspace(token, authHeaders, supplyIdAtStart)')
+    expect(preparation).toContain('.filter((order) => !order.sticker.code && order.status !== \'cancelled\')')
+  })
+
+  it('WMS-666 includes refreshed sticker codes in an ordinary picking-list print when available', () => {
+    const print = source.slice(source.indexOf('const printPickingList = async () =>'), source.indexOf('const packLineByProduct = useMemo'))
+    expect(print).toContain('ensureFbsStickers(token, authHeaders, workspace)')
+    expect(print).toContain('printWorkspace = result.workspace')
+    expect(print).toContain('fbsBuildPickingRows(\n      printWorkspace.orders')
+    expect(print).toContain('historicalReadOnly')
+    expect(print).toContain('const write = beginWorkspaceWrite()')
+    expect(print).toContain('const isCurrentPrint = () => isWorkspaceWriteScreenCurrent(write, shownSupplyId.current, targetSupplyId)')
+    expect(print).toContain('!isCurrentPrint()')
+    expect(print).toContain('write.matchesShownSupply(result.workspace)')
+    expect(print).toContain('if (isCurrentPrint() && write.isLatest()')
   })
 
   it('finishes a cancelled product reprint attempt before clearing the active target', () => {

@@ -1,0 +1,50 @@
+name: FBS main screen real stack
+on:
+  push:
+    branches: [codex/fbs-main-screen-ci, codex/wms666-packing-release-1008, etalon]
+    paths:
+      - 'backend/app/**'
+      - 'backend/alembic/**'
+      - 'backend/tests/fbs_main_screen*.py'
+      - 'backend/pyproject.toml'
+      - 'frontend/src/**'
+      - '!frontend/src/**/*.test.ts'
+      - '!frontend/src/**/*.test.tsx'
+      - 'frontend/tests-e2e/fbs-main-screen/**'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'scripts/ci/run_fbs_main_screen.sh'
+      - '.github/workflows/fbs-main-screen.yml'
+# For target-only diagnostics, dispatch from a branch outside the push list above;
+# a push to an automatically watched branch runs the suite when its runtime inputs change.
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fbs-main-screen-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated browser driver
+        run: |
+          npm install --prefix "$RUNNER_TEMP/fbs-browser" --no-audit --no-fund @playwright/test@1.58.2
+          "$RUNNER_TEMP/fbs-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Real frontend API database and worker
+        env:
+          WMS_PLAYWRIGHT_MODULE: ${{ runner.temp }}/fbs-browser/node_modules/@playwright/test/index.mjs
+          FBS_MAIN_EVIDENCE: ${{ runner.temp }}/fbs-main-screen
+        run: bash scripts/ci/run_fbs_main_screen.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fbs-main-screen-${{ github.sha }}
+          path: ${{ runner.temp }}/fbs-main-screen
+          retention-days: 7
+          if-no-files-found: error

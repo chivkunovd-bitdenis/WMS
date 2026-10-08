@@ -1,4 +1,5 @@
 import { FbsPackingScanBar } from './FbsPackingScanBar'
+import { FbsPackingActionsToolbar, type FbsPackingActions } from './FbsPackingActionsToolbar'
 import type { PackingScanController } from './fbsSequentialPacking'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -34,9 +35,11 @@ import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
   fetchFbsWorkspace,
   getFbsPickOptions,
+  getFbsPickingContext,
   type FbsPickOptionProduct,
   type FbsWorkspace,
 } from './fbsApi'
+import { ensureFbsStickers } from './fbsStickerPrefetch'
 import {
   buildFbsPickingListPrintHtml,
   fbsErrorText,
@@ -87,6 +90,16 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   // поставка и открытый короб не терялись при переходе между вкладками.
   const [framesMounted, setFramesMounted] = useState(false)
   const [packingHost, setPackingHost] = useState<HTMLDivElement | null>(null)
+  const [packingActions, setPackingActions] = useState<Record<string, FbsPackingActions>>({})
+  const registerPackingActions = useCallback((id: string, actions: FbsPackingActions | null) => {
+    setPackingActions(current => {
+      if (actions) return current[id] === actions ? current : { ...current, [id]: actions }
+      if (!current[id]) return current
+      const next = { ...current }
+      delete next[id]
+      return next
+    })
+  }, [])
   const [packingColumnsBySupply, setPackingColumnsBySupply] = useState<Record<string, { size: boolean; markingAvailable: boolean }>>({})
   const reportPackingColumns = useCallback((id: string, columns: { size: boolean; markingAvailable: boolean }) => {
     setPackingColumnsBySupply(current => current[id]?.size === columns.size && current[id]?.markingAvailable === columns.markingAvailable
@@ -108,6 +121,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   const openGeneration = useRef(0)
   const initialStageGeneration = useRef<number | null>(null)
   const writeSeq = useRef(new Map<string, number>())
+  const freshWorkspaceGeneration = useRef(new Map<string, number>())
   const silentRefreshInFlight = useRef(false)
 
   const selectStage = (next: FbsAssemblyStageKey) => {
@@ -125,6 +139,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     writeSeq.current.set(supplyId, seq)
     const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
     if (generation !== openGeneration.current || writeSeq.current.get(supplyId) !== seq) return
+    freshWorkspaceGeneration.current.set(supplyId, generation)
     setWorkspaces((current) => ({ ...current, [supplyId]: next }))
     return next
   }, [token, authHeaders])
@@ -162,6 +177,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     initialStageGeneration.current = openGeneration.current
     const ids = idsKey.split(',')
     setWorkspaces({})
+    setPackingActions({})
     setError(null)
     setBusy(false)
     setHistorySupplyId(null)
@@ -220,6 +236,35 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     setWorkspaces((current) => (current[next.supply.id] === next ? current : { ...current, [next.supply.id]: next }))
   }, [])
 
+  const stickerAttempts = useRef(new Set<string>())
+  useEffect(() => { stickerAttempts.current.clear() }, [open, stage])
+  useEffect(() => {
+    if (!open || stage !== 'picking') return
+    const generation = openGeneration.current
+    for (const snapshot of ordered) {
+      if (freshWorkspaceGeneration.current.get(snapshot.supply.id) !== generation) continue
+      if (snapshot.supply.marketplace !== 'wb'
+        || snapshot.stage === 'tracking'
+        || ['in_delivery', 'done', 'cancelled'].includes(snapshot.supply.status)
+        || stickerAttempts.current.has(snapshot.supply.id)
+        || !snapshot.orders.some(order => !order.sticker.code && order.status !== 'cancelled')) continue
+      stickerAttempts.current.add(snapshot.supply.id)
+      const sequence = writeSeq.current.get(snapshot.supply.id) ?? 0
+      void ensureFbsStickers(token, authHeaders, snapshot).then(result => {
+        if (generation !== openGeneration.current
+          || freshWorkspaceGeneration.current.get(snapshot.supply.id) !== generation
+          || writeSeq.current.get(snapshot.supply.id) !== sequence) return
+        onFrameWorkspace(result.workspace)
+        if (result.errorMessage) setError(result.errorMessage)
+      }).catch(cause => {
+        if (generation !== openGeneration.current
+          || freshWorkspaceGeneration.current.get(snapshot.supply.id) !== generation
+          || writeSeq.current.get(snapshot.supply.id) !== sequence) return
+        setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+      })
+    }
+  }, [open, stage, ordered, token, authHeaders, onFrameWorkspace])
+
   const registerEscape = useCallback((handler: (() => boolean) | null) => {
     escapeHandlerRef.current = handler
   }, [])
@@ -236,9 +281,43 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     printWindow.opener = null
     setError(null)
     printWindow.document.write('<title>Лист подбора</title><p style="font:14px Arial,sans-serif">Готовим лист подбора…</p>')
-    let rows = fbsAssemblyPickingRows(ordered)
+    const generation = openGeneration.current
+    const snapshots = ordered
+    const sequences = new Map(snapshots.map(one => [one.supply.id, writeSeq.current.get(one.supply.id) ?? 0]))
+    const printable = await Promise.all(snapshots.map(async snapshot => {
+      const historicalReadOnly = snapshot.stage === 'tracking'
+        || ['in_delivery', 'done', 'cancelled'].includes(snapshot.supply.status)
+      const missingStickers = snapshot.orders.some(
+        order => !order.sticker.code && order.status !== 'cancelled',
+      )
+      if (snapshot.supply.marketplace !== 'wb' || historicalReadOnly || !missingStickers) return snapshot
+      try {
+        const result = await ensureFbsStickers(token, authHeaders, snapshot)
+        if (generation !== openGeneration.current) return snapshot
+        if (result.errorMessage) setError(result.errorMessage)
+        if (generation === openGeneration.current
+          && freshWorkspaceGeneration.current.get(snapshot.supply.id) === generation
+          && writeSeq.current.get(snapshot.supply.id) === sequences.get(snapshot.supply.id)) {
+          onFrameWorkspace(result.workspace)
+        }
+        return result.workspace
+      } catch (cause) {
+        if (generation !== openGeneration.current) return snapshot
+        setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+        return snapshot
+      }
+    }))
+    if (generation !== openGeneration.current) {
+      printWindow.close()
+      return
+    }
+    let rows = fbsAssemblyPickingRows(printable)
     try {
       const optionLists = await Promise.all(ordered.map((one) => getFbsPickOptions(token, authHeaders, one.supply.id)))
+      if (generation !== openGeneration.current) {
+        printWindow.close()
+        return
+      }
       const byProduct = new Map<string, FbsPickOptionProduct[]>()
       for (const list of optionLists) {
         for (const option of list) byProduct.set(option.product_id, [...(byProduct.get(option.product_id) ?? []), option])
@@ -252,6 +331,35 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     } catch {
       rows = rows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
+    }
+    try {
+      const lists = await Promise.all(ordered.map((one) => getFbsPickingContext(token, authHeaders, one.supply.id)))
+      if (generation !== openGeneration.current) {
+        printWindow.close()
+        return
+      }
+      const context = new Map<string, { locations: string[]; inbound_supplies: string[]; source_groups: Array<{ key: string; title: string; lines: string[] }> }>()
+      for (const list of lists) for (const item of list) {
+        const previous = context.get(item.product_id)
+        const mergedGroups = new Map((previous?.source_groups ?? []).map((group) => [group.key, group]))
+        for (const group of item.source_groups) {
+          const earlier = mergedGroups.get(group.key)
+          mergedGroups.set(group.key, { ...group, lines: [...new Set([...(earlier?.lines ?? []), ...group.lines])] })
+        }
+        context.set(item.product_id, {
+          locations: [...new Set([...(previous?.locations ?? []), ...item.locations])],
+          inbound_supplies: [...new Set([...(previous?.inbound_supplies ?? []), ...item.inbound_supplies])],
+          source_groups: [...mergedGroups.values()],
+        })
+      }
+      rows = rows.map((row) => {
+        const item = context.get(row.key)
+        return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies, sourceGroups: item.source_groups } : row
+      })
+    } catch {
+      setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')
+      printWindow.close()
+      return
     }
     if (printWindow.closed) return
     const distinct = (values: string[]) => [...new Set(values)].join(', ')
@@ -279,7 +387,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   }
 
   const pickSupplies = useMemo(
-    () => ordered.map((one) => ({ id: one.supply.id, sellerId: one.supply.seller.id })),
+    () => ordered.map((one) => ({ id: one.supply.id, sellerId: one.supply.seller.id, marketplace: one.supply.marketplace })),
     [ordered],
   )
 
@@ -404,6 +512,8 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
                   const scanner = scanners.current.get(id)
                   return scanner ? [scanner] : []
                 })} />
+                <FbsPackingActionsToolbar entries={supplyIds.flatMap(id => packingActions[id] ? [packingActions[id]] : [])}
+                  active={open && stage === 'packing'} contextKey={idsKey} />
                 <Box ref={setPackingHost} sx={{ display: 'flex', flexDirection: 'column' }} data-testid="fbs-unified-packing-rows" />
               </Paper>
               {ordered.map((workspace) => {
@@ -417,7 +527,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
                     open={open}
                     onClose={() => undefined}
                     assemblyFrame={{
-                      packingHost, registerScanner, onScanChange, promotedSupplyId, onPromotePackingOrder,
+                      packingHost, registerScanner, registerPackingActions, onScanChange, promotedSupplyId, onPromotePackingOrder,
                       packingColumns,
                       onPackingColumnsChange: columns => reportPackingColumns(supplyId, columns),
                       rejectedFilter: { active: rejectedFilterOn, count: rejectedCount, headerSupplyId: rejectedHeaderSupplyId },

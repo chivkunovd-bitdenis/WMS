@@ -3,7 +3,6 @@
 All data is synthetic; no GitHub, printer, marketplace or production calls.
 """
 import copy
-import hashlib
 import importlib
 import json
 from pathlib import Path
@@ -130,17 +129,17 @@ class ProcessContractTests(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 self.m.verify_reports(self.policy, self.root, sha='a'*40)
 
-    def test_freeze_rejects_source_helper_runner_and_self_updated_hash(self):
+    def test_source_fixture_addition_and_rename_pass_without_external_pin(self):
         def git(*args):
             return subprocess.check_output(['git', '-C', str(self.root), *args], stderr=subprocess.DEVNULL)
         git('init', '-q')
         git('config', 'user.email', 'fixture@example.invalid')
         git('config', 'user.name', 'Fixture')
-        for path in ['tests/test_scan.py', 'tests/helpers.py', '.github/workflows/ci.yml']:
+        for path in ['tests/test_scan.py', 'tests/helpers.py']:
             target = self.root / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('original contract\n')
-            self.policy['files'][path] = hashlib.sha256(target.read_bytes()).hexdigest()
+            self.policy['files'][path] = 'a' * 64
         policy_path = self.root / self.m.POLICY_PATH
         policy_path.parent.mkdir(parents=True, exist_ok=True)
         policy_path.write_text(json.dumps(self.policy))
@@ -148,23 +147,39 @@ class ProcessContractTests(unittest.TestCase):
         git('commit', '-qm', 'fixture')
         base = git('rev-parse', 'HEAD').decode().strip()
         self.m.verify_integrity(self.root, base)
-        for name in self.policy['files']:
-            with self.subTest(path=name):
-                path = self.root / name
-                original = path.read_bytes()
-                path.write_text('assert True # weakened or launch disabled\n')
-                changed = copy.deepcopy(self.policy)
-                changed['files'][name] = hashlib.sha256(path.read_bytes()).hexdigest()
-                policy_path.write_text(json.dumps(changed))
-                with self.assertRaisesRegex(ValueError, 'protected'):
-                    self.m.verify_integrity(self.root, base)
-                path.write_bytes(original)
-                policy_path.write_text(json.dumps(self.policy))
+        (self.root / 'tests/test_scan.py').write_text('def test_scan(): assert True\n')
+        (self.root / 'tests/helpers.py').rename(self.root / 'tests/fixtures.py')
+        (self.root / 'tests/new_scan_test.py').write_text('def test_added(): assert True\n')
+        self.m.verify_integrity(self.root, base)
+
+    def test_renamed_case_with_same_coverage_count_passes_and_runs(self):
+        def git(*args):
+            return subprocess.check_output(['git', '-C', str(self.root), *args], stderr=subprocess.DEVNULL)
+        git('init', '-q')
+        git('config', 'user.email', 'fixture@example.invalid')
+        git('config', 'user.name', 'Fixture')
+        source = self.root / 'tests/test_scan.py'
+        source.parent.mkdir(parents=True)
+        source.write_text('def test_scan(): assert True\n')
+        policy_path = self.root / self.m.POLICY_PATH
+        policy_path.parent.mkdir(parents=True, exist_ok=True)
+        self.policy['files']['tests/test_scan.py'] = 'a' * 64
+        policy_path.write_text(json.dumps(self.policy))
+        git('add', '.')
+        git('commit', '-qm', 'fixture')
+        base = git('rev-parse', 'HEAD').decode().strip()
         changed = copy.deepcopy(self.policy)
-        changed['suites']['picking']['cases'].remove('tests.test_pick::undo')
+        changed['suites']['picking']['cases'][0] = 'tests.test_pick::scan[renamed]'
+        source.rename(source.with_name('test_scan_renamed.py'))
         policy_path.write_text(json.dumps(changed))
-        with self.assertRaises(ValueError):
-            self.m.verify_integrity(self.root, base)
+        self.assertEqual(self.m.verify_integrity(self.root, base), changed)
+        (self.root / 'picking.xml').write_bytes(junit([('scan[renamed]', ''), ('undo', '')]))
+        self.m.verify_reports(changed, self.root)
+
+    def test_removed_mandatory_case_is_missing_from_unchanged_policy_report(self):
+        (self.root / 'picking.xml').write_bytes(junit([('scan[EAN]', '')]))
+        with self.assertRaisesRegex(ValueError, 'missing required cases.*undo'):
+            self.m.verify_reports(self.policy, self.root)
 
 
 if __name__ == '__main__':

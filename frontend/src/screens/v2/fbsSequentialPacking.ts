@@ -13,7 +13,7 @@ import {
   lookupFbsOrderBySticker, markFbsDirectKizPrintStarted, markFbsScanAutoPrintTargetStarted,
   releaseFbsDirectKizPrintClaim, releaseFbsScanAutoPrintTargetClaim,
   resolveFbsAssetUrl, saveFbsDirectKizReprint, scanFbsProductForAutoPrint, startFbsSupplyWork, validateFbsKiz,
-  FbsApiError, type FbsKizLookup, type FbsScanAutoPrintReprintClaim, type FbsScanAutoPrintResult, type FbsWorkspace,
+  validateFbsPrintBindings, FbsApiError, type FbsKizLookup, type FbsScanAutoPrintReprintClaim, type FbsScanAutoPrintResult, type FbsWorkspace,
 } from './fbsApi'
 import type { PackagingTask } from '../ff/FfPackagingPage'
 
@@ -625,14 +625,14 @@ export function makePackingScanDeps(
     }
     return response.json()
   }
-  const send = (imageDataUrl: string, idempotencyKey: string, sizeId: LabelSizeId) => {
+  const send = (imageDataUrl: string, idempotencyKey: string, sizeId: LabelSizeId, beforeDispatch?: () => Promise<void>) => {
     const size = resolveLabelSize(sizeId)
-    return dispatchPreparedQrInKiosk({ imageDataUrl, idempotencyKey, widthMm: size.widthMm, heightMm: size.heightMm })
+    return dispatchPreparedQrInKiosk({ imageDataUrl, idempotencyKey, widthMm: size.widthMm, heightMm: size.heightMm, beforeDispatch })
   }
   // WMS-633: one job per copy, one after another; WMS Print returns the saved
   // receipt for a copy it already accepted, so a retry prints only the rest.
-  const sendCopies = async (imageDataUrl: string, key: string, sizeId: LabelSizeId, copies: number) => {
-    for (const copyKey of packingLabelCopyKeys(key, copies)) await send(imageDataUrl, copyKey, sizeId)
+  const sendCopies = async (imageDataUrl: string, key: string, sizeId: LabelSizeId, copies: number, beforeDispatch?: () => Promise<void>) => {
+    for (const copyKey of packingLabelCopyKeys(key, copies)) await send(imageDataUrl, copyKey, sizeId, beforeDispatch)
   }
   const toAttempt = (raw: string): PackingAttempt | null => {
     const saved = peekFbsPendingProductScan(token, storageId, raw)
@@ -805,7 +805,9 @@ export function makePackingScanDeps(
       await startClaimedAutomaticPrint(key, async () => {
         const image = await renderCzLabelPng(
           { cis: code.cis_code, codeId: code.id, hasLabelArtifact: code.has_label_artifact }, resolveLabelSize(sizeId), token)
-        await sendCopies(image, key, sizeId, copies)
+        await sendCopies(image, key, sizeId, copies, () => validateFbsPrintBindings(token, [{
+          order_id: result.order_id, supply_id: supplyId, marking_id: code.marking_id, cis_code: code.cis_code,
+        }]))
       }, {
         claim: (attemptKey) => claimFbsScanAutoPrintTarget(token, authHeaders, supplyId, result.scan_id, 'chz', attemptKey),
         markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(token, authHeaders, supplyId, result.scan_id, 'chz', attemptKey),
@@ -819,7 +821,9 @@ export function makePackingScanDeps(
         if (!claim.kiz) throw new Error('Сервер не подтвердил канонический ЧЗ для перепечати.')
         await sendCopies(await renderCzLabelPng(
           { cis: claim.kiz, codeId: claim.code_id, hasLabelArtifact: claim.has_label_artifact },
-          resolveLabelSize(sizeId), token), key, sizeId, copies)
+          resolveLabelSize(sizeId), token), key, sizeId, copies, () => validateFbsPrintBindings(token, [{
+          order_id: result.order_id, supply_id: supplyId, marking_id: claim.marking_id, cis_code: claim.kiz!,
+        }]))
       }, {
         claim: (attemptKey) => claimFbsScanAutoPrintReprint(token, authHeaders, supplyId, result.scan_id, attemptKey),
         markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(token, authHeaders, supplyId, result.scan_id, 'chz', attemptKey),

@@ -3412,21 +3412,23 @@ def test_gs_restore_never_loses_payload_characters() -> None:
 
 
 @pytest.mark.parametrize("missing_before", ["91", "92"])
-def test_gs_restore_repairs_code_with_only_one_of_two_separators(
+def test_gs_restore_preserves_fully_parseable_half_separator_input(
     missing_before: str,
 ) -> None:
-    # TC-NEW-FBS-KIZ-I3-009: разделители теряются и поодиночке. Половинчатый
-    # код обязан достраиваться до канонического вида с ОБОИМИ разделителями —
-    # раньше он проходил насквозь как «нормальный» и получал от WB sgtinNoGS.
+    # WMS-666 R1008.9: these two inputs are also complete GS1 parses: AI 21
+    # permits a variable value up to 20 characters and AI 91-99 up to 90.
+    # Without a trusted profile, a missing separator cannot be distinguished
+    # from payload bytes; preserve the fully parseable scan exactly. Known
+    # no-GS repairs remain covered independently above.
     full = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
     half = full.replace(f"{_GS}{missing_before}", missing_before, 1)
     assert half.count(_GS) == 1
 
     value, hints = kiz_svc.normalize_scanned_cis(half)
 
-    assert value == full
-    assert value.count(_GS) == 2
-    assert hints == ["gs_structure_restored"]
+    assert value == half
+    assert value.count(_GS) == 1
+    assert hints == []
 
 
 def test_gs_restore_collapses_duplicated_separators_to_canonical_form() -> None:
@@ -3673,19 +3675,6 @@ def test_gs_restore_normalizes_trailing_gs1_terminator_without_losing_data() -> 
     assert value.replace(_GS, "") == canonical.replace(_GS, "")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ДЕФЕКТ (остаточный, внесён починкой половинчатых кодов): очистка "
-        "хвоста от разделителей сделала достраивание применимым и к кодам, "
-        "которые уже разбирались однозначно. КИЗ вида 21<серийник><GS>92<44> "
-        "(без блока 91), чей серийник заканчивается на шаблон '91'+2 символа, "
-        "переразбирается: шесть символов серийного номера уезжают в выдуманный "
-        "блок 91, и в WB уходит другой ЛОГИЧЕСКИЙ код при тех же байтах. "
-        "Лечится проверкой «если значение уже разбирается как валидный GS1 "
-        "имеющимися разделителями — не трогать»."
-    ),
-)
 def test_gs_restore_does_not_reparse_a_code_that_already_parses() -> None:
     # TC-NEW-FBS-KIZ-I3-013 (negative): тихая подмена границ полей — худший
     # вид отказа: байты те же, оператор ничего не замечает, а WB видит другой
@@ -3696,6 +3685,63 @@ def test_gs_restore_does_not_reparse_a_code_that_already_parses() -> None:
 
     assert value == victim
     assert hints == []
+
+
+@pytest.mark.asyncio
+async def test_operator_commit_preserves_valid_gs1_with_91_like_serial_tail(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # WMS-666: a valid AI 21 serial ending in "91ZZQQ" must remain opaque.
+    # The following GS and AI 92 already make the input unambiguous; operator
+    # KIZ commit must send and persist the exact scanned CIS bytes.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=934004,
+        sticker_code="GS-OPAQUE-SERIAL",
+        wb_barcode="GS-OPAQUE-SERIAL-BAR",
+        with_packaging=True,
+    )
+    sent = _patch_wb_acceptance(monkeypatch)
+    victim = f"01{_GTIN14}21AB91ZZQQ{_GS}92{_SIGNATURE_44}"
+
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={
+            "idempotency_key": "kiz-gs-opaque-serial",
+            "pairs": [
+                {"order_id": str(order.order_id), "value": victim, "confirmed": False}
+            ],
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()[0]["status"] == "ok", response.text
+    assert sent[934004] == victim
+    async with SessionLocal() as session:
+        marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(
+                    FbsOrderMarking.order_id == order.order_id
+                )
+            )
+        ).scalar_one()
+        assert marking.value == victim
 
 
 def test_gs_restore_leaves_alternative_crypto_tag_93_alone_when_separated() -> None:

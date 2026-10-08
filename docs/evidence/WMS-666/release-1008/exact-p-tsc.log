@@ -1,0 +1,3 @@
+product_sha=b6d23148f1571d08d13d83c6179c385e2f6a1efc
+command=(cd frontend && ./node_modules/.bin/tsc --noEmit -p tsconfig.app.json)
+exit=0

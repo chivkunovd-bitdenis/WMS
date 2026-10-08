@@ -1,0 +1,13 @@
+{
+  "sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "cases": [
+    {
+      "id": "WMS666.named-supply.skip-honest-sign",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC_WB_AND_PRINT;REAL_LOCAL_API_POSTGRES",
+  "currentCase": "WMS666.named-supply.skip-honest-sign",
+  "productSha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc"
+}

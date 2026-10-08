@@ -1,0 +1,13 @@
+{
+  "sha": "f1177c5404f59e593f97ee17b5c6339c5306554d",
+  "cases": [
+    {
+      "id": "WMS652.printPreview[valid-fixture]",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.printPreview[valid-fixture]",
+  "status": "PASS"
+}

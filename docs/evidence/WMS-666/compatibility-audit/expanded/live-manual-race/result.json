@@ -1,0 +1,19 @@
+{
+  "sha": "bfdc72ba3840798cdf4a7aa5440e51599128e80f",
+  "cases": [
+    {
+      "id": "WMS666.actualPool[supply_id;manual-then-delete-scan]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: manual printed CIS must still belong to its original order after the other operator scan"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;manual-then-delete-scan]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: manual printed CIS must still belong to its original order after the other operator scan"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "REAL_LOCAL_API_POSTGRES_SYNTHETIC_WB",
+  "currentCase": "WMS666.actualPool[supply_ids;manual-then-delete-scan]",
+  "productSha": "212f19d548496fef7baf75c83204b771e304281b"
+}

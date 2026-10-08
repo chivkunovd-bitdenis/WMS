@@ -1,0 +1,7 @@
+{
+  "candidateSha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "status": "INVALIDATED_AS_SCAN_PRINT_ACCEPTANCE",
+  "reason": "The runner asserted printLog.length > 0 after product scan, but two manual HTML print jobs had already populated printLog. It did not prove that the scanner dispatched a new native/direct-print job. The retained request/PG trace does prove scan auto-pack for order A, followed by explicit pack-all for remaining order B; that packing evidence remains independently valid.",
+  "sourceEvidence": "WMS666-whole-process-bare-ordinary-manual-before-scan.json",
+  "followup": "Use corrected runner with a post-manual printLog baseline and require two new sink PNGs decoding to the scanned order's current full CIS."
+}

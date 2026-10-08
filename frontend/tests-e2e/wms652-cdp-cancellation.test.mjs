@@ -12,10 +12,13 @@ const source = readFileSync(new URL('./wms652-critical/browser.mjs', import.meta
 const tree = ts.createSourceFile('browser.mjs', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
 const actualClass = tree.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === 'CDP');
 assert.ok(actualClass, 'extract the actual CDP operation, not a replacement transport');
+const actualSleep = tree.statements.find(node => ts.isVariableStatement(node)
+  && node.declarationList.declarations.some(declaration => ts.isIdentifier(declaration.name) && declaration.name.text === 'sleep'));
+assert.ok(actualSleep, 'extract the actual bounded wait used by the CDP operation');
 // Inert function declarations may support the class; no top-level variables,
 // browser startup, imports, fixture execution or business operation is evaluated.
 const declarations = tree.statements.filter(ts.isFunctionDeclaration).map(node => node.getText(tree)).join('\n');
-const actualCode = `${declarations}\n${actualClass.getText(tree)}\nCDP`;
+const actualCode = `${declarations}\n${actualSleep.getText(tree)}\n${actualClass.getText(tree)}\nCDP`;
 const nativeError = {code: -32602, message: 'Invalid InterceptionId.'};
 const fetchId = 'interception-job-3.0', networkId = '3156.3';
 const flush = async () => {for (let i = 0; i < 4; i++) await new Promise(setImmediate);};
@@ -29,8 +32,14 @@ function fixture() {
     close() {}
   }
   const CDP = runInNewContext(actualCode, {WebSocket: ControlledWebSocket, errors,
-    assert, Buffer, URL, queueMicrotask,
-    setTimeout: callback => {const id = ++timerId; timers.set(id, callback); return id;},
+    assert, Buffer, URL, queueMicrotask, setImmediate,
+    setTimeout: (callback, delay) => {
+      const id = ++timerId; timers.set(id, callback);
+      // Advance only the bounded 300ms cancellation-observation window. The
+      // 12s command timeout stays explicitly controlled by each test.
+      if (delay === 300) setImmediate(() => {if (timers.has(id)) {timers.delete(id); callback();}});
+      return id;
+    },
     clearTimeout: id => timers.delete(id)});
   const cdp = new CDP('ws://synthetic.invalid/no-connection');
   const emit = (method, params) => ws.onmessage({data: JSON.stringify({method, params})});

@@ -27,11 +27,12 @@ beforeAll(() => {
 })
 
 const SUPPLY_ID = 'sup-575'
+const OTHER_SUPPLY_ID = 'sup-576'
 const STICKER_A = '*CDhjtA1111'
 const STICKER_B = '*CDhjtB2222'
 const KIZ_A = '0104600000000017215AbCdEfGh1234'
 
-function order(id: string, wbOrderId: number, index: number, tail: string | null) {
+function order(id: string, wbOrderId: number, index: number, tail: string | null, supplyId = SUPPLY_ID) {
   return {
     id,
     marketplace: 'wb',
@@ -67,16 +68,16 @@ function order(id: string, wbOrderId: number, index: number, tail: string | null
     pack: { status: 'pending', packed_at: null },
     created_at_wb: new Date().toISOString(),
     deadline_at: new Date(Date.now() + 86_400_000).toISOString(),
-    supply_id: SUPPLY_ID,
+    supply_id: supplyId,
     selection_blockers: [],
     tape_order_index: index,
   }
 }
 
-function workspace(tails: Record<string, string | null> = {}): FbsWorkspace {
+function workspace(tails: Record<string, string | null> = {}, supplyId = SUPPLY_ID): FbsWorkspace {
   return {
     supply: {
-      id: SUPPLY_ID, marketplace: 'wb', wb_supply_id: 'WB-GI-575', source: 'wms', name: 'Поставка 000575',
+      id: supplyId, marketplace: 'wb', wb_supply_id: `WB-GI-${supplyId}`, source: 'wms', name: `Поставка ${supplyId}`,
       status: 'assembling', delivery_type: 'warehouse_sc', seller: { id: 'seller-1', name: 'ИП Тестовый' },
       wb_warehouse: { id: 507, name: 'Коледино' }, wms_warehouse: { id: 'wh-1', name: 'Основной склад' },
       planned_destination: null, planned_shipment_date: null,
@@ -86,7 +87,7 @@ function workspace(tails: Record<string, string | null> = {}): FbsWorkspace {
     stage: 'packing',
     progress: { picked: 2, packed: 0, metadata_ready: 0, stickers_ready: 0, total: 2 },
     blockers: [],
-    orders: [order('order-a', 5001, 0, tails['order-a'] ?? null), order('order-b', 5002, 1, tails['order-b'] ?? null)],
+    orders: [order('order-a', 5001, 0, tails['order-a'] ?? null, supplyId), order('order-b', 5002, 1, tails['order-b'] ?? null, supplyId)],
     cargo_places: [],
     boxes: [],
     delivery_preflight: null,
@@ -109,6 +110,9 @@ let committedTails: Record<string, string | null>
 let validationFailure = false
 let deleteFailure = false
 let commitGate: Promise<void> | null = null
+let stickerReadyIds: Set<string>
+let missingStickerIds: Set<string>
+let printBatchHandler: ((body: Record<string, unknown>) => Promise<Response>) | null
 const originalFetch = globalThis.fetch
 
 function json(body: unknown, status = 200) {
@@ -127,6 +131,15 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   calls.push({ method, path: `${path}${url.search}`, body })
   if (path.startsWith('/operations/packaging-tasks/')) return json(packagingTask)
   if (path === `/operations/fbs-supplies/${SUPPLY_ID}/start-work`) return json(workspace(committedTails))
+  if (path === `/operations/fbs-supplies/${OTHER_SUPPLY_ID}/workspace`) {
+    const next = workspace({}, OTHER_SUPPLY_ID)
+    next.orders = next.orders.map((item) => ({ ...item, product: { ...item.product, name: 'Товар из новой поставки' } }))
+    return json(next)
+  }
+  if (method === 'POST' && path.endsWith('/print-assets')) {
+    if (printBatchHandler) return printBatchHandler((body ?? {}) as Record<string, unknown>)
+    return json({ requested: 0, ready: 0, missing: 0, failed: 0, assets: [], order_errors: [] })
+  }
   if (path === '/operations/fbs-orders/kiz/lookup') {
     await wait(delays.lookup ?? 0)
     const sticker = url.searchParams.get('sticker')
@@ -160,7 +173,11 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   }
   if (path === `/operations/fbs-supplies/${SUPPLY_ID}/workspace`) {
     await wait(delays.workspace ?? 0)
-    return json(workspace(committedTails))
+    const snapshot = workspace(committedTails)
+    snapshot.orders = snapshot.orders.map((item) => missingStickerIds.has(item.id)
+      ? { ...item, sticker: { ...item.sticker, code: stickerReadyIds.has(item.id) ? `QR-${item.id}` : null } }
+      : item)
+    return json(snapshot)
   }
   if (path === `/operations/fbs-supplies/${SUPPLY_ID}/scan-auto-print`) {
     return json({ detail: { code: 'scan_product_not_found', message: 'Товар не найден' } }, 404)
@@ -176,6 +193,9 @@ beforeEach(() => {
   calls = []
   delays = {}
   committedTails = {}
+  stickerReadyIds = new Set()
+  missingStickerIds = new Set()
+  printBatchHandler = null
   validationFailure = false
   deleteFailure = false
   commitGate = null
@@ -252,7 +272,7 @@ function scan(code: string) {
 const noop = () => undefined
 const headers = () => ({ Authorization: 'Bearer t-575' })
 
-function UnifiedWorkspace({ initial }: { initial: FbsWorkspace }) {
+function UnifiedWorkspace({ initial, selectedSupply = SUPPLY_ID }: { initial: FbsWorkspace; selectedSupply?: string }) {
   const [controller, setController] = useState<PackingScanController | null>(null)
   const [, setScanVersion] = useState(0)
   const registerScanner = useCallback((_id: string, scanner: PackingScanController | null) => setController(scanner), [])
@@ -267,7 +287,7 @@ function UnifiedWorkspace({ initial }: { initial: FbsWorkspace }) {
     <FfFbsSupplyWorkspace
       token="t-575"
       authHeaders={headers}
-      supplyId={SUPPLY_ID}
+      supplyId={selectedSupply}
       initialWorkspace={initial}
       open
       onClose={noop}
@@ -286,9 +306,9 @@ const commonScanInput = () => document.querySelector<HTMLInputElement>(
 )
 const commonScanError = () => document.querySelector('[data-testid="fbs-unified-scan"] [role="alert"]')
 
-async function openPackingTab(initial: FbsWorkspace = workspace()) {
+async function openPackingTab(initial: FbsWorkspace = workspace(), selectedSupply = SUPPLY_ID) {
   await act(async () => {
-    root.render(<UnifiedWorkspace initial={initial} />)
+    root.render(<UnifiedWorkspace initial={initial} selectedSupply={selectedSupply} />)
   })
   await settle(50)
   expect(document.querySelectorAll('[data-testid="fbs-unified-scan"]')).toHaveLength(1)
@@ -303,6 +323,85 @@ const rowTail = (orderId: string) => document.querySelector<HTMLElement>(`[data-
 const kizCalls = () => calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/'))
 
 describe('WMS-575 · «Упаковка и маркировка» принимает скан в любой точке', () => {
+  it('keeps HTTP-200 missing-QR recovery available and retries only the failed order', async () => {
+    const initial = workspace()
+    const orderA = initial.orders[0]!
+    const orderB = initial.orders[1]!
+    missingStickerIds = new Set([orderA.id, orderB.id])
+    initial.orders = initial.orders.map((item) => ({ ...item, sticker: { ...item.sticker, code: null } }))
+    const attempts: Array<{ order_ids?: string[]; kind?: string; retry_missing?: boolean }> = []
+    printBatchHandler = async (body) => {
+      const request = body as { order_ids?: string[]; kind?: string; retry_missing?: boolean }
+      attempts.push(request)
+      if (attempts.length === 1) {
+        stickerReadyIds.add(orderA.id)
+        return json({
+          requested: 2, ready: 1, missing: 0, failed: 1,
+          assets: [],
+          order_errors: [{ order_id: orderB.id, wb_order_id: orderB.wb_order_id, code: 'synthetic_qr_failure', message: 'QR для заказа 5002 не получен' }],
+        })
+      }
+      for (const id of request.order_ids ?? []) stickerReadyIds.add(id)
+      return json({ requested: 1, ready: 1, missing: 0, failed: 0, assets: [], order_errors: [] })
+    }
+
+    await openPackingTab(initial)
+    await settle(100)
+    expect(attempts).toHaveLength(1)
+    expect(attempts[0]).toMatchObject({ kind: 'order_sticker', retry_missing: true, order_ids: [orderA.id, orderB.id] })
+    expect(document.body.textContent).toContain('QR для заказа 5002 не получен')
+    const retry = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((candidate) => candidate.textContent?.trim() === 'Повторить')
+    expect(retry, 'an HTTP-200 partial QR response must leave a same-window recovery action').not.toBeUndefined()
+    await act(async () => retry!.click())
+    await settle(100)
+    expect(attempts).toHaveLength(2)
+    expect(attempts[1]).toMatchObject({ kind: 'order_sticker', retry_missing: true, order_ids: [orderB.id] })
+    expect(attempts[1]?.order_ids).not.toContain(orderA.id)
+  })
+
+  it('does not apply a late failed QR retry to another supply mounted in the same workspace', async () => {
+    const initial = workspace()
+    const orderA = initial.orders[0]!
+    const orderB = initial.orders[1]!
+    missingStickerIds = new Set([orderA.id, orderB.id])
+    initial.orders = initial.orders.map((item) => ({ ...item, sticker: { ...item.sticker, code: null } }))
+    let resolveRetry!: (response: Response) => void
+    const retryResponse = new Promise<Response>((resolve) => { resolveRetry = resolve })
+    let attempts = 0
+    printBatchHandler = async () => {
+      attempts += 1
+      if (attempts === 1) return json({ detail: { code: 'temporary_unavailable', message: 'Первичная подготовка QR не выполнена', retryable: true } }, 503)
+      return retryResponse
+    }
+    await openPackingTab(initial)
+    await settle(100)
+    expect(attempts).toBe(1)
+    const retry = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((candidate) => candidate.textContent?.trim() === 'Повторить')
+    expect(retry).not.toBeUndefined()
+    await act(async () => retry!.click())
+    await settle(0)
+    expect(attempts).toBe(2)
+
+    const other = workspace({}, OTHER_SUPPLY_ID)
+    other.orders = other.orders.map((item) => ({
+      ...item,
+      product: { ...item.product, name: 'Товар из новой поставки' },
+    }))
+    await openPackingTab(other, OTHER_SUPPLY_ID)
+    await settle(80)
+    expect(document.body.textContent).toContain('Товар из новой поставки')
+    expect(document.querySelector('[role="alert"]')?.textContent ?? '').not.toContain('заказа 5002')
+
+    resolveRetry(json({
+      requested: 2, ready: 1, missing: 0, failed: 1, assets: [],
+      order_errors: [{ order_id: orderB.id, wb_order_id: orderB.wb_order_id, code: 'late_qr_failure', message: 'Поздняя ошибка QR старой поставки' }],
+    }))
+    await settle(100)
+    expect(document.body.textContent).toContain('Товар из новой поставки')
+    expect(document.body.textContent).not.toContain('Поздняя ошибка QR старой поставки')
+    expect(document.querySelector('[role="alert"]')?.textContent ?? '').not.toContain('Поздняя ошибка QR старой поставки')
+  })
+
   it('C5/R5: фокус на «Печатать QR» — стикер A, ЧЗ A, стикер B без единого клика', async () => {
     await openPackingTab()
     const printQr = document.querySelector<HTMLInputElement>('[data-testid="fbs-scan-print-qr-toggle"] input')!

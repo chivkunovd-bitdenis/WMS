@@ -1,0 +1,154 @@
+{
+  "source_sha": "af5b5aa15210167ee1f943943871f6052150c791",
+  "handler_identity_sha256": "2a480705fd34f6f5690e7eae215fa2a4de466a6b4a0e1b08f75dcd9c110a99e1",
+  "cases": {
+    "ordinary": {
+      "result": "PASS",
+      "case_json_sha256": "96d94bf04b77a1257380bc3912b17f27f53a2361404ab30dbd59d39fae8fef5a",
+      "joins": [
+        {
+          "job_key": "5f8dcaa6-bada-4831-ba6d-42fa8402d830",
+          "kind": "sticker",
+          "order_id": "a25420c2-b255-4d89-b52f-cb44da2e5fb7",
+          "decoded": "*WMS666-800392",
+          "rendered_png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "handler_receipt": "emulator-0001-8ee34fda516b",
+          "handler_png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "sink_png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "join_valid": true
+        },
+        {
+          "job_key": "5f8dcaa6-bada-4831-ba6d-42fa8402d830:chz",
+          "kind": "KIZ",
+          "order_id": "a25420c2-b255-4d89-b52f-cb44da2e5fb7",
+          "decoded": "010460043993125321KIZTAPE0000000000",
+          "rendered_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_receipt": "emulator-0002-f2f4c4632159",
+          "handler_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "sink_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "join_valid": true
+        },
+        {
+          "job_key": "5f8dcaa6-bada-4831-ba6d-42fa8402d830:chz:c2",
+          "kind": "KIZ",
+          "order_id": "a25420c2-b255-4d89-b52f-cb44da2e5fb7",
+          "decoded": "010460043993125321KIZTAPE0000000000",
+          "rendered_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_receipt": "emulator-0003-f2f4c4632159",
+          "handler_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "sink_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "join_valid": true
+        },
+        {
+          "job_key": "fc34f4dc-72a7-4c2b-bc54-c1f4a748ba4c",
+          "kind": "sticker",
+          "order_id": "635d2f04-00dc-4c6d-a368-c0ae227b297e",
+          "decoded": "*WMS666-800393",
+          "rendered_png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "handler_receipt": "emulator-0004-ffebd4debcd7",
+          "handler_png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "sink_png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "join_valid": true
+        },
+        {
+          "job_key": "fc34f4dc-72a7-4c2b-bc54-c1f4a748ba4c:chz",
+          "kind": "KIZ",
+          "order_id": "635d2f04-00dc-4c6d-a368-c0ae227b297e",
+          "decoded": "010460043993125321KIZTAPE0000000001",
+          "rendered_png_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "handler_receipt": "emulator-0005-cb9e8ba5ed4a",
+          "handler_png_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "sink_png_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "join_valid": true
+        },
+        {
+          "job_key": "fc34f4dc-72a7-4c2b-bc54-c1f4a748ba4c:chz:c2",
+          "kind": "KIZ",
+          "order_id": "635d2f04-00dc-4c6d-a368-c0ae227b297e",
+          "decoded": "010460043993125321KIZTAPE0000000001",
+          "rendered_png_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "handler_receipt": "emulator-0006-cb9e8ba5ed4a",
+          "handler_png_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "sink_png_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "join_valid": true
+        }
+      ],
+      "count": 6
+    },
+    "group": {
+      "result": "PASS",
+      "case_json_sha256": "867d01c0d010510e6d66ffd9db5a913324e0d9e4bc07e667a96e0fc37504bd12",
+      "joins": [
+        {
+          "job_key": "abcc841b-e75c-4438-ac6b-23a2c8a38ac0",
+          "kind": "sticker",
+          "order_id": "e4ac808e-d8aa-402a-a140-275ae2b95cfa",
+          "decoded": "*WMS666-800392",
+          "rendered_png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "handler_receipt": "emulator-0013-8ee34fda516b",
+          "handler_png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "sink_png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "join_valid": true
+        },
+        {
+          "job_key": "abcc841b-e75c-4438-ac6b-23a2c8a38ac0:chz",
+          "kind": "KIZ",
+          "order_id": "e4ac808e-d8aa-402a-a140-275ae2b95cfa",
+          "decoded": "010460043993125321KIZTAPE0000000000",
+          "rendered_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_receipt": "emulator-0014-f2f4c4632159",
+          "handler_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "sink_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "join_valid": true
+        },
+        {
+          "job_key": "abcc841b-e75c-4438-ac6b-23a2c8a38ac0:chz:c2",
+          "kind": "KIZ",
+          "order_id": "e4ac808e-d8aa-402a-a140-275ae2b95cfa",
+          "decoded": "010460043993125321KIZTAPE0000000000",
+          "rendered_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_receipt": "emulator-0015-f2f4c4632159",
+          "handler_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "sink_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "join_valid": true
+        },
+        {
+          "job_key": "a8f9ce9a-cabd-496f-88cd-42e753eac6b4",
+          "kind": "sticker",
+          "order_id": "26ee918e-0a39-4507-9cf4-ea2620d7c494",
+          "decoded": "*WMS666-800393",
+          "rendered_png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "handler_receipt": "emulator-0016-ffebd4debcd7",
+          "handler_png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "sink_png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "join_valid": true
+        },
+        {
+          "job_key": "a8f9ce9a-cabd-496f-88cd-42e753eac6b4:chz",
+          "kind": "KIZ",
+          "order_id": "26ee918e-0a39-4507-9cf4-ea2620d7c494",
+          "decoded": "010460043993125321KIZTAPE0000000003",
+          "rendered_png_sha256": "d5b0dd700c564239fe04d8774cf76fbb1e0e6c56112367b99c7422c82670637b",
+          "handler_receipt": "emulator-0017-d5b0dd700c56",
+          "handler_png_sha256": "d5b0dd700c564239fe04d8774cf76fbb1e0e6c56112367b99c7422c82670637b",
+          "sink_png_sha256": "d5b0dd700c564239fe04d8774cf76fbb1e0e6c56112367b99c7422c82670637b",
+          "join_valid": true
+        },
+        {
+          "job_key": "a8f9ce9a-cabd-496f-88cd-42e753eac6b4:chz:c2",
+          "kind": "KIZ",
+          "order_id": "26ee918e-0a39-4507-9cf4-ea2620d7c494",
+          "decoded": "010460043993125321KIZTAPE0000000003",
+          "rendered_png_sha256": "d5b0dd700c564239fe04d8774cf76fbb1e0e6c56112367b99c7422c82670637b",
+          "handler_receipt": "emulator-0018-d5b0dd700c56",
+          "handler_png_sha256": "d5b0dd700c564239fe04d8774cf76fbb1e0e6c56112367b99c7422c82670637b",
+          "sink_png_sha256": "d5b0dd700c564239fe04d8774cf76fbb1e0e6c56112367b99c7422c82670637b",
+          "join_valid": true
+        }
+      ],
+      "count": 6
+    }
+  },
+  "all_joins_valid": true,
+  "physical_paper": "NOT_TESTED"
+}

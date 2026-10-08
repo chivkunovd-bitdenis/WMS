@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 from urllib.parse import parse_qs, urlparse
 
-from scripts.ci.verify_ci import GateError, REQUIRED_JOBS, pages, verify
+from scripts.ci.verify_ci import GateError, REQUIRED_JOBS, pages, prose_only_commit, verify
 
 SHA = "a" * 40
 REPO = "owner/repo"
@@ -24,6 +24,7 @@ class Fixture:
                      for i, name in enumerate(sorted(REQUIRED_JOBS), 1)]
         self.app = {"id": 15368, "slug": "github-actions"}
         self.paths = []
+        self.changed = ['frontend/src/app.ts']
         self.run_reads = 0
         self.on_second_read = None
 
@@ -38,6 +39,15 @@ class Fixture:
             return copy.deepcopy(dict(total_count=len(self.runs), workflow_runs=self.runs))
         if "/check-suites/" in path:
             return dict(app=self.app, head_sha=SHA)
+        if "/git/commits/" in path:
+            ref = path.rsplit('/', 1)[-1]
+            return {'tree': {'sha': 'head-tree' if ref == SHA else 'base-tree'},
+                    'parents': [{'sha': 'b' * 40}] if ref == SHA else []}
+        if "/git/trees/" in path:
+            ref = path.split('/git/trees/', 1)[1].split('?', 1)[0]
+            rows = ([{'path': name, 'sha': f'new-{i}', 'mode': '100644', 'type': 'blob'}
+                     for i, name in enumerate(self.changed)] if ref == 'head-tree' else [])
+            return {'truncated': False, 'tree': rows}
         if "/jobs?" in path:
             return copy.deepcopy(dict(total_count=len(self.jobs), jobs=self.jobs))
         raise AssertionError(path)
@@ -114,6 +124,40 @@ class GateTests(unittest.TestCase):
                 self.f.jobs[0]["conclusion"] = conclusion
                 with self.assertRaises(GateError):
                     self.verify()
+
+    def test_docs_only_skips_are_allowed_only_for_prose_changes(self):
+        next(job for job in self.f.jobs if job['name'] == 'backend')['conclusion'] = 'skipped'
+        with self.assertRaises(GateError):
+            self.verify()
+        self.f = Fixture()
+        self.f.changed = ['docs/requirements/WMS-704.md', 'AGENTS.md']
+        next(job for job in self.f.jobs if job['name'] == 'backend')['conclusion'] = 'skipped'
+        result = self.verify()
+        self.assertTrue(result['docs_only'])
+
+    def test_prose_tree_diff_ignores_directory_objects_and_tracks_deleted_files(self):
+        def tree_get(path):
+            if '/git/commits/' in path:
+                ref = path.rsplit('/', 1)[-1]
+                return {'tree': {'sha': 'head' if ref == SHA else 'base'},
+                        'parents': [{'sha': 'b' * 40}] if ref == SHA else []}
+            if '/git/trees/' in path:
+                ref = path.split('/git/trees/', 1)[1].split('?', 1)[0]
+                docs = {'path': 'docs', 'sha': 'a' * 40 if ref == 'head' else 'c' * 40,
+                        'mode': '040000', 'type': 'tree'}
+                blob = {'path': 'docs/requirements/old.md' if ref == 'base'
+                        else 'docs/requirements/new.md', 'sha': '1' * 40 if ref == 'base'
+                        else '2' * 40, 'mode': '100644', 'type': 'blob'}
+                return {'truncated': False, 'tree': [docs, blob]}
+            raise AssertionError(path)
+
+        self.assertTrue(prose_only_commit(tree_get, 'owner/repo', SHA))
+
+    def test_generated_evidence_output_is_docs_only(self):
+        self.f.changed = [
+            'docs/evidence/WMS-666/release-1008/p2-prefix/critical-browser-full/result.json'
+        ]
+        self.assertTrue(prose_only_commit(self.f.get, REPO, SHA))
 
     def test_job_other_sha_or_run_fails(self):
         for field, value in [("head_sha", "b" * 40), ("run_id", 123), ("status", "queued")]:

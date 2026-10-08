@@ -174,7 +174,7 @@ async def sales_for_scope(
             else report.coverage_missing
         )
         if report.coverage_missing.intersection(selected_orders):
-            raise WithdrawalError("wb_sales_history_coverage_90_days_incomplete")
+            raise WithdrawalError("wb_sales_history_before_2024_incomplete")
     return report
 
 

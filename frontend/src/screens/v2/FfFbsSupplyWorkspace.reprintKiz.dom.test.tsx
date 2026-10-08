@@ -17,6 +17,7 @@ type OpenPrintCall = {
     qtyNeedPack: number
     fbsTape?: {
       orders: Array<{ orderId: string; requiresHonestSign: boolean }>
+      reprintMarkingIds?: string[]
       print: (args: { layout: unknown; allowPartial: boolean; reprint: boolean }) => Promise<unknown>
     }
   }
@@ -164,6 +165,7 @@ describe('WMS-575 R11 · «Перепечатать ЧЗ» у кода опер�
     expect(ctx.requiresHonestSign).toBe(true)
     expect(ctx.qtyNeedPack).toBe(1)
     expect(ctx.fbsTape?.orders).toEqual([expect.objectContaining({ orderId: 'order-r11', requiresHonestSign: true })])
+    expect(ctx.fbsTape?.reprintMarkingIds).toEqual([MARKING_ID])
 
     await act(async () => {
       await ctx.fbsTape!.print({ layout: { units: [{ block: 'cz', copies: 1 }] }, allowPartial: false, reprint: true })

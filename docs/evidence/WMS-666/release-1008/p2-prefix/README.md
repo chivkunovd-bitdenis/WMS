@@ -1,0 +1,7 @@
+# P2 active packing prefix evidence
+
+These two exact-P2 browser runs cover the active, taskless sticker and manual KIZ preparation prefix, followed by a product scan and native Handler acceptance for an ordinary supply (S) and a grouped supply (G). The prefix begins with the supply's packaging task and order stickers absent, records the one-time `start-work` 503 and explicit retry, confirms taskless manual KIZ tape printing, then continues through sticker preparation and product scans. At the saved boundary both seeded orders are packed, the current KIZ identities are distinct and unchanged, stock and reservations are captured with no inventory movements, six Handler jobs per case have exact keys and PNG hashes, and the browser has no recorded errors or blocked requests.
+
+The run outputs are `ordinary-r3/` and `group-r2/`. `handler-receipt-joins.json` joins each case's idempotency key and recorded PNG hash to the actual local Direct Handler receiver journal. The receiver journal is cumulative across the runs; the join selects the six exact keys for each case. The browser runner's decoded field is retained as captured, and the join does not claim a separate pixel decoder pass.
+
+The local WB endpoint is a synthetic loopback HTTP receiver. The print Handler is the actual Direct Handler, with an emulated PNG sink. Physical printing and paper output were not tested. These bounded prefixes stop before the later WB verification/rejection and box workflows. Earlier harness failures are preserved in their own folders and are not treated as product failures.

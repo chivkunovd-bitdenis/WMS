@@ -1,0 +1,13 @@
+{
+  "sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "cases": [
+    {
+      "id": "WMS666.group-boxes.create-assign-reopen-qr",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC_WB_AND_PRINT;REAL_LOCAL_API_POSTGRES",
+  "currentCase": "WMS666.group-boxes.create-assign-reopen-qr",
+  "productSha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc"
+}

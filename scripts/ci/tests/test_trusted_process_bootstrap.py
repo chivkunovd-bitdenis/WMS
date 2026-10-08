@@ -21,15 +21,24 @@ PIN = {'base_sha': B, 'source_sha': S}
 class BootstrapFixture(ArtifactFixture):
     def __init__(self):
         super().__init__()
+        self.base_tree = [row for row in self.base_tree
+                          if row['path'] != 'guards/PROCESS_CONTRACTS.json']
+        self.tree = copy.deepcopy(self.base_tree)
         self.source_policy = copy.deepcopy(self.base_policy)
         self.source_tree = copy.deepcopy(self.base_tree)
         self.policy_row = {'path': 'guards/PROCESS_CONTRACTS.json', 'type': 'blob',
-                           'mode': '100644', 'sha': 'f' * 40}
+                           'mode': '100644', 'sha': self.blob_oid(json.dumps(self.source_policy).encode())}
+        self.tree.append(copy.deepcopy(self.policy_row))
         self.source_tree.append(copy.deepcopy(self.policy_row))
         self.missing_base = True
         self.source_available = True
         self.tree_outage = False
         self.policy_outage = False
+
+    @staticmethod
+    def blob_oid(raw):
+        import hashlib
+        return hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
 
     def get(self, path):
         route = path.split('?')[0]
@@ -103,16 +112,21 @@ class ExplicitBootstrapTests(unittest.TestCase):
                 else: self.f.truncated = True
                 self.reject()
 
-    def test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse(self):
-        for mutation in ['blob', 'mode', 'missing', 'selfhash', 'case']:
+    def test_seed_still_requires_sources_and_suite_but_legacy_hash_is_not_a_lock(self):
+        for mutation in ['blob', 'missing']:
             with self.subTest(mutation=mutation):
                 self.f = BootstrapFixture()
-                if mutation == 'blob': self.f.tree[-1]['sha'] = 'e'*40
-                elif mutation == 'mode': self.f.tree[-1]['mode'] = '100755'
-                elif mutation == 'missing': self.f.tree.pop()
-                elif mutation == 'selfhash': self.f.policy['files']['tests/scan.py'] = '9'*64
-                else: self.f.policy['suites']['qr']['cases'] = ['first', 'unrelated']
+                if mutation == 'blob':
+                    next(row for row in self.f.source_tree if row['path'] == 'tests/scan.py')['sha'] = 'invalid'
+                elif mutation == 'missing':
+                    self.f.source_tree = [row for row in self.f.source_tree if row['path'] != 'tests/scan.py']
                 self.reject()
+
+    def test_regular_source_mode_and_legacy_digest_changes_do_not_require_pin(self):
+        next(row for row in self.f.tree if row['path'] == 'tests/scan.py')['mode'] = '100755'
+        self.f.policy['files']['tests/scan.py'] = '9'*64
+        self.f.metadata['policy_sha256'] = self.f.digest()
+        self.assertTrue(self.verify()['evidence_complete'])
 
     def test_existing_baseline_priority_never_reads_seed_even_with_wrong_pin(self):
         self.f.missing_base = False

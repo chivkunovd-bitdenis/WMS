@@ -1,0 +1,16 @@
+{
+  "sha": "bfdc72ba3840798cdf4a7aa5440e51599128e80f",
+  "cases": [
+    {
+      "id": "WMS666.ozon-selected-button-scope",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: button labelled all(2) must print both postings\n+ actual - expected\n\n  [\n    'ozon-a-order',\n-   'ozon-a-second'\n  ]\n"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS666.ozon-selected-button-scope",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: button labelled all(2) must print both postings\n+ actual - expected\n\n  [\n    'ozon-a-order',\n-   'ozon-a-second'\n  ]\n",
+  "stack": "AssertionError [ERR_ASSERTION]: button labelled all(2) must print both postings\n+ actual - expected\n\n  [\n    'ozon-a-order',\n-   'ozon-a-second'\n  ]\n\n    at file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-compatibility-audit/frontend/tests-e2e/wms652-critical/compatibility-ozon.audit.mjs:253:10"
+}

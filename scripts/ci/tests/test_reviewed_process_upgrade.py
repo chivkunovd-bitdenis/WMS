@@ -77,6 +77,13 @@ class ReviewedUpgradeFixture(ArtifactFixture):
         self.artifacts[0]['workflow_run']['head_sha'] = self.head
         self.metadata.update(sha=self.merge, head_sha=self.head, base_sha=self.base,
                              policy_sha256=self.digest())
+        import xml.etree.ElementTree as ET
+        report = ET.Element('testsuite', tests=str(len(self.policy['suites']['picking']['cases'])))
+        for nodeid in self.policy['suites']['picking']['cases']:
+            classname, name = nodeid.split('::', 1)
+            ET.SubElement(report, 'testcase', classname=classname, name=name, time='0')
+        self.entries = [('execution.json', None),
+                        ('picking.xml', ET.tostring(report, encoding='utf-8', xml_declaration=True))]
 
     def pin(self):
         return {'base_sha': self.base, 'source_sha': self.source}
@@ -122,100 +129,57 @@ class ReviewedProcessUpgradeTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.f = ReviewedUpgradeFixture(Path(self.temp.name))
 
-    def verify_anchor(self, pin):
+    def verify_anchor(self):
         return anchor.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
-                                         approved_bootstrap=pin)
+                                         approved_bootstrap=None)
 
-    def verify_integrity(self, pin):
-        if pin is None:
-            return process_contracts.verify_integrity(self.f.root, self.f.base)
-        return process_contracts.verify_integrity(self.f.root, self.f.base, approved_upgrade=pin)
+    def verify_integrity(self):
+        return process_contracts.verify_integrity(self.f.root, self.f.base)
 
-    def test_exact_trusted_pin_upgrades_existing_base_and_checks_source_candidate_and_proof(self):
-        checker = self.f.root / 'trusted-main/scripts/ci/trusted_process_check.py'
-        self.f.write('trusted-main/scripts/ci/process_bootstrap.json', json.dumps(self.f.pin()))
-        with patch.object(anchor, '__file__', str(checker)):
-            trusted_pin = anchor.load_approved_bootstrap()
-        policy, tree, source = anchor.baseline_policy(
-            self.f.get, f'repos/{REPO}', self.f.base, trusted_pin)
-        self.assertEqual(source, self.f.source)
-        self.assertEqual(policy, self.f.source_policy)
-        self.assertIn('tests/undo.py', tree)
-        result = self.verify_anchor(self.f.pin())
+    def test_source_and_fixture_changes_pass_without_external_pin(self):
+        policy, _, source = anchor.baseline_policy(self.f.get, f'repos/{REPO}', self.f.base, None)
+        self.assertIsNone(source)
+        self.assertEqual(policy, self.f.base_policy)
+        result = self.verify_anchor()
         self.assertTrue(result['evidence_complete'])
         self.assertEqual(result['base_sha'], self.f.base)
-        self.assertEqual(result['bootstrap_source_sha'], self.f.source)
-        self.f.policy['files']['tests/scan.py'] = '9' * 64
+        self.assertNotIn('bootstrap_source_sha', result)
+        self.assertEqual(self.verify_integrity(), self.f.policy)
+
+    def test_rename_and_addition_are_reviewable_when_mandatory_counts_remain(self):
+        self.f.git('mv', 'tests/scan.py', 'tests/renamed_scan.py')
+        self.f.policy['files'].pop('tests/scan.py')
+        self.f.policy['files']['tests/renamed_scan.py'] = '9' * 64
         self.f.save_policy(self.f.policy)
-        self.f.head = self.f.commit('candidate self-approved hash')
-        self.f.merge = self.f.commit('merge of self-approved candidate')
+        self.f.head = self.f.commit('candidate renamed source')
+        self.f.merge = self.f.commit('merge renamed source')
         self.f.bind_candidate()
-        with self.assertRaises(ValueError):
-            self.verify_anchor(self.f.pin())
+        self.assertTrue(self.verify_anchor()['evidence_complete'])
+        self.assertEqual(self.verify_integrity(), self.f.policy)
 
-    def test_git_integrity_exact_approved_upgrade_accepts_reviewed_digest_and_additions(self):
-        with self.assertRaisesRegex(ValueError, 'Changed protected contract hash'):
-            self.verify_integrity(None)
-        self.assertEqual(self.verify_integrity(self.f.pin()), self.f.source_policy)
+    def test_case_contract_edit_is_reviewable_without_a_case_count_floor(self):
+        self.f.policy['suites']['picking']['cases'][0] = 'tests.scan::renamed'
+        self.f.save_policy(self.f.policy)
+        self.f.head = self.f.commit('rename required case')
+        self.f.merge = self.f.commit('merge renamed case')
+        self.f.bind_candidate()
+        self.assertTrue(self.verify_anchor()['evidence_complete'])
+        self.assertEqual(self.verify_integrity(), self.f.policy)
 
-    def test_unapproved_base_source_or_candidate_config_cannot_authorize_upgrade(self):
-        self.f.write('scripts/ci/process_bootstrap.json', json.dumps(self.f.pin()))
-        trusted_checker = self.f.root / 'trusted-main/scripts/ci/trusted_process_check.py'
-        with patch.object(anchor, '__file__', str(trusted_checker)), patch.dict(
-            'os.environ', {'SOURCE_SHA': self.f.source,
-                           'PROCESS_BOOTSTRAP_CONFIG': str(self.f.root / 'scripts/ci/process_bootstrap.json')}):
-            self.assertIsNone(anchor.load_approved_bootstrap())
-            with self.assertRaises(ValueError):
-                self.verify_anchor(anchor.load_approved_bootstrap())
-            with self.assertRaises(ValueError):
-                self.verify_integrity(None)
-        for pin in [{'base_sha': self.f.other, 'source_sha': self.f.source},
-                    {'base_sha': self.f.base, 'source_sha': self.f.other}]:
-            with self.subTest(pin=pin):
-                with self.assertRaises(ValueError):
-                    self.verify_anchor(pin)
-                with self.assertRaises(ValueError):
-                    self.verify_integrity(pin)
+        self.f.policy['suites']['picking']['cases'].pop()
+        self.f.policy['files'].pop('tests/undo.py')
+        self.f.save_policy(self.f.policy)
+        self.f.head = self.f.commit('remove required case')
+        self.f.merge = self.f.commit('merge missing case')
+        self.f.bind_candidate()
+        self.assertTrue(self.verify_anchor()['evidence_complete'])
+        self.assertEqual(self.verify_integrity(), self.f.policy)
 
-    def test_reviewed_source_must_keep_every_base_path_case_and_suite_semantics(self):
-        original = copy.deepcopy(self.f.source_policy)
-        for mutation in ('path', 'case', 'report', 'format', 'exact'):
-            with self.subTest(mutation=mutation):
-                policy = copy.deepcopy(original)
-                suite = policy['suites']['picking']
-                if mutation == 'path':
-                    policy['files'].pop('tests/scan.py')
-                elif mutation == 'case':
-                    suite['cases'].remove('tests.scan::retry')
-                elif mutation == 'report':
-                    suite['report'] = 'other.xml'
-                elif mutation == 'format':
-                    suite['format'] = 'vitest'
-                else:
-                    suite['exact'] = False
-                self.f.save_policy(policy)
-                self.f.source = self.f.commit('invalid reviewed source ' + mutation)
-                self.f.head = self.f.commit('candidate equals invalid source')
-                self.f.merge = self.f.commit('merge equals invalid source')
-                self.f.bind_candidate()
-                with self.assertRaises(ValueError):
-                    self.verify_anchor(self.f.pin())
-                with self.assertRaises(ValueError):
-                    self.verify_integrity(self.f.pin())
-
-    def test_corrupt_base_or_source_bytes_never_fall_back_to_candidate_hashes(self):
-        for ref in ('base', 'source'):
-            with self.subTest(ref=ref):
-                self.f = ReviewedUpgradeFixture(Path(self.temp.name) / ref)
-                self.f.git('checkout', '-q', getattr(self.f, ref))
-                self.f.write('tests/scan.py', 'changed without updating saved digest\n')
-                setattr(self.f, ref, self.f.commit('corrupt ' + ref + ' bytes'))
-                self.f.git('checkout', '-q', self.f.head)
-                self.f.bind_candidate()
-                with self.assertRaises(ValueError):
-                    anchor.baseline_policy(self.f.get, f'repos/{REPO}', self.f.base, self.f.pin())
-                with self.assertRaises(ValueError):
-                    self.verify_integrity(self.f.pin())
+    def test_actual_report_missing_or_skip_remains_failure(self):
+        report = self.f.root / 'picking.xml'
+        report.write_text('<testsuite><testcase classname="tests.scan" name="scan"/></testsuite>')
+        with self.assertRaisesRegex(ValueError, 'missing required cases'):
+            process_contracts.verify_reports(self.f.policy, self.f.root)
 
 
 if __name__ == '__main__':

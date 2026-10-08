@@ -1,0 +1,22 @@
+SHA: ffb524e2950cfb250993ad4db3b0f394ca55f735
+DB: isolated in-memory SQLite (:memory:); concurrency not covered
+Command: WMS_TEST_DATABASE_URL=sqlite+aiosqlite:///:memory: PYTHONPATH="$PWD/backend" /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/pytest -q -n 0 backend/tests/test_wms635_kiz_no_wb_wait.py::test_r_a5c_complete_wb_row_without_sgtin_keeps_the_refused_kiz_red backend/tests/test_wms635_kiz_no_wb_wait.py::test_r_a5c_empty_wb_read_keeps_the_refused_kiz_red backend/tests/test_wms546_marking_verdicts.py::test_c5_background_cycle_is_read_only_across_wb_answers
+.........                                                                [100%]
+=============================== warnings summary ===============================
+backend/app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-release-1008/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+9 passed, 6 warnings in 18.11s

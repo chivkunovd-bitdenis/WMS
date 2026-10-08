@@ -1,0 +1,1037 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-30T19%3A35%3A13.873Z&to=2026-10-07T19%3A35%3A13.873Z",
+      "body": null,
+      "status": 200,
+      "response": {
+        "hours": 0,
+        "orders": 0,
+        "within_12_hours_percent": 0,
+        "within_24_hours_percent": 0
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null,
+      "status": 200,
+      "response": {
+        "total": null,
+        "items": [],
+        "next_cursor": null,
+        "server_now": "2026-10-07T19:35:13.880302+00:00",
+        "warehouse_options": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null,
+      "status": 200,
+      "response": {
+        "items": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null,
+      "status": 200,
+      "response": {
+        "total": null,
+        "items": [],
+        "next_cursor": null,
+        "server_now": "2026-10-07T19:35:13.924565+00:00",
+        "warehouse_options": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null,
+      "status": 200,
+      "response": {
+        "total": null,
+        "items": [
+          {
+            "delivery_type": "warehouse_sc",
+            "delivery_route": null,
+            "id": "68c777a9-b553-4ee1-b475-e2cbcb92170b",
+            "marketplace": "wb",
+            "wb_supply_id": "WB-GI-KIZ-1791401712023288000-acbcce1d",
+            "name": "KIZ supply 1791401712023288000",
+            "status": "assembling",
+            "seller": {
+              "id": "e0491d2e-6787-461c-b825-094dcfe7ab50",
+              "name": "Tape race"
+            },
+            "wb_warehouse": {
+              "id": 99,
+              "name": null
+            },
+            "wms_warehouse": {
+              "id": "30a91761-6995-4c63-a7b8-9f6688f6f69b",
+              "name": "Tape race"
+            },
+            "orders_count": 2,
+            "units_count": 2,
+            "picked_units_count": 0,
+            "boxes_count": 0,
+            "planned_shipment_date": null,
+            "can_add_orders": true
+          }
+        ],
+        "server_now": "2026-10-07T19:35:13.947439+00:00"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/68c777a9-b553-4ee1-b475-e2cbcb92170b/workspace",
+      "body": null,
+      "status": 200,
+      "response": {
+        "supply": {
+          "delivery_route": null,
+          "id": "68c777a9-b553-4ee1-b475-e2cbcb92170b",
+          "marketplace": "wb",
+          "wb_supply_id": "WB-GI-KIZ-1791401712023288000-acbcce1d",
+          "source": "wms",
+          "name": "KIZ supply 1791401712023288000",
+          "status": "assembling",
+          "delivery_type": "warehouse_sc",
+          "seller": {
+            "id": "e0491d2e-6787-461c-b825-094dcfe7ab50",
+            "name": "Tape race"
+          },
+          "wb_warehouse": {
+            "id": 99,
+            "name": null
+          },
+          "wms_warehouse": {
+            "id": "30a91761-6995-4c63-a7b8-9f6688f6f69b",
+            "name": "Tape race"
+          },
+          "planned_destination": null,
+          "planned_shipment_date": null,
+          "nearest_deadline_at": "2026-10-08T22:35:12.337265+03:00",
+          "packaging_task_id": "0a8e4e9f-0da1-425c-b81e-a3bcfe2ed132",
+          "barcode_asset": null,
+          "honest_sign_skipped": false,
+          "boxes_without_distribution": false
+        },
+        "stage": "picking",
+        "progress": {
+          "picked": 0,
+          "packed": 0,
+          "metadata_ready": 0,
+          "stickers_ready": 2,
+          "total": 2
+        },
+        "blockers": [],
+        "orders": [
+          {
+            "id": "ec49a424-a033-4dd3-acd0-5aef96f718cf",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 800392,
+            "status": "assembling",
+            "wb_status": null,
+            "supplier_status": null,
+            "seller": {
+              "id": "e0491d2e-6787-461c-b825-094dcfe7ab50",
+              "name": "Tape race"
+            },
+            "wb_warehouse": {
+              "id": 99,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "30a91761-6995-4c63-a7b8-9f6688f6f69b",
+              "name": "Tape race"
+            },
+            "product": {
+              "id": "254caf9e-62d5-43d7-b72e-b00d4170725f",
+              "name": "KIZ product 800392",
+              "image_url": null,
+              "seller_article": "VENDOR-800392",
+              "wb_article": 801392,
+              "barcode": "460666AUDIT",
+              "sku": "SKU-KIZ-1791401712023288000-800392",
+              "chrt_id": 802392,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 2,
+              "locations": [
+                {
+                  "id": "9edc0d43-4be8-43ed-a80a-86b5c8084c3c",
+                  "code": "TAPE",
+                  "available_unpacked": 3
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "mgt",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [
+                "sgtin"
+              ],
+              "optional": [],
+              "states": [
+                {
+                  "id": null,
+                  "kind": "sgtin",
+                  "status": "missing",
+                  "reason": null,
+                  "decision": null,
+                  "source": null,
+                  "value_tail": null
+                }
+              ],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": "AUDIT-STICKER-0",
+              "status": "ready",
+              "asset_url": "/operations/fbs-print-assets/50eb967e-e662-4b7e-9aaf-ebb3143fb015/content",
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-07T22:35:12.337265+03:00",
+            "deadline_at": "2026-10-08T22:35:12.337265+03:00",
+            "supply_id": "68c777a9-b553-4ee1-b475-e2cbcb92170b",
+            "selection_blockers": [
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 0
+          },
+          {
+            "id": "9e9dcf57-05b8-4a8d-9fce-c7edd27fb13e",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 800393,
+            "status": "assembling",
+            "wb_status": null,
+            "supplier_status": null,
+            "seller": {
+              "id": "e0491d2e-6787-461c-b825-094dcfe7ab50",
+              "name": "Tape race"
+            },
+            "wb_warehouse": {
+              "id": 99,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "30a91761-6995-4c63-a7b8-9f6688f6f69b",
+              "name": "Tape race"
+            },
+            "product": {
+              "id": "254caf9e-62d5-43d7-b72e-b00d4170725f",
+              "name": "KIZ product 800392",
+              "image_url": null,
+              "seller_article": "VENDOR-800392",
+              "wb_article": 801393,
+              "barcode": "460666AUDIT",
+              "sku": "SKU-KIZ-1791401712023288000-800392",
+              "chrt_id": 802393,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 2,
+              "locations": [
+                {
+                  "id": "9edc0d43-4be8-43ed-a80a-86b5c8084c3c",
+                  "code": "TAPE",
+                  "available_unpacked": 3
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "mgt",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [
+                "sgtin"
+              ],
+              "optional": [],
+              "states": [
+                {
+                  "id": null,
+                  "kind": "sgtin",
+                  "status": "missing",
+                  "reason": null,
+                  "decision": null,
+                  "source": null,
+                  "value_tail": null
+                }
+              ],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": "AUDIT-STICKER-1",
+              "status": "ready",
+              "asset_url": "/operations/fbs-print-assets/506b253c-5d40-4303-b8d6-f85370b6bdbe/content",
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-07T22:35:12.342392+03:00",
+            "deadline_at": "2026-10-08T22:35:12.342392+03:00",
+            "supply_id": "68c777a9-b553-4ee1-b475-e2cbcb92170b",
+            "selection_blockers": [
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 1
+          }
+        ],
+        "cargo_places": [],
+        "boxes": [],
+        "marking_pool": {
+          "required": 2,
+          "available": 4,
+          "shortage": 0,
+          "orders_without_code": []
+        },
+        "delivery_preflight": null,
+        "last_wb_sync_at": null,
+        "tracking_summary": null,
+        "partial_rejection": null,
+        "picking_auto_passed_reason": null,
+        "wb_sync_stale": false,
+        "last_delivery_error": null,
+        "server_now": "2026-10-07T19:35:13.941505+00:00"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/68c777a9-b553-4ee1-b475-e2cbcb92170b/workspace",
+      "body": null,
+      "status": 200,
+      "response": {
+        "supply": {
+          "delivery_route": null,
+          "id": "68c777a9-b553-4ee1-b475-e2cbcb92170b",
+          "marketplace": "wb",
+          "wb_supply_id": "WB-GI-KIZ-1791401712023288000-acbcce1d",
+          "source": "wms",
+          "name": "KIZ supply 1791401712023288000",
+          "status": "assembling",
+          "delivery_type": "warehouse_sc",
+          "seller": {
+            "id": "e0491d2e-6787-461c-b825-094dcfe7ab50",
+            "name": "Tape race"
+          },
+          "wb_warehouse": {
+            "id": 99,
+            "name": null
+          },
+          "wms_warehouse": {
+            "id": "30a91761-6995-4c63-a7b8-9f6688f6f69b",
+            "name": "Tape race"
+          },
+          "planned_destination": null,
+          "planned_shipment_date": null,
+          "nearest_deadline_at": "2026-10-08T22:35:12.337265+03:00",
+          "packaging_task_id": "0a8e4e9f-0da1-425c-b81e-a3bcfe2ed132",
+          "barcode_asset": null,
+          "honest_sign_skipped": false,
+          "boxes_without_distribution": false
+        },
+        "stage": "picking",
+        "progress": {
+          "picked": 0,
+          "packed": 0,
+          "metadata_ready": 0,
+          "stickers_ready": 2,
+          "total": 2
+        },
+        "blockers": [],
+        "orders": [
+          {
+            "id": "ec49a424-a033-4dd3-acd0-5aef96f718cf",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 800392,
+            "status": "assembling",
+            "wb_status": null,
+            "supplier_status": null,
+            "seller": {
+              "id": "e0491d2e-6787-461c-b825-094dcfe7ab50",
+              "name": "Tape race"
+            },
+            "wb_warehouse": {
+              "id": 99,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "30a91761-6995-4c63-a7b8-9f6688f6f69b",
+              "name": "Tape race"
+            },
+            "product": {
+              "id": "254caf9e-62d5-43d7-b72e-b00d4170725f",
+              "name": "KIZ product 800392",
+              "image_url": null,
+              "seller_article": "VENDOR-800392",
+              "wb_article": 801392,
+              "barcode": "460666AUDIT",
+              "sku": "SKU-KIZ-1791401712023288000-800392",
+              "chrt_id": 802392,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 2,
+              "locations": [
+                {
+                  "id": "9edc0d43-4be8-43ed-a80a-86b5c8084c3c",
+                  "code": "TAPE",
+                  "available_unpacked": 3
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "mgt",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [
+                "sgtin"
+              ],
+              "optional": [],
+              "states": [
+                {
+                  "id": null,
+                  "kind": "sgtin",
+                  "status": "missing",
+                  "reason": null,
+                  "decision": null,
+                  "source": null,
+                  "value_tail": null
+                }
+              ],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": "AUDIT-STICKER-0",
+              "status": "ready",
+              "asset_url": "/operations/fbs-print-assets/50eb967e-e662-4b7e-9aaf-ebb3143fb015/content",
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-07T22:35:12.337265+03:00",
+            "deadline_at": "2026-10-08T22:35:12.337265+03:00",
+            "supply_id": "68c777a9-b553-4ee1-b475-e2cbcb92170b",
+            "selection_blockers": [
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 0
+          },
+          {
+            "id": "9e9dcf57-05b8-4a8d-9fce-c7edd27fb13e",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 800393,
+            "status": "assembling",
+            "wb_status": null,
+            "supplier_status": null,
+            "seller": {
+              "id": "e0491d2e-6787-461c-b825-094dcfe7ab50",
+              "name": "Tape race"
+            },
+            "wb_warehouse": {
+              "id": 99,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "30a91761-6995-4c63-a7b8-9f6688f6f69b",
+              "name": "Tape race"
+            },
+            "product": {
+              "id": "254caf9e-62d5-43d7-b72e-b00d4170725f",
+              "name": "KIZ product 800392",
+              "image_url": null,
+              "seller_article": "VENDOR-800392",
+              "wb_article": 801393,
+              "barcode": "460666AUDIT",
+              "sku": "SKU-KIZ-1791401712023288000-800392",
+              "chrt_id": 802393,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 2,
+              "locations": [
+                {
+                  "id": "9edc0d43-4be8-43ed-a80a-86b5c8084c3c",
+                  "code": "TAPE",
+                  "available_unpacked": 3
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "mgt",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [
+                "sgtin"
+              ],
+              "optional": [],
+              "states": [
+                {
+                  "id": null,
+                  "kind": "sgtin",
+                  "status": "missing",
+                  "reason": null,
+                  "decision": null,
+                  "source": null,
+                  "value_tail": null
+                }
+              ],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": "AUDIT-STICKER-1",
+              "status": "ready",
+              "asset_url": "/operations/fbs-print-assets/506b253c-5d40-4303-b8d6-f85370b6bdbe/content",
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-07T22:35:12.342392+03:00",
+            "deadline_at": "2026-10-08T22:35:12.342392+03:00",
+            "supply_id": "68c777a9-b553-4ee1-b475-e2cbcb92170b",
+            "selection_blockers": [
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 1
+          }
+        ],
+        "cargo_places": [],
+        "boxes": [],
+        "marking_pool": {
+          "required": 2,
+          "available": 4,
+          "shortage": 0,
+          "orders_without_code": []
+        },
+        "delivery_preflight": null,
+        "last_wb_sync_at": null,
+        "tracking_summary": null,
+        "partial_rejection": null,
+        "picking_auto_passed_reason": null,
+        "wb_sync_stale": false,
+        "last_delivery_error": null,
+        "server_now": "2026-10-07T19:35:14.094738+00:00"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/0a8e4e9f-0da1-425c-b81e-a3bcfe2ed132",
+      "body": null,
+      "status": 200,
+      "response": {
+        "id": "0a8e4e9f-0da1-425c-b81e-a3bcfe2ed132",
+        "document_number": null,
+        "display_number": null,
+        "warehouse_id": "30a91761-6995-4c63-a7b8-9f6688f6f69b",
+        "warehouse_name": "Tape race",
+        "warehouse_code": "tape-race",
+        "seller_id": "e0491d2e-6787-461c-b825-094dcfe7ab50",
+        "seller_name": "Tape race",
+        "status": "in_progress",
+        "marketplace_unload_request_id": null,
+        "inbound_intake_request_id": null,
+        "is_complete": false,
+        "pick_resync_warning": false,
+        "created_at": "2026-10-07T22:35:12.347830+03:00",
+        "updated_at": "2026-10-07T22:35:12.347830+03:00",
+        "completed_at": null,
+        "completed_by_user_id": null,
+        "lines": [
+          {
+            "id": "7c3067dd-dc7b-47b3-97e4-89f954310232",
+            "product_id": "254caf9e-62d5-43d7-b72e-b00d4170725f",
+            "seller_id": "e0491d2e-6787-461c-b825-094dcfe7ab50",
+            "seller_name": "Tape race",
+            "sku_code": "SKU-KIZ-1791401712023288000-800392",
+            "product_name": "KIZ product 800392",
+            "size": null,
+            "color": null,
+            "storage_location_id": "9edc0d43-4be8-43ed-a80a-86b5c8084c3c",
+            "storage_location_code": "TAPE",
+            "packaging_instructions": null,
+            "requires_honest_sign": true,
+            "qty_total": 2,
+            "qty_suggested_packed": 0,
+            "qty_confirmed_packed": 0,
+            "qty_need_pack": 2,
+            "qty_packed_in_task": 0,
+            "qty_done": 0,
+            "qty_marking_printed": 0,
+            "qty_marking_external": 0,
+            "qty_product_label_printed": 0,
+            "marking_available_count": 4,
+            "is_complete": false
+          }
+        ],
+        "events": []
+      }
+    }
+  ],
+  "printLog": [],
+  "trace": [
+    {
+      "kind": "controls-inventory",
+      "inventory": [
+        {
+          "tag": "BUTTON",
+          "text": "Обновить",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Заказы",
+          "aria": null,
+          "testid": "fbs-nav-orders",
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Неделя",
+          "aria": null,
+          "testid": "fbs-metric-preset-week",
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Месяц",
+          "aria": null,
+          "testid": "fbs-metric-preset-month",
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Свой период",
+          "aria": null,
+          "testid": "fbs-metric-preset-custom",
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Новые",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "В работе",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "В доставке",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Просрочены",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Завершённые",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Отменённые",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": null,
+          "testid": null,
+          "type": "text",
+          "disabled": false
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": null,
+          "testid": null,
+          "type": "text",
+          "disabled": false
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": null,
+          "testid": null,
+          "type": "text",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "QR",
+          "aria": null,
+          "testid": "fbs-supply-qr-print-68c777a9-b553-4ee1-b475-e2cbcb92170b",
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Печать листа подбора",
+          "aria": null,
+          "testid": "fbs-pick-list-print",
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "",
+          "aria": "Закрыть",
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Состав",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Подбор",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Упаковка и маркировка",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "Короба",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": null,
+          "testid": null,
+          "type": "text",
+          "disabled": false
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": null,
+          "testid": null,
+          "type": "checkbox",
+          "disabled": false
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": null,
+          "testid": null,
+          "type": "checkbox",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "",
+          "aria": "Экземпляров ЧЗ: меньше",
+          "testid": "fbs-scan-print-chz-copies-minus",
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "",
+          "aria": "Экземпляров ЧЗ: больше",
+          "testid": "fbs-scan-print-chz-copies-plus",
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": null,
+          "testid": null,
+          "type": "checkbox",
+          "disabled": true
+        },
+        {
+          "tag": "BUTTON",
+          "text": "",
+          "aria": "Отменить последний скан",
+          "testid": "fbs-scan-undo",
+          "type": "button",
+          "disabled": true
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": null,
+          "testid": "label-size-select-input",
+          "type": "text",
+          "disabled": false
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": "Выбрать заказ 800392",
+          "testid": null,
+          "type": "checkbox",
+          "disabled": false
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": "КИЗ заказа 800392",
+          "testid": "fbs-kiz-row-input",
+          "type": "text",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "ТЗ",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "QR",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "",
+          "aria": "Печать ЧЗ и ШК",
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "",
+          "aria": "Перепечатать",
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": "Выбрать заказ 800393",
+          "testid": null,
+          "type": "checkbox",
+          "disabled": false
+        },
+        {
+          "tag": "INPUT",
+          "text": "",
+          "aria": "КИЗ заказа 800393",
+          "testid": "fbs-kiz-row-input",
+          "type": "text",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "ТЗ",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "QR",
+          "aria": null,
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "",
+          "aria": "Печать ЧЗ и ШК",
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        },
+        {
+          "tag": "BUTTON",
+          "text": "",
+          "aria": "Перепечатать",
+          "testid": null,
+          "type": "button",
+          "disabled": false
+        }
+      ]
+    }
+  ],
+  "blocked": [],
+  "errors": [],
+  "finalDb": {
+    "markings": [],
+    "codes": [
+      {
+        "id": "7c76429c-cf16-4528-aa1c-d1c353c73868",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "available"
+      },
+      {
+        "id": "f71a8933-67e7-4bd8-ae02-76cac06aaee7",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "44930ca3-a39f-4ab8-b612-e2898919c76a",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "7f91dfb1-2823-44a0-897f-34c52c2e2ece",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      }
+    ],
+    "orders": [
+      {
+        "id": "ec49a424-a033-4dd3-acd0-5aef96f718cf",
+        "pack_status": "pending"
+      },
+      {
+        "id": "9e9dcf57-05b8-4a8d-9fce-c7edd27fb13e",
+        "pack_status": "pending"
+      }
+    ],
+    "stock": "([(UUID('1cffaf67-3c73-49a1-8abd-78b5ee2b3a2c'), 3, 3, 0)], [(UUID('9f9ce25d-c8b7-4760-b72f-68cd8066ac12'), 1), (UUID('ffd36eaf-28fd-4277-8978-efc9c3795bff'), 1)], 0)"
+  }
+}

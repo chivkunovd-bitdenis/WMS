@@ -264,7 +264,7 @@ class _ValidatedKizPair:
 
 @dataclass(frozen=True)
 class _PackagingLineRef:
-    line: PackagingTaskLine
+    line: PackagingTaskLine | None
     document_number: str | None
 
 
@@ -481,6 +481,61 @@ def _restore_missing_gs_by_structure(value: str) -> tuple[str, bool, bool]:
     return restored, restored != value, False
 
 
+def _has_complete_gs1_structure(value: str) -> bool:
+    """Return whether surviving GS separators already delimit known complete AIs.
+
+    A valid delimiter is stronger evidence than the heuristic used to recover a
+    separator that was removed altogether. In particular, a serial may itself
+    contain text such as ``91ZZQQ``; do not reinterpret it when AI 21 already
+    ends at a real separator before a complete AI 92 signature.
+    """
+    if not _cis_prefix_ok(value):
+        return False
+    position = 0
+    seen_prefix_ai = False
+    seen_serial_ai = False
+    while position < len(value):
+        if value[position] == _GS:
+            position += 1
+            continue
+        ai = _match_gs1_ai(value, position)
+        if ai is None:
+            return False
+        position += len(ai)
+        if ai == "01":
+            length = _GS1_FIXED_AI_VALUE_LENGTHS[ai]
+            field = value[position : position + length]
+            if len(field) != length or not field.isdigit():
+                return False
+            seen_prefix_ai = True
+            position += length
+            continue
+        if ai in _GS1_FIXED_AI_VALUE_LENGTHS:
+            length = _GS1_FIXED_AI_VALUE_LENGTHS[ai]
+            field = value[position : position + length]
+            if len(field) != length:
+                return False
+            position += length
+            continue
+
+        separator = value.find(_GS, position)
+        end = separator if separator >= 0 else len(value)
+        field = value[position:end]
+        max_length = _GS1_VARIABLE_AI_MAX_LENGTHS[ai]
+        if not field or len(field) > max_length:
+            return False
+        if ai == "21":
+            seen_serial_ai = True
+        if separator < 0:
+            position = end
+            break
+        next_ai = _match_gs1_ai(value, separator + 1)
+        if next_ai is None or not _is_expected_next_ai(ai, next_ai):
+            return False
+        position = separator + 1
+    return seen_prefix_ai and seen_serial_ai
+
+
 def _has_keyboard_layout_noise(value: str) -> bool:
     return any(char in _KEYBOARD_LAYOUT_MARKERS for char in value)
 
@@ -527,11 +582,12 @@ def normalize_scanned_cis(raw: str) -> tuple[str, list[str]]:
     # Последний шаг: разделитель вырезан целиком, без замены (I3). Идёт после
     # всех остальных репаров, на максимально уже вычищенном значении — если
     # раскладка или AIM-префикс мешали, они уже сняты выше.
-    value, gs_structure_restored, gs_unrestorable = _restore_missing_gs_by_structure(value)
-    if gs_structure_restored:
-        hints.append(_GS_STRUCTURE_HINT)
-    elif gs_unrestorable:
-        hints.append(_GS_UNRESTORABLE_HINT)
+    if not _has_complete_gs1_structure(value):
+        value, gs_structure_restored, gs_unrestorable = _restore_missing_gs_by_structure(value)
+        if gs_structure_restored:
+            hints.append(_GS_STRUCTURE_HINT)
+        elif gs_unrestorable:
+            hints.append(_GS_UNRESTORABLE_HINT)
 
     hint_order = {
         "aim_prefix": 0,
@@ -941,7 +997,10 @@ async def _ensure_kiz_not_occupied_in_pool(
             return
         if code.status == STATUS_PRINTED:
             line_ref = await _packaging_line_for_order(session, tenant_id, order)
-            if code.packaging_task_line_id == line_ref.line.id:
+            if (
+                line_ref.line is not None
+                and code.packaging_task_line_id == line_ref.line.id
+            ):
                 return
         raise FbsKizError(
             "duplicate_kiz",
@@ -1077,12 +1136,35 @@ async def _packaging_line_for_order(
     return _PackagingLineRef(line=line[0], document_number=line[1])
 
 
+async def _optional_packaging_line_for_order(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order: FbsOrder,
+) -> _PackagingLineRef:
+    try:
+        return await _packaging_line_for_order(session, tenant_id, order)
+    except FbsKizError as exc:
+        if exc.code != "packaging_line_not_found":
+            raise
+        if order.supply_id is None:
+            raise
+    document_number = None
+    if order.supply_id is not None:
+        document_number = await session.scalar(
+            select(FbsSupply.document_number).where(
+                FbsSupply.tenant_id == tenant_id,
+                FbsSupply.id == order.supply_id,
+            )
+        )
+    return _PackagingLineRef(line=None, document_number=document_number)
+
+
 async def _create_or_apply_external_code(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     order: FbsOrder,
     value: str,
-    line: PackagingTaskLine,
+    line: PackagingTaskLine | None,
 ) -> MarkingCode:
     now = datetime.now(tz=UTC)
     code = MarkingCode(
@@ -1093,7 +1175,7 @@ async def _create_or_apply_external_code(
         source=_EXTERNAL_FBS_MARKING_SOURCE,
         status=STATUS_APPLIED,
         applied_at=now,
-        packaging_task_line_id=line.id,
+        packaging_task_line_id=line.id if line is not None else None,
         pool_id=None,
         import_batch_id=None,
         label_artifact_pdf=None,
@@ -1108,7 +1190,7 @@ async def _prepare_code_for_binding(
     tenant_id: uuid.UUID,
     order: FbsOrder,
     value: str,
-    line: PackagingTaskLine,
+    line: PackagingTaskLine | None,
 ) -> tuple[MarkingCode, bool]:
     try:
         pool_code = await marking_svc._claim_pool_code_if_present(
@@ -1116,14 +1198,15 @@ async def _prepare_code_for_binding(
             tenant_id=tenant_id,
             order=order,
             cis_raw=value,
-            printed_for_line_id=line.id,
+            printed_for_line_id=line.id if line is not None else None,
         )
     except marking_svc.FbsMarkingError as exc:
         raise _marking_error_to_kiz(exc) from exc
     if pool_code is not None:
         received = await marking_code_svc.is_unbound_received_code(session, pool_code)
         cancelled = await marking_code_svc.is_unbound_cancelled_wb_code(session, pool_code)
-        pool_code.packaging_task_line_id = line.id
+        if line is not None:
+            pool_code.packaging_task_line_id = line.id
         await session.flush()
         return pool_code, pool_code.source == "pool" if cancelled else not received
     return (
@@ -1458,12 +1541,31 @@ async def _commit_one_kiz_pair(
             and current.marking_code_id == code.id
             and code.status in {STATUS_RESERVED, STATUS_PRINTED}
         ):
-            line_ref = await _packaging_line_for_order(session, tenant_id, order)
+            try:
+                line_ref = await _packaging_line_for_order(session, tenant_id, order)
+            except FbsKizError as exc:
+                if exc.code != "packaging_line_not_found":
+                    raise
+                # Applying this order's already-current printed CIS is an
+                # order-level action. An accounting task may be absent after a
+                # successful manual print; keep the applied event without
+                # making task creation a prerequisite.
+                line_ref = None
+            document_number = (
+                line_ref.document_number if line_ref is not None
+                else await session.scalar(
+                    select(FbsSupply.document_number).where(
+                        FbsSupply.tenant_id == tenant_id,
+                        FbsSupply.id == order.supply_id,
+                    )
+                )
+            )
             code.status = STATUS_APPLIED
             code.applied_at = datetime.now(UTC)
             await marking_code_svc.record_event(
                 session, code=code, event_type=EVENT_APPLIED, actor=actor_user_id,
-                document_number=line_ref.document_number, packaging_task=line_ref.line,
+                document_number=document_number,
+                packaging_task=line_ref.line if line_ref is not None else None,
                 source_process=marking_code_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
             )
         return _FbsKizCommitOutcome(
@@ -1475,7 +1577,7 @@ async def _commit_one_kiz_pair(
         )
     if current is not None and not pair.confirmed:
         raise FbsKizError("needs_confirmation", context={"current_kiz": _mask_kiz(current.value)})
-    line_ref = await _packaging_line_for_order(session, tenant_id, order)
+    line_ref = await _optional_packaging_line_for_order(session, tenant_id, order)
     code, from_pool = await _prepare_code_for_binding(
         session,
         tenant_id,
@@ -1653,10 +1755,10 @@ async def _commit_one_kiz_pair(
             reason=_VOID_REPLACED_REASON,
         )
     previous_was_pool = current is not None and current.source == _POOL_MARKING_SOURCE
-    if from_pool:
+    if from_pool and line_ref.line is not None:
         if not previous_was_pool and not was_printed:
             line_ref.line.qty_marking_printed = int(line_ref.line.qty_marking_printed) + 1
-    elif not previous_was_pool:
+    elif not from_pool and not previous_was_pool and line_ref.line is not None:
         line_ref.line.qty_marking_external = int(line_ref.line.qty_marking_external) + 1
     await session.flush()
     if pending_error is not None:
@@ -2134,10 +2236,11 @@ async def rollback_scan_kiz(
     if code is None or code.status not in {STATUS_VOID, STATUS_APPLIED, STATUS_PRINTED}:
         await session.commit()
         return _KIZ_PREVIOUS_UNKNOWN
-    line_ref = await _packaging_line_for_order(session, tenant_id, order)
+    line_ref = await _optional_packaging_line_for_order(session, tenant_id, order)
     code.status = STATUS_APPLIED
     code.applied_at = code.applied_at or datetime.now(UTC)
-    code.packaging_task_line_id = line_ref.line.id
+    if line_ref.line is not None:
+        code.packaging_task_line_id = line_ref.line.id
     marking = FbsOrderMarking(
         order_id=order.id,
         tenant_id=tenant_id,

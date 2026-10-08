@@ -55,9 +55,12 @@ def verify_server_ci(get, repository, sha):
         jobs = pages(get, f"{root}/actions/runs/{run['run_id']}/attempts/{run['run_attempt']}/jobs", 'jobs')
         for name in sorted(EXTRA_JOBS):
             matches = [job for job in jobs if job['name'] == name]
-            if len(matches) != 1 or any(matches[0].get(key) != value for key, value in {
-                    'head_sha': sha, 'run_id': run['run_id'],
-                    'status': 'completed', 'conclusion': 'success'}.items()):
+            allowed = {'success', 'skipped'} if run['docs_only'] and name in {
+                'print-regressions', 'printer-windows'
+            } else {'success'}
+            if (len(matches) != 1 or any(matches[0].get(key) != value for key, value in {
+                    'head_sha': sha, 'run_id': run['run_id'], 'status': 'completed'}.items()) or
+                    matches[0].get('conclusion') not in allowed):
                 raise GateError('Сервер не подтвердил обязательную задачу CI: ' + name)
         name = f"process-proof-{sha}-{run['run_id']}-{run['run_attempt']}"
         artifacts = pages(get, f"{root}/actions/runs/{run['run_id']}/artifacts", 'artifacts')

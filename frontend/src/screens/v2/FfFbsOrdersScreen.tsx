@@ -504,16 +504,31 @@ function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
     'ШК/SKU',
     'Количество',
   ]
-  const bodyRows = rows.map((order) => [
-    order.product.name,
-    order.product.seller_article,
-    order.product.color,
-    order.product.size,
-    order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`,
-    order.wb_order_id,
-    [order.product.barcode, order.product.sku].filter(Boolean).join(' / '),
-    1,
-  ])
+  const bodyRows = rows.flatMap((order) => {
+    const warehouse = order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`
+    if (order.marketplace === 'ozon' && order.positions.length > 0) {
+      return order.positions.map((position) => [
+        position.name,
+        position.seller_article ?? order.product.seller_article,
+        position.color ?? order.product.color,
+        position.size ?? order.product.size,
+        warehouse,
+        order.wb_order_id,
+        [position.barcode ?? order.product.barcode, position.sku ?? order.product.sku].filter(Boolean).join(' / '),
+        position.quantity,
+      ])
+    }
+    return [[
+      order.product.name,
+      order.product.seller_article,
+      order.product.color,
+      order.product.size,
+      warehouse,
+      order.wb_order_id,
+      [order.product.barcode, order.product.sku].filter(Boolean).join(' / '),
+      1,
+    ]]
+  })
   const html = [
     '<html><head><meta charset="utf-8" /></head><body><table>',
     `<thead><tr>${headers.map((header) => `<th>${excelCell(header)}</th>`).join('')}</tr></thead>`,
@@ -1148,20 +1163,28 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
       assets,
       order_errors: [],
     })
+    let missingAssetsMessage: string | null = null
     if (ready > 0) {
       setSupplyQrPreviewOpen(true)
       if (failures.length > 0) {
         setSupplyQrWarning(`Часть этикеток не получена: ${failures.join(' · ')}`)
       }
     } else {
-      setError(failures.join(' · ') || (
+      missingAssetsMessage = failures.join(' · ') || (
         isOzon
           ? 'Ozon не вернул готовые этикетки для этой поставки.'
           : 'WB не вернул готовые QR для этой поставки.'
-      ))
+      )
+      if (failures.length > 0) {
+        const assetLabel = isOzon ? 'этикетки поставки Ozon' : 'QR поставки WB'
+        missingAssetsMessage = `Не удалось получить ${assetLabel}: ${failures.join(' · ')}`
+      }
     }
     setPrintingSupplyId(null)
     await load()
+    // load() clears the shared screen alert while refreshing the table. Restore
+    // the failed QR result afterward so the operator can see why no preview opened.
+    if (missingAssetsMessage) setError(missingAssetsMessage)
   }, [token, authHeaders, load])
 
   const confirmSupplyQrApplied = useCallback(async (asset: FbsPrintAsset) => {

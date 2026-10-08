@@ -1,0 +1,16 @@
+{
+  "sha": "877ccb6cdd86697cc2099a56e5bb65b0b7e790bf",
+  "cases": [
+    {
+      "id": "WMS666.ozon-selected-button-scope",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: selected one posting must be labelled as selected(1), not all(2)"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS666.ozon-selected-button-scope",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: selected one posting must be labelled as selected(1), not all(2)",
+  "stack": "AssertionError [ERR_ASSERTION]: selected one posting must be labelled as selected(1), not all(2)\n    at file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-release-1008/frontend/tests-e2e/wms652-critical/compatibility-ozon.audit.mjs:253:3"
+}

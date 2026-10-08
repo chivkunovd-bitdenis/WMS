@@ -167,7 +167,7 @@ class BackendWorkflowContracts(unittest.TestCase):
     def test_required_backend_aggregates_checks_and_both_shards_and_preserves_pg_steps(self):
         raw = (ROOT/'.github/workflows/ci.yml').read_text()
         backend = raw.split('\n  backend:\n', 1)[1].split('\n  print-regressions:', 1)[0]
-        self.assertIn('needs: [backend-checks, backend-shards]', backend)
+        self.assertIn('needs: [backend-checks, backend-shards, scope]', backend)
         self.assertIn('if: always()', backend)
         self.assertIn('needs.backend-checks.result', backend)
         self.assertIn('needs.backend-shards.result', backend)
@@ -193,9 +193,10 @@ class BackendWorkflowContracts(unittest.TestCase):
         self.assertLess(guard.index('pip install pytest'), guard.index('python -m unittest discover'))
         self.assertIn('pytest -q scripts/ci/tests/test_product_scope.py --junitxml=', guard)
         self.assertIn('product-scope.xml', guard)
+        self.assertIn('night-controller.xml', guard)
         self.assertIn('actions/upload-artifact@v4', guard)
         proof = raw.split('\n  process-proof:\n', 1)[1]
-        self.assertIn('guard-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}', proof)
+        self.assertIn('name: ${{ steps.select.outputs.guards }}', proof)
 
 
 if __name__ == '__main__':

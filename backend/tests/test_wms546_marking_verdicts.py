@@ -905,6 +905,12 @@ async def test_c4_wb_omits_unknown_order_from_batch_then_next_cycle_applies(
             ],
             META_STATUS_UNKNOWN, False, False, id="empty_value",
         ),
+        pytest.param(
+            lambda oid, value: [
+                MarketplaceOrderMetaRow(order_id=oid, meta_details=(), meta={}),
+            ],
+            META_STATUS_UNKNOWN, False, False, id="missing_kind",
+        ),
         pytest.param(lambda oid, value: [], None, False, True, id="missing_row"),
     ],
 )

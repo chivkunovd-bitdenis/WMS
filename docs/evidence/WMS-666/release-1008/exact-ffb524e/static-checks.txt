@@ -1,0 +1,4 @@
+Command: /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/ruff check backend/app/services/fbs_marking_service.py backend/tests/test_wms635_kiz_no_wb_wait.py backend/tests/test_wms546_marking_verdicts.py
+All checks passed!
+Command: cd backend && /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/mypy --no-incremental --cache-dir=/dev/null app/services/fbs_marking_service.py
+Success: no issues found in 1 source file

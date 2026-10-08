@@ -224,6 +224,19 @@ class FbsPickOptionLocationOut(BaseModel):
     sources: list[FbsPickOptionSourceOut]
 
 
+class FbsPickingSourceGroupOut(BaseModel):
+    key: str
+    title: str
+    lines: list[str]
+
+
+class FbsPickingContextOut(BaseModel):
+    product_id: str
+    inbound_supplies: list[str]
+    locations: list[str]
+    source_groups: list[FbsPickingSourceGroupOut] = Field(default_factory=list)
+
+
 class FbsPickOptionProductOut(BaseModel):
     product_id: str
     sku_code: str | None
@@ -352,6 +365,8 @@ class FbsOrderTapePrintBody(BaseModel):
 
 
 class FbsOrderTapePrintedCodeOut(BaseModel):
+    marking_id: str | None = None
+    supply_id: str | None = None
     id: str
     cis_code: str
     has_label_artifact: bool
@@ -464,6 +479,7 @@ class FbsScanAutoPrintTargetClaimOut(BaseModel):
 
 
 class FbsScanAutoPrintReprintClaimOut(FbsScanAutoPrintTargetClaimOut):
+    marking_id: str | None = None
     kiz: str | None = None
     code_id: str | None = None
     has_label_artifact: bool = False
@@ -476,6 +492,7 @@ class FbsDirectKizReprintBody(BaseModel):
 
 class FbsDirectKizPrintClaimBody(BaseModel):
     attempt_key: str = Field(min_length=1, max_length=128)
+    include_binding: bool = False
 
 
 class FbsDirectKizReprintOut(BaseModel):
@@ -753,11 +770,13 @@ class FbsSupplyDeliverBody(BaseModel):
 class FbsWorkspaceProductOut(FbsWorklistProductOut):
     packaging_instructions: str | None
     has_packaging_instructions: bool
+    requires_honest_sign: bool
 
 
 class FbsWorkspaceOrderOut(FbsWorklistOrderOut):
     product: FbsWorkspaceProductOut
     tape_order_index: int
+    marking_available_count: int = 0
 
 
 class FbsWorkspaceMarkingPoolOut(BaseModel):
@@ -1237,6 +1256,7 @@ def _raise_from_scan_auto_print(exc: scan_print_svc.FbsScanAutoPrintError) -> No
         "scan_print_target_disabled",
         "scan_reprint_claim_requires_atomic",
         "scan_selection_packed",
+        "print_binding_changed",
     }:
         raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
     if exc.code in {
@@ -1564,6 +1584,21 @@ async def get_fbs_supplies_worklist(
     except supply_svc.FbsSupplyError as exc:
         _raise_from_service(exc)
     return FbsSupplyWorklistOut.model_validate(payload)
+
+
+@router.get("/{supply_id}/picking-context", response_model=list[FbsPickingContextOut])
+async def get_fbs_picking_context(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[FbsPickingContextOut]:
+    from app.services.fbs_picking_print_service import get_picking_context
+
+    try:
+        items = await get_picking_context(session, user.tenant_id, supply_id)
+    except picking_svc.FbsPickingError as exc:
+        _raise_from_picking(exc)
+    return [FbsPickingContextOut.model_validate(item) for item in items]
 
 
 @router.get("/{supply_id}/pick-options", response_model=list[FbsPickOptionProductOut])
@@ -2437,6 +2472,8 @@ async def print_fbs_supply_order_tape(
                 printed_codes=[
                     FbsOrderTapePrintedCodeOut(
                         id=str(code.id),
+                        marking_id=str(code.marking_id) if code.marking_id else None,
+                        supply_id=str(code.supply_id) if code.supply_id else None,
                         cis_code=code.cis_code,
                         has_label_artifact=code.has_label_artifact,
                         order_product_id=(
@@ -2579,6 +2616,15 @@ async def scan_fbs_supply_product_for_auto_print(
                 )
             except order_tape_svc.FbsOrderTapePrintError as exc:
                 _raise_from_order_tape_service(exc)
+    if body.print_chz:
+        prepared = next(
+            (order for order in result.orders if order.order_id == selected.order_id), None
+        )
+        if prepared and prepared.printed_codes and prepared.printed_codes[0].marking_id:
+            await scan_print_svc.record_pool_print_target(
+                session, user.tenant_id, supply_id, selected.scan_id,
+                prepared.printed_codes[0].marking_id, actor_user_id=user.id,
+            )
     # The selection was intentionally committed before marketplace work.  The
     # prepared QR asset and any allocated/bound marking code are a second,
     # independently durable phase so a lost response can recover exactly this
@@ -2620,6 +2666,8 @@ async def scan_fbs_supply_product_for_auto_print(
             [
                 FbsOrderTapePrintedCodeOut(
                     id=str(code.id),
+                    marking_id=str(code.marking_id) if code.marking_id else None,
+                    supply_id=str(code.supply_id) if code.supply_id else None,
                     cis_code=code.cis_code,
                     has_label_artifact=code.has_label_artifact,
                     order_product_id=(
@@ -2680,6 +2728,8 @@ async def claim_fbs_scan_auto_print_reprint(
         started=result.started,
         kiz=result.kiz,
     )
+    if body.include_binding:
+        output.marking_id = str(result.marking_id) if result.marking_id else None
     if code_id is not None:
         output.code_id = code_id
         output.has_label_artifact = has_label_artifact

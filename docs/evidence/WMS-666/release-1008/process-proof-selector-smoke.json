@@ -1,0 +1,40 @@
+{
+  "verification": "PASS",
+  "method": "Ran select_artifacts against read-only GitHub REST JSON fetched with gh api; no CI archive contents downloaded.",
+  "source": {
+    "run_id": 37758594474,
+    "candidate_head_sha": "0a937637584f644437dd05e2581db7807e396733",
+    "tested_workflow_sha": "d107d5f318db33bfb477014bec159ba24a728580"
+  },
+  "selected_producer_artifacts": {
+    "backend": "backend-executed-contracts-d107d5f318db33bfb477014bec159ba24a728580-37758594474-1",
+    "frontend-build": "frontend-executed-contracts-d107d5f318db33bfb477014bec159ba24a728580-37758594474-1",
+    "printer-windows": "printer-windows-contracts-d107d5f318db33bfb477014bec159ba24a728580-37758594474-1",
+    "print-regressions": "release-print-d107d5f318db33bfb477014bec159ba24a728580-37758594474-2",
+    "охрана": "guard-executed-contracts-d107d5f318db33bfb477014bec159ba24a728580-37758594474-1",
+    "wms686-mockup": "wms686-executed-contracts-d107d5f318db33bfb477014bec159ba24a728580-37758594474-1"
+  },
+  "assertions": [
+    "all six required producer reports belong to this run and candidate head SHA",
+    "backend report comes from unchanged attempt 1",
+    "print-regressions report comes from successful retry attempt 2"
+  ],
+  "required_report_verification": {
+    "result": "PASS",
+    "ci-shards": {
+      "report": "ci-shards.xml",
+      "required_case_count": 119,
+      "report_sha256": "4b3f1a9ddcd4a07c286e8016fd64af2ae055aae3b2512fc107fba6259faf3d53"
+    },
+    "night-controller": {
+      "report": "night-controller.xml",
+      "required_case_count": 58,
+      "report_sha256": "2a6455a1c90090f53ae54e0ef6861c791be0e590708b6c1f83bc7efed0fd4714"
+    },
+    "verified_suites": [
+      "ci-shards",
+      "night-controller"
+    ]
+  },
+  "selector_real_api_metadata_recheck": "PASS"
+}

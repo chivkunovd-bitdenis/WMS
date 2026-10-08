@@ -1,0 +1,14 @@
+{
+  "sha": "1a4b0d687392a91a2dbfde6fbcfe9013b9e09075",
+  "cases": [
+    {
+      "id": "WMS666.whole-process.bare-ordinary-manual-before-scan",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: each real supply makes one product API request to the local WB sticker emulator\n\n3 !== 1\n"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC_WB;REAL_LOCAL_API_POSTGRES_AND_NATIVE_HANDLER_EMULATED_PRINTER",
+  "currentCase": "WMS666.whole-process.bare-ordinary-manual-before-scan",
+  "productSha": "1a4b0d687392a91a2dbfde6fbcfe9013b9e09075"
+}

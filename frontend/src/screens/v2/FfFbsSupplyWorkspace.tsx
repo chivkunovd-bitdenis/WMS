@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
 import { FbsPackingScanBar } from './FbsPackingScanBar'
+import { FbsPackingActionsToolbar, type FbsPackingActions } from './FbsPackingActionsToolbar'
 import { FbsRejectedKizHeader, FbsRejectedKizTriangle, type FbsRejectedKizFilter } from './FbsRejectedKizFilter'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
@@ -12,7 +13,6 @@ import {
   Box,
   Button,
   Checkbox,
-  Chip,
   CircularProgress,
   Collapse,
   Dialog,
@@ -73,6 +73,8 @@ import { FbsAssemblySupplyFrame, type FbsAssemblyFrameControl } from './FbsAssem
 import { fbsAssemblySupplyTitle, fbsCodeBelongsToSupply } from './fbsSupplyAssembly'
 import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStage'
 import { fbsMenuReprintRequest, hasOperatorKiz } from './fbsMenuReprint'
+import { ensureFbsStickers } from './fbsStickerPrefetch'
+import { isWorkspaceWriteScreenCurrent } from './fbsWorkspaceFreshness'
 import {
   buildFbsPickingListPrintHtml,
   fbsBuildPickingRows,
@@ -124,6 +126,7 @@ import {
   fetchFbsWorklist,
   fetchFbsWorkspace,
   getFbsPickOptions,
+  getFbsPickingContext,
   lookupFbsOrderBySticker,
   markFbsDirectKizPrintStarted,
   markFbsScanAutoPrintTargetStarted,
@@ -141,6 +144,7 @@ import {
   undoFbsPick,
   updateFbsSupplyPlannedShipmentDate,
   validateFbsKiz,
+  validateFbsPrintBindings,
   type FbsKizLookup,
   type FbsOrderPrintTapeRequest,
   type FbsPrintBatch,
@@ -183,6 +187,7 @@ type Props = {
    * карточка поставки, всё как было.
    */
   assemblyFrame?: FbsAssemblyFrameControl & {
+    registerPackingActions?: (id: string, actions: FbsPackingActions | null) => void
     packingColumns?: { size: boolean; markingAvailable: boolean }
     onPackingColumnsChange?: (columns: { size: boolean; markingAvailable: boolean }) => void
   }
@@ -831,7 +836,11 @@ export function FfFbsSupplyWorkspace({
   const shownKizTarget = kizScanActive ?? (unifiedView?.needsKiz ? unifiedView.target ?? null : null)
   const registerSequentialScanner = assemblyFrame?.registerScanner
   const unifiedStickerAttempts = useRef(new Set<string>())
-  useEffect(() => { unifiedStickerAttempts.current.clear() }, [open, supplyId])
+  const ordinaryPreparationAttempt = useRef(false)
+  useEffect(() => {
+    unifiedStickerAttempts.current.clear()
+    ordinaryPreparationAttempt.current = false
+  }, [open, supplyId])
   useEffect(() => {
     if (!supplyId || !registerSequentialScanner || !sequentialScanner) return
     registerSequentialScanner(supplyId, sequentialScanner)
@@ -844,9 +853,17 @@ export function FfFbsSupplyWorkspace({
     workspace?.supply.marketplace ?? 'wb',
   )
   const workspaceOpenGeneration = useRef(0)
+  const freshWorkspaceGeneration = useRef<number | null>(null)
+  const pendingInitialWorkspace = useRef<{ generation: number; snapshot: FbsWorkspace } | null>(null)
   useEffect(() => {
     workspaceOpenGeneration.current += 1
-    return () => { workspaceOpenGeneration.current += 1 }
+    freshWorkspaceGeneration.current = null
+    pendingInitialWorkspace.current = null
+    return () => {
+      workspaceOpenGeneration.current += 1
+      freshWorkspaceGeneration.current = null
+      pendingInitialWorkspace.current = null
+    }
   }, [open, supplyId])
   // Поставка, чей состав сейчас на экране. Ответ обязан назвать её сам: иначе
   // сохранённое «Повторить» из прежней поставки занимает номер записи уже в новом
@@ -887,6 +904,8 @@ export function FfFbsSupplyWorkspace({
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
         if (!write.isCurrent()) return
         if (!write.isLatest()) return next
+        freshWorkspaceGeneration.current = workspaceOpenGeneration.current
+        pendingInitialWorkspace.current = null
         setWorkspace(next)
         const restoredDeliveryError = normalizeDeliveryError(next.last_delivery_error)
         setDeliveryError(restoredDeliveryError)
@@ -927,6 +946,10 @@ export function FfFbsSupplyWorkspace({
     // отправила бы её из открытой поставки, либо висела бы мёртвой.
     setRetryAction(null)
     setWorkspace(initialWorkspace ?? null)
+    pendingInitialWorkspace.current = initialWorkspace?.supply.id === supplyId
+      ? { generation: workspaceOpenGeneration.current, snapshot: initialWorkspace }
+      : null
+    freshWorkspaceGeneration.current = null
     setStage(readFbsWorkspaceStage(supplyId) ?? (initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition'))
     const restoredDeliveryKey = persistentOperationKey(supplyId, 'delivery')
     deliveryKeyRef.current = restoredDeliveryKey
@@ -975,6 +998,17 @@ export function FfFbsSupplyWorkspace({
     setKizCommittedTails({})
     if (!initialWorkspace) void load()
   }, [open, supplyId, initialWorkspace, load])
+
+  // Grouped entry may hand this child the workspace it just fetched. Treat it
+  // as current only after that exact snapshot has become this open's state;
+  // the previous open's same-supply workspace is not fresh by ID alone.
+  useEffect(() => {
+    const pending = pendingInitialWorkspace.current
+    if (!open || !pending || pending.generation !== workspaceOpenGeneration.current
+      || workspace !== pending.snapshot) return
+    freshWorkspaceGeneration.current = pending.generation
+    pendingInitialWorkspace.current = null
+  }, [open, supplyId, workspace])
 
   useEffect(() => {
     setNotice(null)
@@ -1180,24 +1214,78 @@ export function FfFbsSupplyWorkspace({
     }
   }
 
-  // The unified list has no per-supply Start button. Prepare the missing
-  // marketplace stickers on entry, without waiting for the first product scan.
+  // WMS-666: prepare missing WB stickers on picking and packing entry.
+  // A shared request also coalesces an immediate picking-list print click.
   useEffect(() => {
-    if (!open || stage !== 'packing' || !assemblyFrame?.visible || !registerSequentialScanner || !workspace || isOzonSupply) return
-    const missing = workspace.orders.filter((order) => !order.sticker.code && !unifiedStickerAttempts.current.has(order.id))
-    if (!missing.length) return
+    if (!open || (stage !== 'picking' && stage !== 'packing') || !workspace || isOzonSupply
+      || freshWorkspaceGeneration.current !== workspaceOpenGeneration.current) return
+    if (assemblyFrame && (!assemblyFrame.visible || !registerSequentialScanner)) return
+    // Re-entering an already delivered WB supply is read-only. Keep the
+    // historical screen available for explicit label reprints, but do not
+    // automatically create packaging work or request replacement stickers.
+    const historicalReadOnly = deliverySubmitted
+      || workspace.stage === 'tracking'
+      || ['in_delivery', 'done'].includes(workspace.supply.status)
+    if (historicalReadOnly) return
+    const missing = workspace.orders.filter((order) => !order.sticker.code
+      && order.status !== 'cancelled' && !unifiedStickerAttempts.current.has(order.id))
+    // Keep accounting preparation opportunistic; manual tape printing does not
+    // depend on a packaging task being present.
+    const prepare = stage === 'packing' && !workspace.supply.packaging_task_id
+      && !ordinaryPreparationAttempt.current && workspace.orders.length > 0
+      && workspace.supply.status !== 'done' && workspace.supply.status !== 'cancelled'
+    if (!missing.length && !prepare) return
+    if (prepare) ordinaryPreparationAttempt.current = true
     for (const order of missing) unifiedStickerAttempts.current.add(order.id)
     const write = beginWorkspaceWrite()
-    void fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
-      kind: 'order_sticker', order_ids: missing.map((order) => order.id), retry_missing: true,
-    }).then((batch) => {
+    const supplyIdAtStart = workspace.supply.id
+    let retryErrorMessage = ''
+    const retryOperation = async () => {
+      retryErrorMessage = ''
+      const current = await fetchFbsWorkspace(token, authHeaders, supplyIdAtStart)
+      const stillMissing = current.orders
+        .filter((order) => !order.sticker.code && order.status !== 'cancelled')
+      const stickers = stillMissing.length
+        ? await ensureFbsStickers(token, authHeaders, current)
+        : { workspace: current, errorMessage: null }
+      retryErrorMessage = stickers.errorMessage ?? ''
+      return prepare && !stickers.workspace.supply.packaging_task_id
+        ? startFbsSupplyWork(token, authHeaders, supplyIdAtStart)
+        : stickers.workspace
+    }
+    const onRetrySuccess = () => {
+      if (!retryErrorMessage) return
+      setError(retryErrorMessage)
+      setRetryAction(() => () => {
+        if (write.isCurrent()) void run(retryOperation, '', undefined, onRetrySuccess)
+      })
+    }
+    const retryAfterOrderErrors = (message: string) => {
       if (!write.isCurrent()) return
-      if (batch.order_errors.length) setError(batch.order_errors.map((item) => item.message).join(' '))
-      void load(true)
+      setError(message)
+      setRetryAction(() => () => {
+        if (write.isCurrent()) void run(retryOperation, '', undefined, onRetrySuccess)
+      })
+    }
+    const requested = ensureFbsStickers(token, authHeaders, workspace, missing.map((order) => order.id))
+    void requested.then(async (result) => {
+      if (!write.isCurrent()) return
+      if (prepare) await run(() => startFbsSupplyWork(token, authHeaders, supplyIdAtStart), '')
+      else void load(true)
+      if (write.isCurrent() && result.errorMessage) {
+        retryAfterOrderErrors(result.errorMessage)
+      }
     }).catch((cause: unknown) => {
-      if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+      if (!write.isCurrent()) return
+      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+      // The failed background request is deliberately not retried automatically.
+      // Keep it attached to this supply and retry the same finite prepare sequence
+      // only after the operator presses the existing Alert action.
+      setRetryAction(() => () => {
+        if (write.isCurrent()) void run(retryOperation, '', undefined, onRetrySuccess)
+      })
     })
-  }, [open, stage, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, token, authHeaders, beginWorkspaceWrite, load])
+  }, [open, stage, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, deliverySubmitted, token, authHeaders, beginWorkspaceWrite, load])
 
   const openAddOrders = async () => {
     if (!workspace) return
@@ -1579,13 +1667,19 @@ export function FfFbsSupplyWorkspace({
                   enabled: true,
                 },
                 async (kiz) => {
+                  const validateCurrentBinding = async () => validateFbsPrintBindings(token, [{
+                    order_id: result.order_id,
+                    supply_id: printed.supply_id,
+                    marking_id: printed.marking_id,
+                    cis_code: kiz,
+                  }])
                   const printResult = await startClaimedAutomaticPrint(
                     printAttemptKey,
                     async () => printMarkingCodeTape(
                       [{ cis: kiz, codeId: printed.id, hasLabelArtifact: printed.has_label_artifact }],
                       { units: [{ block: 'cz', copies: 1 }] },
                       undefined,
-                      { authToken: token },
+                      { authToken: token, beforeDispatch: validateCurrentBinding },
                     ),
                     {
                       claim: (attemptKey) => claimFbsScanAutoPrintTarget(
@@ -2062,9 +2156,11 @@ export function FfFbsSupplyWorkspace({
         return
       }
       if (ordinaryWbPacking) {
-        // The row target is read synchronously by the controller before any blur.
         setKizScanValue('')
-        acceptPackingScanRef.current(raw)
+        // Route row input through the visible unified scan bar. Its serial
+        // queue owns scan errors and Escape recovery; the selected row target
+        // remains available synchronously when the event is accepted.
+        document.dispatchEvent(new CustomEvent('fbs-packing-row-scan', { detail: raw }))
         return
       }
       // Detach the accepted hardware payload synchronously. No async branch is
@@ -2143,18 +2239,6 @@ export function FfFbsSupplyWorkspace({
       refocusKizInput(true)
     }
   }
-  useEffect(() => {
-    if (!ordinaryWbPacking || !open || stage !== 'packing') return
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape' || !(packingSerialBusy() || sequentialScanner?.canCancel?.())) return
-      event.preventDefault()
-      event.stopPropagation()
-      void cancelUnifiedScanRef.current()
-    }
-    document.addEventListener('keydown', onKeyDown, true)
-    return () => document.removeEventListener('keydown', onKeyDown, true)
-  }, [ordinaryWbPacking, open, stage, sequentialScanner])
-
   // Один приём кода для поля скана и для слушателя всей вкладки (WMS-575):
   // что делает скан, решает прежняя логика — ожидание ЧЗ, поиск стикера,
   // галки WMS-514; код, пришедший во время обработки, ждёт в очереди.
@@ -2780,7 +2864,11 @@ export function FfFbsSupplyWorkspace({
       return order.metadata.states.some((state) => state.kind === 'sgtin' && Boolean(state.value_tail))
     }
     const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
-    return Boolean(line?.requires_honest_sign || order.metadata.required.includes('sgtin'))
+    return Boolean(
+      order.product.requires_honest_sign
+      || line?.requires_honest_sign
+      || order.metadata.required.includes('sgtin'),
+    )
   }
 
   const markingAvailableForOrders = (orders: Array<FbsWorkspace['orders'][number]>) => {
@@ -2789,9 +2877,14 @@ export function FfFbsSupplyWorkspace({
     for (const order of orders) {
       if (!requiresOrderHonestSign(order) || !order.product.id || seen.has(order.product.id)) continue
       seen.add(order.product.id)
-      total += packLineByProduct.get(order.product.id)?.marking_available_count ?? 0
+      total += markingAvailableForOrder(order)
     }
     return total
+  }
+
+  const markingAvailableForOrder = (order: FbsWorkspace['orders'][number]) => {
+    const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
+    return order.marking_available_count ?? line?.marking_available_count ?? 0
   }
 
   const markingShortageForOrders = (orders: FbsWorkspace['orders']) => {
@@ -2802,16 +2895,25 @@ export function FfFbsSupplyWorkspace({
       }
     }
     return [...needed].reduce((sum, [productId, quantity]) =>
-      sum + Math.max(0, quantity - (packLineByProduct.get(productId)?.marking_available_count ?? 0)), 0)
+      sum + Math.max(0, quantity - markingAvailableForOrder(
+        orders.find((order) => order.product.id === productId)!,
+      )), 0)
   }
 
-  const openBulkOrderMarkingPrint = (orders: Array<FbsWorkspace['orders'][number]>, reprint = false) => {
-    if (!workspace || orders.length === 0) return
+  const openBulkOrderMarkingPrint = (
+    orders: Array<FbsWorkspace['orders'][number]>,
+    reprint = false,
+    onClose?: (completed: boolean) => void,
+  ): boolean => {
+    if (!workspace || orders.length === 0) return false
     const firstOrder = orders[0]
     const firstProductId = firstOrder?.product.id
       ?? (isOzonSupply ? firstOrder?.positions.find((position) => position.product_id)?.product_id : null)
     const firstLine = firstProductId ? packLineByProduct.get(firstProductId) : undefined
-    if (!firstOrder || !firstProductId) return
+    if (!firstOrder || !firstProductId) {
+      setError('У заказа нет товара для печати.')
+      return false
+    }
     const firstOzonPosition = isOzonSupply ? firstOrder.positions[0] : undefined
     const anyHonestSign = orders.some(requiresOrderHonestSign)
     const tapeOrders = orders.map((order) => ({
@@ -2855,14 +2957,15 @@ export function FfFbsSupplyWorkspace({
             }
             return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
           },
-          confirmQrApplied: async (asset) => {
-            await confirmFbsPrintApplied(token, authHeaders, asset.id, createFbsIdempotencyKey())
+          confirmQrApplied: async (asset, idempotencyKey) => {
+            await confirmFbsPrintApplied(token, authHeaders, asset.id, idempotencyKey)
           },
         },
         onPrinted: () => { void refreshPackagingTask() },
       },
-      { reprint },
+      { reprint, onClose },
     )
+    return true
   }
 
   const clearSelectedMarking = async () => {
@@ -2930,7 +3033,7 @@ export function FfFbsSupplyWorkspace({
         sellerId: workspace?.supply.seller.id,
         documentNumber: workspace?.supply.name ?? null,
         qtyNeedPack: printsHonestSign ? 1 : 0,
-        markingAvailable: printsHonestSign ? (line?.marking_available_count ?? 0) : 0,
+        markingAvailable: printsHonestSign ? markingAvailableForOrder(order) : 0,
         qtyMarkingPrinted: orderPrintDone(order) ? 1 : 0,
         requiresHonestSign: printsHonestSign,
         skuCode: ozonPosition?.sku ?? ozonPosition?.seller_article ?? line?.sku_code ?? order.product.sku ?? order.product.seller_article
@@ -2942,6 +3045,7 @@ export function FfFbsSupplyWorkspace({
           ? productBarcodeOptionsForPosition(ozonPosition, 'ozon')
           : productBarcodeOptionsForOrder(order, workspace.supply.marketplace),
         fbsTape: {
+          reprintMarkingIds: reprintMarkingId ? [reprintMarkingId] : undefined,
           orders: [{
             orderId: order.id,
             wbOrderId: order.wb_order_id,
@@ -2965,8 +3069,8 @@ export function FfFbsSupplyWorkspace({
             }
             return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
           },
-          confirmQrApplied: async (asset) => {
-            await confirmFbsPrintApplied(token, authHeaders, asset.id, createFbsIdempotencyKey())
+          confirmQrApplied: async (asset, idempotencyKey) => {
+            await confirmFbsPrintApplied(token, authHeaders, asset.id, idempotencyKey)
           },
         },
         onPrinted: () => { void refreshPackagingTask() },
@@ -3066,12 +3170,15 @@ export function FfFbsSupplyWorkspace({
   // листа, построенные группировкой по этому же списку, так что расхождение
   // между ними структурно невозможно (регрессия чинилась трижды за один день
   // 23.08.2026 — см. docs/requirements/WMS-580.md).
-  const { sortedOrders: fullTapeOrders, rows: pickingRows } = useMemo(() => {
+  const { sortedOrders: fullTapeOrders } = useMemo(() => {
     if (!workspace) return { sortedOrders: [], rows: [] }
     return fbsBuildPickingRows(workspace.orders, isOzonSupply)
   }, [workspace, isOzonSupply])
   const printPickingList = async () => {
     if (!workspace) return
+    const write = beginWorkspaceWrite()
+    const targetSupplyId = workspace.supply.id
+    const isCurrentPrint = () => isWorkspaceWriteScreenCurrent(write, shownSupplyId.current, targetSupplyId)
     const printWindow = window.open('', '_blank')
     if (!printWindow) {
       setError('Браузер заблокировал окно печати. Разрешите всплывающие окна и повторите.')
@@ -3080,33 +3187,93 @@ export function FfFbsSupplyWorkspace({
     printWindow.opener = null
     setError(null)
     printWindow.document.write('<title>Лист подбора</title><p style="font:14px Arial,sans-serif">Готовим лист подбора…</p>')
+    let printWorkspace = workspace
+    const historicalReadOnly = deliverySubmitted
+      || workspace.stage === 'tracking'
+      || ['in_delivery', 'done'].includes(workspace.supply.status)
+    if (!isOzonSupply && !historicalReadOnly
+      && workspace.orders.some(order => !order.sticker.code && order.status !== 'cancelled')) {
+      try {
+        const result = await ensureFbsStickers(token, authHeaders, workspace)
+        if (!isCurrentPrint() || !write.matchesShownSupply(result.workspace)) {
+          printWindow.close()
+          return
+        }
+        printWorkspace = result.workspace
+        if (result.errorMessage) setError(result.errorMessage)
+        if (isCurrentPrint() && write.isLatest()
+          && freshWorkspaceGeneration.current === workspaceOpenGeneration.current) setWorkspace(printWorkspace)
+      } catch (cause) {
+        if (!isCurrentPrint()) {
+          printWindow.close()
+          return
+        }
+        setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+      }
+    }
     // WMS-528: где брать — ячейки и тара по убыванию остатка, ровно на покрытие подбора.
     // Без ответа сервера лист печатается с прежними ячейками, печать не блокируется.
-    let rows: typeof pickingRows = pickingRows
+    let rows = fbsBuildPickingRows(
+      printWorkspace.orders,
+      printWorkspace.supply.marketplace === 'ozon',
+    ).rows
     try {
       // Подобранное берём из того же свежего ответа, что и места: экран мог не перечитаться после подбора.
-      const options = new Map((await getFbsPickOptions(token, authHeaders, workspace.supply.id))
+      const options = new Map((await getFbsPickOptions(token, authHeaders, printWorkspace.supply.id))
         .map((option) => [option.product_id, option]))
-      rows = pickingRows.map((row) => {
+      if (!isCurrentPrint()) {
+        printWindow.close()
+        return
+      }
+      rows = rows.map((row) => {
         const option = options.get(row.key)
         if (!option) return row
         const picked = Math.min(option.picked_qty, row.required)
         return { ...row, picked, locations: fbsPickSourceLabels(option.locations, row.required - picked) }
       })
     } catch {
-      rows = pickingRows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
+      if (!isCurrentPrint()) {
+        printWindow.close()
+        return
+      }
+      rows = rows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
     }
-    if (printWindow.closed) return
+    try {
+      const context = new Map((await getFbsPickingContext(token, authHeaders, printWorkspace.supply.id))
+        .map((item) => [item.product_id, item]))
+      if (!isCurrentPrint()) {
+        printWindow.close()
+        return
+      }
+      rows = rows.map((row) => {
+        const item = context.get(row.key)
+        return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies, sourceGroups: item.source_groups } : row
+      })
+    } catch {
+      if (!isCurrentPrint()) {
+        printWindow.close()
+        return
+      }
+      setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')
+      printWindow.close()
+      return
+    }
+    if (printWindow.closed || !isCurrentPrint()) {
+      printWindow.close()
+      return
+    }
     printWindow.document.open()
     printWindow.document.write(buildFbsPickingListPrintHtml({
-      supplyName: workspace.supply.name,
-      wbSupplyId: workspace.supply.wb_supply_id,
-      marketplace: workspace.supply.marketplace,
-      sellerName: workspace.supply.seller.name,
-      wmsWarehouseName: workspace.supply.wms_warehouse.name,
-      routeLabel: workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',
-      deadlineLabel: new Date(workspace.supply.nearest_deadline_at).toLocaleString('ru-RU'),
+      supplyName: printWorkspace.supply.name,
+      wbSupplyId: printWorkspace.supply.wb_supply_id,
+      marketplace: printWorkspace.supply.marketplace,
+      sellerName: printWorkspace.supply.seller.name,
+      wmsWarehouseName: printWorkspace.supply.wms_warehouse.name,
+      routeLabel: printWorkspace.supply.marketplace === 'ozon'
+        ? printWorkspace.orders.find((order) => Boolean(order.delivery_route))?.delivery_route ?? 'Метод доставки Ozon не указан'
+        : printWorkspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',
+      deadlineLabel: new Date(printWorkspace.supply.nearest_deadline_at).toLocaleString('ru-RU'),
       printedAtLabel: new Date().toLocaleString('ru-RU'),
       rows,
     }))
@@ -3174,7 +3341,6 @@ export function FfFbsSupplyWorkspace({
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
   // Выбор сохраняет тот же порядок, что и исходная лента / лист подбора.
   const selectedPackingOrders = fullTapeOrders.filter((order) => packingSelectedIds.has(order.id))
-  const printPackingOrders = selectedPackingOrders.length ? selectedPackingOrders : fullTapeOrders
   const markingNeededByProduct = new Map<string, number>()
   for (const order of packingOrders) {
     const hasWorkingCode = order.metadata.states.some((state) => state.kind === 'sgtin'
@@ -3718,7 +3884,7 @@ export function FfFbsSupplyWorkspace({
                       const printed = orderPrintDone(order)
                       const needsHonestSign = requiresOrderHonestSign(order)
                       const markingNeeded = order.product.id ? markingNeededByProduct.get(order.product.id) ?? 0 : Number(needsHonestSign)
-                      const markingAvailable = line?.marking_available_count ?? 0
+                      const markingAvailable = markingAvailableForOrder(order)
                       const markingShortage = needsHonestSign && markingAvailable < markingNeeded
                       const mutedColor = printed ? 'text.secondary' : 'text.primary'
                       const kizRowActive = (sequentialScanner?.view()?.orderId ?? kizScanActive?.order_id) === order.id
@@ -4010,6 +4176,62 @@ export function FfFbsSupplyWorkspace({
                   </Stack>
   ) : null
 
+  // Keep current handlers in the workspace; report a memoized, immutable view to
+  // the assembly. Parent re-renders do not publish a new subscription/state loop.
+  const currentPackingActions = {
+    select: (ids: string[]) => setPackingSelectedIds(new Set(ids)),
+    print: (ids: string[], onClose: (completed: boolean) => void): boolean => {
+      const selectedIds = new Set(ids)
+      const orders = fullTapeOrders.filter(order => selectedIds.has(order.id))
+      if (orders.length !== selectedIds.size) {
+        setError('Состав поставки изменился. Выберите заказы для печати заново.')
+        return false
+      }
+      return openBulkOrderMarkingPrint(orders, orders.every(orderPrintDone), onClose)
+    },
+    verify: checkMarkingsInWb,
+    packAll: () => { void packEverything() },
+    skip: () => setSkipHonestSignOpen(true),
+    transfer: () => setTransferDialogOpen(true),
+    clear: () => setClearMarkingOrders([...selectedPackingOrders]),
+  }
+  const packingActionHandlers = useRef(currentPackingActions)
+  packingActionHandlers.current = currentPackingActions
+  const packingActions = useMemo<FbsPackingActions | null>(() => workspace ? ({
+    id: workspace.supply.id,
+    title: workspace.supply.name,
+    seller: workspace.supply.seller.name,
+    marketplace: workspace.supply.marketplace,
+    orderIds: fullTapeOrders.map(order => order.id),
+    selectedIds: fullTapeOrders.filter(order => packingSelectedIds.has(order.id)).map(order => order.id),
+    printed: printedOrdersCount,
+    packed: workspace.progress.packed,
+    packedTotal: workspace.progress.total,
+    busy,
+    editable: packagingEditable,
+    codes: packingOrdersWithCode,
+    clearable: clearableSelectedCount,
+    honestSignSkipped: Boolean(workspace.supply.honest_sign_skipped),
+    skipBusy: skipHonestSignBusy,
+    packAllDisabled: !packagingEditable || busy || (assemblyWbPacking && !packagingTask),
+    select: ids => packingActionHandlers.current.select(ids),
+    print: (ids, onClose) => packingActionHandlers.current.print(ids, onClose),
+    verify: () => packingActionHandlers.current.verify(),
+    packAll: () => packingActionHandlers.current.packAll(),
+    skip: () => packingActionHandlers.current.skip(),
+    transfer: () => packingActionHandlers.current.transfer(),
+    clear: () => packingActionHandlers.current.clear(),
+  }) : null, [workspace, fullTapeOrders, packingSelectedIds, printedOrdersCount, busy,
+    packagingEditable, packingOrdersWithCode, clearableSelectedCount, skipHonestSignBusy,
+    assemblyWbPacking, packagingTask])
+  const registerPackingActions = assemblyFrame?.registerPackingActions
+  useEffect(() => {
+    if (supplyId && registerPackingActions) registerPackingActions(supplyId, packingActions)
+  }, [supplyId, registerPackingActions, packingActions])
+  useEffect(() => () => {
+    if (supplyId) registerPackingActions?.(supplyId, null)
+  }, [supplyId, registerPackingActions])
+
   const packingPanel = workspace ? (
     <>
               {packagingTask || deliveryConfirmed || useSequentialPacking || ozonPackingScanner || Boolean(assemblyFrame?.registerScanner) ? (
@@ -4024,84 +4246,9 @@ export function FfFbsSupplyWorkspace({
                       rejected={isOzonSupply ? undefined : ownRejectedToggle}
                     />
                   ) : null}
-                  <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-                      <Box>
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-                          <Typography variant="h6">Упаковка и маркировка</Typography>
-                          {workspace.supply.honest_sign_skipped ? (
-                            <Chip
-                              size="small"
-                              color="warning"
-                              label="Сдаём без Честного знака"
-                              data-testid="fbs-honest-sign-skipped-chip"
-                            />
-                          ) : null}
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                          Напечатано {printedOrdersCount} из {packingOrders.length} · упаковано {workspace.progress.packed} из {workspace.progress.total}
-                        </Typography>
-                      </Box>
-                      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                        <Button
-                          disabled={busy || packingOrders.length === 0}
-                          onClick={() => setPackingSelectedIds(selectedPackingOrders.length === packingOrders.length
-                            ? new Set()
-                            : new Set(packingOrders.map((order) => order.id)))}
-                          data-testid="fbs-packing-select-all"
-                        >
-                          {selectedPackingOrders.length === packingOrders.length && packingOrders.length > 0 ? 'Снять выбор' : 'Выбрать всё'}
-                        </Button>
-                        <Button
-                          disabled={busy || packingOrders.length === 0}
-                          onClick={() => openBulkOrderMarkingPrint(
-                            printPackingOrders,
-                            printPackingOrders.every(orderPrintDone),
-                          )}
-                          data-task-id="FBS-21"
-                        >
-                          {selectedPackingOrders.length ? `Печать выбранного (${selectedPackingOrders.length})` : `Печать всего (${packingOrders.length})`}
-                        </Button>
-                        {!isOzonSupply && packagingEditable ? (
-                          <Button
-                            disabled={busy || packingOrdersWithCode === 0}
-                            onClick={checkMarkingsInWb}
-                            data-testid="fbs-packing-check-wb"
-                          >
-                            Проверить в WB
-                          </Button>
-                        ) : null}
-                        {!isOzonSupply && selectedPackingOrders.length > 0 ? (
-                          <Button color="error" disabled={!packagingEditable || busy || clearableSelectedCount === 0} onClick={() => setClearMarkingOrders([...selectedPackingOrders])} data-testid="fbs-packing-clear-selected">
-                            Очистить ЧЗ
-                          </Button>
-                        ) : null}
-                        {!isOzonSupply && selectedPackingOrders.length > 0 ? (
-                          <Button
-                            disabled={!packagingEditable || busy}
-                            onClick={() => setTransferDialogOpen(true)}
-                            data-testid="fbs-packing-transfer-supply"
-                          >
-                            Перенести в другую поставку
-                          </Button>
-                        ) : null}
-
-                        <Button variant="contained" disabled={!packagingEditable || busy || (assemblyWbPacking && !packagingTask)} onClick={() => void packEverything()}>
-                          Всё упаковано
-                        </Button>
-                        {!workspace.supply.honest_sign_skipped && packingOrders.length > 0 ? (
-                          <Button
-                            color="warning"
-                            disabled={!packagingEditable || skipHonestSignBusy || busy}
-                            onClick={() => setSkipHonestSignOpen(true)}
-                            data-testid="fbs-skip-honest-sign"
-                          >
-                            Сдать без Честного знака
-                          </Button>
-                        ) : null}
-                      </Stack>
-                    </Stack>
-                  </Box>
+                  {!assemblyFrame && packingActions ? <FbsPackingActionsToolbar
+                    entries={[packingActions]} active={open && stage === 'packing'} contextKey={workspace.supply.id}
+                  /> : null}
                   {workspace.marking_pool && workspace.marking_pool.shortage > 0 ? (
                     <Box sx={{ px: 2, py: 1.25, bgcolor: '#fdf4e7', borderBottom: 1, borderColor: 'divider' }}>
                       <Typography variant="body2" sx={{ color: '#854f0b' }}>
@@ -5052,16 +5199,6 @@ export function FfFbsSupplyWorkspace({
     if (assemblyFrame.registerScanner) {
       return <>
         {assemblyFrame.packingHost ? createPortal(<>
-          {isOzonSupply ? (
-            <Box sx={{ px: 2, py: 1, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button
-                disabled={busy || packingOrders.length === 0}
-                onClick={() => openBulkOrderMarkingPrint(printPackingOrders, printPackingOrders.every(orderPrintDone))}
-              >
-                Печать всего ({packingOrders.length})
-              </Button>
-            </Box>
-          ) : null}
           {packingRows}
         </>, assemblyFrame.packingHost) : null}
         {frameMessages}
@@ -5133,13 +5270,12 @@ export function FfFbsSupplyWorkspace({
     >
       {workspace?.supply.source === 'wb' ? (
         <Alert
-          severity="error"
-          variant="filled"
-          sx={{ borderRadius: 0, fontWeight: 700 }}
+          severity="info"
+          sx={{ borderRadius: 0 }}
           data-testid="fbs-supply-from-seller-cabinet"
         >
-          Поставка собрана в кабинете продавца. Работать с ней можно как с обычной,
-          но её состав меняет продавец, а не мы — перед передачей сверьте заказы.
+          Поставка создана в кабинете WB.
+          {packagingEditable ? ' В WMS можно добавлять и переносить заказы, собирать и упаковывать товар.' : ''}
         </Alert>
       ) : null}
       <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider', bgcolor: '#fff' }}>

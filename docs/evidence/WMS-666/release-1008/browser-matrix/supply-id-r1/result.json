@@ -1,0 +1,51 @@
+{
+  "sha": "36cb64e1a1f30c86636728fa046364c937a5d277",
+  "cases": [
+    {
+      "id": "WMS666.actualPool[supply_id;normal]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;delete-before-claim]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;delete-after-claim]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;replace-before-claim]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;replace-after-claim]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;manual-then-delete-scan]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;rapid-scans]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;flags-after-claim]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;clear-partial]",
+      "status": "FAIL",
+      "failure": "Error: UI timeout: document.querySelector('[data-testid=\"fbs-packing-clear-selected\"]')&&!document.querySelector('[data-testid=\"fbs-packing-clear-selected\"]').disabled"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;controls]",
+      "status": "FAIL",
+      "failure": "Error: UI timeout: document.querySelector('[data-testid=\"fbs-packing-clear-selected\"]')&&!document.querySelector('[data-testid=\"fbs-packing-clear-selected\"]').disabled"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC_WB_AND_PRINT;REAL_LOCAL_API_POSTGRES",
+  "currentCase": "WMS666.actualPool[supply_id;controls]",
+  "productSha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc"
+}

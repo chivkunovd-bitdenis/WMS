@@ -3,10 +3,12 @@
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
+from test_fbs_kiz import _create_order, _create_supply, _register_ff_admin, _setup_seller_warehouse
 from test_fbs_packing_selection import inventory_snapshot, seed_selection
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder, FbsOrderMarking
+from app.models.product import Product
 from app.services import fbs_marking_service
 from app.services.wildberries_fbs_client import MarketplaceMetaDetail, MarketplaceOrderMetaRow
 
@@ -108,3 +110,48 @@ async def test_put_refusal_exposes_only_this_orders_saved_decision(
     row = next(row for row in response.json()["orders"] if row["id"] == str(orders[0].order_id))
     assert row["metadata"]["states"][0]["decision"] == "sgtinRetired"
     assert row["metadata"]["states"][0]["reason"] is None
+
+
+@pytest.mark.asyncio
+async def test_workspace_exposes_product_honest_sign_without_task_or_wb_required_meta(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=986666,
+        sticker_code="WB-BARE-GROUP-CHZ",
+        wb_barcode="WB-BARE-GROUP-CHZ",
+        status="assembling",
+    )
+    async with SessionLocal() as session:
+        product = await session.get(Product, order.product_id)
+        fbs_order = await session.get(FbsOrder, order.order_id)
+        assert product is not None and fbs_order is not None
+        product.requires_honest_sign = True
+        fbs_order.required_meta_json = []
+        fbs_order.optional_meta_json = []
+        await session.commit()
+
+    response = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    row = next(row for row in payload["orders"] if row["id"] == str(order.order_id))
+    assert row["metadata"]["required"] == []
+    assert row["product"]["requires_honest_sign"] is True

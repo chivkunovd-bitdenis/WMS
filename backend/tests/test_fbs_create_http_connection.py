@@ -7,6 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -73,9 +74,11 @@ async def test_create_http_releases_pool_and_persists_identity(
         fixture_engine.url, pool_size=1, max_overflow=0, pool_timeout=0.2
     )
     sessions = async_sessionmaker(tiny_engine, expire_on_commit=False)
+    observers = async_sessionmaker(fixture_engine, expire_on_commit=False)
     calls: asyncio.Queue[tuple[str, asyncio.Event]] = asyncio.Queue()
     create_calls: list[str] = []
     add_calls: list[str] = []
+    sticker_requests: list[str] = []
 
     async def pause_http(name: str) -> None:
         release = asyncio.Event()
@@ -134,7 +137,33 @@ async def test_create_http_releases_pool_and_persists_identity(
     ) -> dict[str, Any]:
         supply = await session.get(FbsSupply, supply_id)
         assert supply
-        return {"id": str(supply_id), "wb_id": supply.wb_supply_id}
+        return {
+            "id": str(supply_id),
+            "wb_id": supply.wb_supply_id,
+            "supply": {
+                "id": str(supply_id),
+                "wb_supply_id": supply.wb_supply_id,
+                "marketplace": "wb",
+            },
+        }
+
+    async def request_stickers(
+        session: AsyncSession,
+        tenant_id: uuid.UUID,
+        supply: FbsSupply,
+        _http_client: httpx.AsyncClient,
+    ) -> None:
+        async with observers() as observer:
+            durable = await observer.get(FbsSupply, supply.id)
+            assert durable and durable.wb_supply_id == supply.wb_supply_id
+            operation = await observer.scalar(
+                select(FbsWbOperation).where(
+                    FbsWbOperation.tenant_id == tenant_id,
+                    FbsWbOperation.local_entity_id == supply.id,
+                )
+            )
+            assert operation and operation.state in {"confirmed", "pending_confirmation"}
+        sticker_requests.append(supply.wb_supply_id or "")
 
     monkeypatch.setattr(service, "_require_marketplace_token", token)
     monkeypatch.setattr(service, "validate_supply_composition", validate)
@@ -142,6 +171,11 @@ async def test_create_http_releases_pool_and_persists_identity(
     monkeypatch.setattr(service, "_execute_wb_batch_add", add)
     monkeypatch.setattr(service, "reconcile_supply_orders", readback)
     monkeypatch.setattr(service, "get_supply_workspace", workspace)
+    monkeypatch.setattr(
+        service,
+        "_request_order_stickers_for_picking",
+        AsyncMock(side_effect=request_stickers),
+    )
 
     async def run(name: str, key: str, order_index: int = 0) -> dict[str, Any]:
         async with sessions() as session, httpx.AsyncClient() as client:
@@ -169,6 +203,7 @@ async def test_create_http_releases_pool_and_persists_identity(
         # The operation owns only its order set, not the whole seller.
         other = await run("other", "disjoint-key", 2)
         assert other["wb_id"] == "WB-GI-other"
+        assert sticker_requests == ["WB-GI-other"]
         assert create_calls == ["main", "other"]
         if outcome in {"same_key", "rotated_key", "loser_failed", "partial_winner"}:
             retry_key = "original-key" if outcome == "same_key" else "rotated-key"
@@ -180,6 +215,7 @@ async def test_create_http_releases_pool_and_persists_identity(
                     await task
             else:
                 assert await task == winner
+            assert sticker_requests.count("WB-GI-winner") == 1
             async with sessions() as observer:
                 assert await observer.scalar(text("select 1")) == 1
                 own_operations = list(

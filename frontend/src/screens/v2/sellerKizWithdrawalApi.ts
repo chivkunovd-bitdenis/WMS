@@ -214,12 +214,12 @@ export class SameOriginSellerWithdrawalApi implements SellerWithdrawalApi {
 
   async list(query: WithdrawalRegistryQuery, signal?: AbortSignal): Promise<WithdrawalPage> {
     const params = new URLSearchParams({
-      date_from: query.dateFrom,
-      date_to: query.dateTo,
       only_not_withdrawn: String(query.onlyNotWithdrawn),
       limit: String(query.limit),
       offset: String(query.offset),
     })
+    if (query.dateFrom) params.set('date_from', query.dateFrom)
+    if (query.dateTo) params.set('date_to', query.dateTo)
     if (query.search.trim()) params.set('search', query.search.trim())
     if (query.productId) params.set('product_id', query.productId)
     const response = await fetch(

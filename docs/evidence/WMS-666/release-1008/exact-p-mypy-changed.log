@@ -1,0 +1,4 @@
+product_sha=b6d23148f1571d08d13d83c6179c385e2f6a1efc
+command=(cd backend && mypy --no-incremental --cache-dir=/dev/null app/services/fbs_kiz_service.py app/services/fbs_order_tape_print_service.py app/services/marking_code_service.py)
+exit=0
+Success: no issues found in 3 source files

@@ -1,0 +1,16 @@
+AssertionError [ERR_ASSERTION]: button labelled all(2) must print both postings
++ actual - expected
+
+  [
+    'ozon-a-order',
+-   'ozon-a-second'
+  ]
+
+    at file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-compatibility-audit/frontend/tests-e2e/wms652-critical/compatibility-ozon.audit.mjs:253:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [Array],
+  expected: [Array],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}

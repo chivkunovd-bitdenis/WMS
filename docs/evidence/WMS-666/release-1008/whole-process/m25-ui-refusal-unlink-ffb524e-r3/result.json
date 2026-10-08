@@ -1,0 +1,13 @@
+{
+  "sha": "ffb524e2950cfb250993ad4db3b0f394ca55f735",
+  "cases": [
+    {
+      "id": "WMS666.actualPool[supply_id;replace-ui-refusal-unlink]",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC_WB_AND_PRINT;REAL_LOCAL_API_POSTGRES",
+  "currentCase": "WMS666.actualPool[supply_id;replace-ui-refusal-unlink]",
+  "productSha": "ffb524e2950cfb250993ad4db3b0f394ca55f735"
+}

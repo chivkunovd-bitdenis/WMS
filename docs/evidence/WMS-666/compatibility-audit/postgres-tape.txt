@@ -1,0 +1,163 @@
+......FF...............                                                  [100%]
+=================================== FAILURES ===================================
+__________ test_postgres_tape_with_concurrent_packing_or_kiz[unbind] ___________
+
+async_client = <httpx.AsyncClient object at 0x1142a8af0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1143a3ec0>
+operation = 'unbind'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("operation", ["pack_all", "scan", "unbind"])
+    async def test_postgres_tape_with_concurrent_packing_or_kiz(
+        async_client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+        operation: str,
+    ) -> None:
+        if engine.dialect.name != "postgresql":
+            pytest.skip("Requires PostgreSQL row locks")
+        seed = await seed_tape(async_client, monkeypatch, 3)
+        before = await stock_snapshot()
+        attached, proceed = asyncio.Event(), asyncio.Event()
+        original_attach = tape.marking_svc.attach_order_meta_to_wb_and_sync
+        values: list[str] = []
+
+        async def pause_before_wb(*args, **kwargs):
+            values.append(args[3].value)
+            attached.set()
+            await proceed.wait()
+            return await original_attach(*args, **kwargs)
+
+        monkeypatch.setattr(tape.marking_svc, "attach_order_meta_to_wb_and_sync", pause_before_wb)
+        async with SessionLocal() as first, SessionLocal() as second:
+            printing = asyncio.create_task(print_tape(first, async_client, seed))
+            await asyncio.wait_for(attached.wait(), 5)
+            value = values[0]
+            pid = await second.scalar(text("select pg_backend_pid()"))
+
+            async def change():
+                if operation == "pack_all":
+                    await packaging.pack_all_and_complete_fbs_task(
+                        second,
+                        seed.tenant_id,
+                        seed.task_id,
+                        acting_user_id=seed.user_id,
+                    )
+                elif operation == "scan":
+                    await kiz._commit_one_kiz_pair(
+                        second,
+                        seed.tenant_id,
+                        seed.user_id,
+                        kiz.FbsKizCommitPair(order_id=seed.order_ids[0], value=value, confirmed=False),
+                        async_client,
+                        "race-scan",
+                    )
+                    await second.commit()
+                else:
+                    await kiz.cancel_order_kiz(
+                        second,
+                        seed.tenant_id,
+                        seed.user_id,
+                        seed.order_ids[0],
+                        async_client,
+                    )
+
+            pending = asyncio.create_task(change())
+            try:
+                await wait_for_row_lock(pid)
+                proceed.set()
+                printed = await asyncio.wait_for(printing, 5)
+                assert printed.orders and not printed.order_errors
+                await first.commit()
+                await asyncio.wait_for(pending, 5)
+            finally:
+                proceed.set()
+                for running in (printing, pending):
+                    if not running.done():
+                        running.cancel()
+                await asyncio.gather(printing, pending, return_exceptions=True)
+        async with SessionLocal() as session:
+            line = await session.get(PackagingTaskLine, seed.line_id)
+            code = await session.scalar(select(MarkingCode).where(MarkingCode.cis_code == value))
+            assert line and code
+            assert line.qty_marking_printed == (0 if operation == "unbind" else 1)
+            assert line.qty_marking_external == 0
+>           assert (
+                code.status
+                == {"scan": "applied", "unbind": "applied", "pack_all": "printed"}[operation]
+            )
+E           AssertionError: assert 'available' == 'applied'
+E
+E             - applied
+E             + available
+
+tests/test_fbs_order_tape_concurrency.py:425: AssertionError
+_______ test_postgres_unbind_then_waiting_tape_refreshes_deleted_binding _______
+
+async_client = <httpx.AsyncClient object at 0x114207550>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1124d2cf0>
+
+    @pytest.mark.asyncio
+    async def test_postgres_unbind_then_waiting_tape_refreshes_deleted_binding(
+        async_client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        if engine.dialect.name != "postgresql":
+            pytest.skip("Requires PostgreSQL row locks")
+        seed = await seed_tape(async_client, monkeypatch, 2)
+        before = await stock_snapshot()
+        async with SessionLocal() as initial:
+            original = await print_tape(initial, async_client, seed)
+            await initial.commit()
+        deleted, proceed = asyncio.Event(), asyncio.Event()
+        original_void = kiz.void_existing_sgtin_marking
+
+        async def pause_after_void(*args, **kwargs):
+            await original_void(*args, **kwargs)
+            deleted.set()
+            await proceed.wait()
+
+        monkeypatch.setattr(kiz, "void_existing_sgtin_marking", pause_after_void)
+        async with SessionLocal() as first, SessionLocal() as second:
+            stale_order = await second.scalar(
+                select(FbsOrder)
+                .where(
+                    FbsOrder.id == seed.order_ids[0],
+                )
+                .options(selectinload(FbsOrder.markings).selectinload(FbsOrderMarking.marking_code))
+            )
+            assert stale_order and len(stale_order.markings) == 1
+            cancelling = asyncio.create_task(
+                kiz.cancel_order_kiz(
+                    first,
+                    seed.tenant_id,
+                    seed.user_id,
+                    seed.order_ids[0],
+                    async_client,
+                )
+            )
+            await asyncio.wait_for(deleted.wait(), 5)
+            pid = await second.scalar(text("select pg_backend_pid()"))
+            printing = asyncio.create_task(print_tape(second, async_client, seed))
+            try:
+                await wait_for_row_lock(pid)
+                proceed.set()
+                await asyncio.wait_for(cancelling, 5)
+                repeated = await asyncio.wait_for(printing, 5)
+                await second.commit()
+            finally:
+                proceed.set()
+                for running in (cancelling, printing):
+                    if not running.done():
+                        running.cancel()
+                await asyncio.gather(cancelling, printing, return_exceptions=True)
+            assert repeated.orders and not repeated.order_errors
+>           assert repeated.orders[0].codes != original.orders[0].codes
+E           AssertionError: assert ['010460043993125321KIZTAPE0000000000'] != ['010460043993125321KIZTAPE0000000000']
+E            +  where ['010460043993125321KIZTAPE0000000000'] = FbsOrderTapeOrder(order_id=UUID('e4433c18-bcd5-482e-8e6e-af153a8b74d5'), wb_order_id=800392, requires_honest_sign=True...a2'), cis_code='010460043993125321KIZTAPE0000000000', has_label_artifact=False, order_product_id=None)], shortage=None).codes
+E            +  and   ['010460043993125321KIZTAPE0000000000'] = FbsOrderTapeOrder(order_id=UUID('e4433c18-bcd5-482e-8e6e-af153a8b74d5'), wb_order_id=800392, requires_honest_sign=True...a2'), cis_code='010460043993125321KIZTAPE0000000000', has_label_artifact=False, order_product_id=None)], shortage=None).codes
+
+tests/test_fbs_order_tape_concurrency.py:492: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_fbs_order_tape_concurrency.py::test_postgres_tape_with_concurrent_packing_or_kiz[unbind]
+FAILED tests/test_fbs_order_tape_concurrency.py::test_postgres_unbind_then_waiting_tape_refreshes_deleted_binding
+2 failed, 21 passed, 6 warnings in 37.50s

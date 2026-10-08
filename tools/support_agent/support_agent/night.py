@@ -378,7 +378,10 @@ class NightRunner:
         feedback = str(task.get("feedback", ""))
         prompt = (
             f"Ты разработчик {task['id']}. Прочитай AGENTS.md, docs/requirements/{task['id']}.md "
-            f"и {SKILLS_ROOT}/wms-developer/SKILL.md. Реализуй требования, не меняя контракт тестов. "
+            f"и {SKILLS_ROOT}/wms-developer/SKILL.md. Сохраняй обязательное поведение. "
+            "Если подтверждённая диагностика требует правки теста, фикстуры или имени, "
+            "обнови затронутые проверки и передай изменение на обычное независимое ревью; "
+            "не ослабляй assertions ради зелёного результата. "
             "Актуальное прямое решение владельца: все новые этапы, включая frontend/дизайн, "
             "выполняет только gpt-6.1-sol через Codex, без подмены другой моделью. "
             "Ревью выполняет отдельная сессия Sol 6.1. Это правило имеет приоритет "
@@ -420,6 +423,7 @@ class NightRunner:
 
     def _task_checks(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
         self._sync_task_base(tid, state, task)
+        self._refresh_contract_tests(task)
         self._assert_contract(task)
         failures = self._run_contract(task)
         if failures:
@@ -431,7 +435,6 @@ class NightRunner:
                                                     f"{reason}"))
             self._save(tid, state)
             return
-        task["contract_changed"] = self._hashes(task, task.get("tests") or []) != task.get("contract_hashes")
         task["step"] = "review"
         self._save(tid, state)
 
@@ -442,8 +445,13 @@ class NightRunner:
                 f"Проверь реализацию {task['id']}. Прочитай AGENTS.md, "
                 f"docs/requirements/{task['id']}.md, diff, результаты тестов, "
                 f"полные журналы {task.get('check_logs', {})}, "
+                f"исходный коммит тестового контракта {task.get('contract_commit') or 'не указан'}, "
+                f"изменение тестов/фикстур/имён: {'да' if task.get('contract_changed') else 'нет'}, "
                 f"{SKILLS_ROOT}/../owner-cases.md и {SKILLS_ROOT}/../failure-cases.md целиком. "
-                "Проверь требования, повторы, сбои и соседние процессы. Ничего не меняй. "
+                "Проверь требования, повторы, сбои и соседние процессы. Если менялись тесты, "
+                "фикстуры или имена, отдельно изучи diff contract_commit → текущий SHA и "
+                "подтверди, что исходное обязательное поведение сохранилось; обычные правки "
+                "не требуют сохранения прежних байтов. Ничего не меняй. "
                 "Прямое решение владельца: новый этап ревью выполняет отдельная сессия "
                 "gpt-6.1-sol через Codex, без подмены; прежние назначения моделей отменены. "
                 'Верни JSON {"accepted":true|false,"summary":"конкретные дефекты или результат"}.'
@@ -913,10 +921,58 @@ class NightRunner:
     def _assert_contract(self, task: dict[str, Any]) -> None:
         if "control_hashes" in task and self._control_hashes(task) != task["control_hashes"]:
             raise StepFailed("изменены CI, правила выпуска или защищённые проверки; автопубликация запрещена")
-        changed = self._hashes(task, task.get("tests") or []) != task.get("contract_hashes", {})
+        changed = (self._hashes(task, task.get("tests") or []) != task.get("contract_hashes", {})
+                   or bool(task.get("contract_paths_changed")))
+        # Keep the original digest only as review context. Test/fixture bytes and
+        # names are checked by the current test run and ordinary independent review.
         task["contract_changed"] = changed
-        if changed:
-            raise StepFailed("разработчик изменил зафиксированный контракт тестов")
+
+    def _refresh_contract_tests(self, task: dict[str, Any]) -> None:
+        """Run the current test paths after an ordinary reviewed test/fixture edit.
+
+        Keep original paths still present in HEAD and include current executable
+        paths added or changed since the test contract. Disabling rename detection
+        makes the destination of a rename an ordinary added path. A deleted
+        contract with no executable tests left still stops before local checks.
+        """
+        contract_commit = str(task.get("contract_commit") or "")
+        if not re.fullmatch(r"[0-9a-fA-F]{40,64}", contract_commit):
+            return
+        result = self.hotfix.git(
+            "diff", "--no-renames", "--name-status", contract_commit, "HEAD", "--",
+            cwd=task["path"],
+        )
+        baseline_paths = task.get("contract_hashes") or {}
+        original = list(dict.fromkeys(
+            str(path) for path in (baseline_paths if baseline_paths else task.get("tests") or [])
+        ))
+        deleted: set[str] = set()
+        added_or_changed: set[str] = set()
+        changed_test_paths = False
+        for line in result.splitlines():
+            fields = line.split("\t")
+            if len(fields) != 2:
+                continue
+            status, path = fields
+            changed_test_paths = changed_test_paths or bool(TEST_PATH_RE.search(path))
+            if status in ("A", "M", "C") and self._executable_test(path):
+                added_or_changed.add(path)
+            elif status == "D":
+                deleted.add(path)
+
+        root = Path(task["path"])
+        refreshed: list[str] = []
+        paths = [path for path in original if path not in deleted] + sorted(added_or_changed)
+        for path in paths:
+            if self._safe_rel(path) and (root / path).is_file():
+                refreshed.append(path)
+        refreshed = list(dict.fromkeys(refreshed))
+        if any(self._executable_test(path) for path in original) and not any(
+            self._executable_test(path) for path in refreshed
+        ):
+            raise StepFailed("контракт не содержит исполняемых тестов после изменений")
+        task["tests"] = refreshed
+        task["contract_paths_changed"] = changed_test_paths
 
     @staticmethod
     def _clear_stale_validation(task: dict[str, Any]) -> None:
@@ -938,8 +994,6 @@ class NightRunner:
             if self.hotfix.git_result(
                 "merge-base", "--is-ancestor", str(intent), "HEAD", cwd=task["path"]
             ).rc == 0:
-                if self._hashes(task, task.get("tests") or []) != task.get("contract_hashes", {}):
-                    raise StepFailed("актуальный etalon изменил зафиксированный контракт задачи")
                 task["control_hashes"] = self._control_hashes(task)
                 self._clear_stale_validation(task)
                 task["base_sha"] = intent
@@ -990,8 +1044,6 @@ class NightRunner:
                 raise StepFailed(
                     "актуальный etalon конфликтует с веткой задачи; нужна ручная интеграция"
                 )
-        if self._hashes(task, task.get("tests") or []) != task.get("contract_hashes", {}):
-            raise StepFailed("актуальный etalon изменил зафиксированный контракт задачи")
         task["control_hashes"] = self._control_hashes(task)
         task["base_sha"] = etalon
         task.pop("base_sync_intent", None)

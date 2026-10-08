@@ -1623,8 +1623,12 @@ async def test_ozon_supply_creation_never_calls_wb(
     monkeypatch.setattr(supply_svc, "validate_supply_composition", AsyncMock(return_value=preview))
     wb_create = AsyncMock(side_effect=AssertionError("WB create must not run for Ozon"))
     wb_add = AsyncMock(side_effect=AssertionError("WB add must not run for Ozon"))
+    sticker_prefetch = AsyncMock(
+        side_effect=AssertionError("WB sticker prefetch must not run for Ozon")
+    )
     monkeypatch.setattr(supply_svc, "create_marketplace_supply", wb_create)
     monkeypatch.setattr(supply_svc, "_execute_wb_batch_add", wb_add)
+    monkeypatch.setattr(supply_svc, "_request_order_stickers_for_picking", sticker_prefetch)
     transport = FakeMarketplaceTransport()
 
     workspace = await supply_svc.create_supply_from_orders(
@@ -1646,6 +1650,7 @@ async def test_ozon_supply_creation_never_calls_wb(
     assert workspace["supply"]["boxes_without_distribution"] is False
     wb_create.assert_not_awaited()
     wb_add.assert_not_awaited()
+    sticker_prefetch.assert_not_awaited()
 
 
 @pytest.mark.asyncio

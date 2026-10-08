@@ -373,6 +373,10 @@ async def test_postgres_tape_with_concurrent_packing_or_kiz(
         printing = asyncio.create_task(print_tape(first, async_client, seed))
         await asyncio.wait_for(attached.wait(), 5)
         value = values[0]
+        initial_marking_id = await first.scalar(
+            select(FbsOrderMarking.id).where(FbsOrderMarking.order_id == seed.order_ids[0])
+        )
+        assert initial_marking_id is not None
         pid = await second.scalar(text("select pg_backend_pid()"))
 
         async def change():
@@ -424,11 +428,20 @@ async def test_postgres_tape_with_concurrent_packing_or_kiz(
         assert line.qty_marking_external == 0
         assert (
             code.status
-            == {"scan": "applied", "unbind": "applied", "pack_all": "printed"}[operation]
+            == {"scan": "applied", "unbind": "available", "pack_all": "printed"}[operation]
         )
         following = await print_tape(session, async_client, seed)
         assert following.orders and not following.order_errors
-        assert (following.orders[0].codes == [value]) is (operation != "unbind")
+        # WMS-518 R1/R3 returns an unused code and permits its reuse. The
+        # concurrency contract is a fresh binding, not an arbitrarily different CIS.
+        current = list((await session.scalars(select(FbsOrderMarking))).all())
+        assert len(current) == 1
+        assert current[0].order_id == seed.order_ids[0]
+        assert [current[0].value] == following.orders[0].codes
+        if operation == "unbind":
+            assert current[0].id != initial_marking_id
+        else:
+            assert following.orders[0].codes == [value]
         await session.commit()
         assert line.qty_marking_printed == 1
     assert await stock_snapshot() == before
@@ -464,6 +477,7 @@ async def test_postgres_unbind_then_waiting_tape_refreshes_deleted_binding(
             .options(selectinload(FbsOrder.markings).selectinload(FbsOrderMarking.marking_code))
         )
         assert stale_order and len(stale_order.markings) == 1
+        old_marking_id = stale_order.markings[0].id
         cancelling = asyncio.create_task(
             kiz.cancel_order_kiz(
                 first,
@@ -489,8 +503,11 @@ async def test_postgres_unbind_then_waiting_tape_refreshes_deleted_binding(
                     running.cancel()
             await asyncio.gather(cancelling, printing, return_exceptions=True)
         assert repeated.orders and not repeated.order_errors
-        assert repeated.orders[0].codes != original.orders[0].codes
         assert len(stale_order.markings) == 1
+        assert stale_order.markings[0].id != old_marking_id
+        assert [stale_order.markings[0].value] == repeated.orders[0].codes
+        # Same returned full CIS is legal; the deleted association is not.
+        assert original.orders[0].codes
     async with SessionLocal() as session:
         line = await session.get(PackagingTaskLine, seed.line_id)
         assert line and line.qty_marking_printed == 1 and line.qty_marking_external == 0
@@ -502,5 +519,5 @@ async def test_postgres_unbind_then_waiting_tape_refreshes_deleted_binding(
                 )
             ).all()
         )
-        assert statuses == {"applied": 1, "printed": 1}
+        assert statuses == {"available": 1, "printed": 1}
     assert await stock_snapshot() == before

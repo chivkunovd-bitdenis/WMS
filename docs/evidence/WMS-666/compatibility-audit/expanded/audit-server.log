@@ -1,0 +1,10 @@
+/Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-compatibility-audit/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+INFO:     Started server process [50052]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:16689 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [50052]

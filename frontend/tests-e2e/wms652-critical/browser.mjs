@@ -26,17 +26,19 @@ await mkdir(dir,{recursive:true});
 const qrCodes = ['*DUIkWJJF', '*DUIkNEXT'];
 const cises = ['010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A','010460000000000221SERIAL-B\u001d91EFGH\u001d92signed-B'];
 const qrImages = await Promise.all(qrCodes.map(text => bwip.toBuffer({bcid:'qrcode',text,scale:3})));
-let requestLog=[],printLog=[],trace=[],blocked=[],errors=[],state,heldLookup,holdFirst;
+let requestLog=[],printLog=[],trace=[],blocked=[],errors=[],state,heldLookup,holdFirst,assetResponses=[];
 let receiptMode='', heldPrint, acceptedPrints=new Map(), lostAck=false, boundOrders=new Map(), restored=false;
+const markingIds={'wb-a-order':'66600000-0000-4000-8000-000000000001','wb-next-order':'66600000-0000-4000-8000-000000000002'};
 let cdp, mode='qr', selectionState, failedGroup, groupAttempts, addAttempts, createdRefs, heldAdd;
 const report={sha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),cases:[],physicalPaper:'NOT_TESTED',externalApi:'SYNTHETIC'};
+const previewOnly=process.env.WMS652_PREVIEW_ONLY==='1';
 class CDP {
   constructor(url) {
     this.ws = new WebSocket(url); this.next = 0; this.pending = new Map(); this.listeners = new Map();
     // Ownership lives in this one CDP session. Never infer cancellation from an error string.
-    this.generation = 0; this.paused = new Map(); this.network = new Map(); this.transport = [];
+    this.generation = 0; this.paused = new Map(); this.network = new Map(); this.terminals = new WeakMap(); this.transport = [];
     this.ready = new Promise((resolve, reject) => { this.ws.onopen = resolve; this.ws.onerror = reject; });
-    this.ws.onmessage = event => {
+    this.ws.onmessage = async event => {
       const msg = JSON.parse(event.data);
       if (msg.id) {
         const p = this.pending.get(msg.id); this.pending.delete(msg.id);
@@ -44,9 +46,8 @@ class CDP {
           clearTimeout(p.timer);
           this.record({kind:'command-result',commandId:msg.id,method:p.method,...p.identity,nativeError:msg.error});
           if (msg.error) {
-            if (p.retirable && !p.token.ambiguous && p.token.attempts === 1 && p.token.disposition === 'paused'
-              && p.token.generation === this.generation && p.token.caseId === this.currentCase()
-              && msg.error.code === -32602 && msg.error.message === 'Invalid InterceptionId.') {
+            if (p.retirableCandidate && msg.error.code === -32602 && msg.error.message === 'Invalid InterceptionId.'
+              && await this.followedByOwnedFetchAbort(p)) {
               p.token.disposition = 'retired';
               const value = {retired:true,nativeError:msg.error,commandId:msg.id,method:p.method,...p.identity};
               this.record({kind:'retired-canceled-request',...value}); p.resolve(value);
@@ -55,18 +56,42 @@ class CDP {
         }
       } else {
         this.observe(msg.method,msg.params);
-        for (const f of this.listeners.get(msg.method) ?? []) Promise.resolve(f(msg.params)).catch(e => errors.push(String(e)));
+        for (const f of this.listeners.get(msg.method) ?? []) Promise.resolve(f(msg.params)).catch(e => {
+          errors.push(String(e));
+          const request = msg.method === 'Fetch.requestPaused' ? this.paused.get(msg.params.requestId) : undefined;
+          this.record({kind:'event-handler-error',eventMethod:msg.method,error:String(e),requestId:request?.requestId,
+            networkId:request?.networkId,frameId:request?.frameId,generation:request?.generation,caseId:request?.caseId});
+        });
       }
     };
   }
   currentCase() { return typeof report === 'undefined' ? null : report.currentCase ?? null; }
   record(value) { this.transport.push({utcMs:Date.now(),...value}); }
+  async followedByOwnedFetchAbort(p) {
+    const {token,identity,method} = p;
+    if (method !== 'Fetch.fulfillRequest' || !token || token.ambiguous || token.attempts !== 1
+      || token.generation !== identity.generation || token.caseId !== identity.caseId
+      || !['paused','network-canceled'].includes(token.disposition)) return false;
+    const terminal = this.terminals.get(token);
+    if (!terminal) return false;
+    if (!token.cancellation) await Promise.race([terminal.promise,sleep(300)]);
+    return token.cancellation?.canceled === true
+      && token.cancellation.errorText === 'net::ERR_ABORTED'
+      && token.cancellation.type === 'Fetch'
+      && ['paused','network-canceled'].includes(token.disposition)
+      && token.caseId === identity.caseId
+      && token.generation === identity.generation
+      && !token.ambiguous;
+  }
   observe(method, params) {
     if (method === 'Page.frameNavigated' || method === 'Runtime.executionContextsCleared') {
       this.generation++; this.record({kind:'generation-boundary',method,generation:this.generation,caseId:this.currentCase()});
     } else if (method === 'Fetch.requestPaused') {
       const token = {requestId:params.requestId,networkId:params.networkId,frameId:params.frameId,
         generation:this.generation,caseId:this.currentCase(),attempts:0,disposition:'paused'};
+      let resolveTerminal;
+      const promise = new Promise(resolve => { resolveTerminal = resolve; });
+      this.terminals.set(token,{promise,resolve:resolveTerminal});
       // A reused Fetch token or ambiguous Network mapping cannot prove ownership.
       if (this.paused.has(token.requestId)) this.paused.get(token.requestId).ambiguous = true;
       else {
@@ -78,11 +103,17 @@ class CDP {
       this.record({kind:'request-paused',...token});
     } else if (method === 'Network.loadingFailed' || method === 'Network.loadingFinished') {
       for (const token of this.network.get(params.requestId) ?? []) {
-        if (token.generation !== this.generation || token.caseId !== this.currentCase()) continue;
         if (method === 'Network.loadingFinished') token.disposition = 'network-completed';
-        else token.cancellation = {canceled:params.canceled,errorText:params.errorText,type:params.type};
+        else {
+          token.cancellation = {canceled:params.canceled,errorText:params.errorText,type:params.type};
+          token.disposition = params.canceled ? 'network-canceled' : 'network-failed';
+        }
+        this.terminals.get(token)?.resolve({method,params});
       }
-      this.record({kind:'network-terminal',method,networkId:params.requestId,generation:this.generation,caseId:this.currentCase(),canceled:params.canceled,errorText:params.errorText,type:params.type});
+      const owners = this.network.get(params.requestId) ?? new Set();
+      this.record({kind:'network-terminal',method,networkId:params.requestId,
+        generation:[...owners][0]?.generation ?? this.generation,caseId:[...owners][0]?.caseId ?? this.currentCase(),
+        canceled:params.canceled,errorText:params.errorText,type:params.type});
     }
   }
   async send(method, params = {}) {
@@ -91,10 +122,9 @@ class CDP {
     const token = method.startsWith('Fetch.') && params.requestId ? this.paused.get(params.requestId) : undefined;
     const identity = {requestId:params.requestId,networkId:token?.networkId,frameId:token?.frameId,
       generation:this.generation,caseId:this.currentCase(),cancellation:token?.cancellation ? {...token.cancellation} : undefined};
-    const retirable = method === 'Fetch.fulfillRequest' && token && !token.ambiguous && token.networkId && token.frameId
-      && token.generation === this.generation && token.caseId === identity.caseId && token.attempts === 0
-      && token.disposition === 'paused' && token.cancellation?.canceled === true
-      && token.cancellation.errorText === 'net::ERR_ABORTED' && token.cancellation.type === 'Fetch';
+    const retirableCandidate = method === 'Fetch.fulfillRequest' && token && !token.ambiguous && token.networkId && token.frameId
+      && token.generation === identity.generation && token.caseId === identity.caseId && token.attempts === 0
+      && ['paused','network-canceled'].includes(token.disposition);
     if (token) token.attempts++;
     this.record({kind:'command-send',commandId:id,method,...identity,attempt:token?.attempts});
     return new Promise((resolve, reject) => {
@@ -102,7 +132,7 @@ class CDP {
         this.pending.delete(id); this.record({kind:'command-timeout',commandId:id,method,...identity});
         reject(Error(`CDP timeout ${method}`));
       }, 12000);
-      this.pending.set(id, {resolve,reject,timer,method,identity,token,retirable});
+      this.pending.set(id, {resolve,reject,timer,method,identity,token,retirableCandidate});
       this.ws.send(JSON.stringify({id,method,params}));
     });
   }
@@ -161,7 +191,13 @@ async function intercept({requestId,request}) {
         exemplars:[{exemplar_id:91+i,gtd_required:false,rnpt_required:false,is_gtd_absent:false,is_rnpt_absent:false}]}))});
   }
   if(path.endsWith('/pick-options')||path==='/products/linked-wb-catalog')return fulfill(requestId,[]);
-  if(path.endsWith('/print-assets'))return fulfill(requestId,{items:[],ready:0,total:0,errors:[]});
+  if(path.endsWith('/print-assets')){
+    const preview=previewOnly?{id:'preview-order-sticker',kind:'order_sticker',status:'ready',content_type:'image/png',
+      width_mm:58,height_mm:40,preview_url:'/assets/qr-preview.png',download_url:null,checksum:null,applied_at:null,error:null}:null;
+    const response={requested:body?.order_ids?.length??0,ready:preview?1:0,missing:0,failed:0,assets:preview?[preview]:[],order_errors:[]};
+    assetResponses.push({request:{method:request.method,path,body},response});
+    return fulfill(requestId,response);
+  }
   if(mode==='selection'&&path.startsWith('/operations/'))return selectionBoundary(requestId,request.method,path,u,body);
   if(path.endsWith('/worklist')||path==='/operations/fbs-assembly-tasks')return fulfill(requestId,{items:[],total:0,warehouse_options:[],server_now:'2026-10-06T08:00:00Z'});
   if(path==='/auth/me')return fulfill(requestId,{separate_marking_print_enabled:false});
@@ -182,7 +218,7 @@ async function intercept({requestId,request}) {
     assert(one&&one.sticker.code===body.barcode,'wrong sticker selection object');
     trace.push(`select:${one.id}`);
     return fulfill(requestId,{scan_id:`scan-${one.id}`,order_id:one.id,wb_order_id:one.wb_order_id,
-      replayed:restored,binding_target:bindingTarget(one),reprint_recovery:restored&&boundOrders.has(one.id)?{status:'available',kiz:boundOrders.get(one.id),code_id:null,has_label_artifact:false}:null,requires_honest_sign:true,
+      replayed:restored,binding_target:bindingTarget(one),reprint_recovery:restored&&boundOrders.has(one.id)?{status:'available',kiz:boundOrders.get(one.id).cis_code,code_id:boundOrders.get(one.id).code_id,has_label_artifact:false}:null,requires_honest_sign:true,
       qr_asset:{id:`qr-${one.id}`,kind:'order_sticker',status:'ready',content_type:'image/png',width_mm:58,height_mm:40,
         preview_url:`/assets/qr-${one.id}.png`,download_url:null,checksum:null,applied_at:null,error:null},
       codes:[],printed_codes:[],shortage:0,order_errors:[]});
@@ -190,11 +226,27 @@ async function intercept({requestId,request}) {
   if(path.startsWith('/assets/qr-'))return fulfill(requestId,qrImages[path.includes('wb-a-order')?0:1],200,'image/png');
   if(path==='/operations/fbs-orders/kiz/validate')return fulfill(requestId,{valid:true});
   if(path==='/operations/fbs-orders/kiz/commit'){
-    trace.push(`bind:${body.pairs[0].order_id}`);boundOrders.set(body.pairs[0].order_id,body.pairs[0].value);
+    trace.push(`bind:${body.pairs[0].order_id}`);
+    for(const pair of body.pairs){
+      const order=Object.values(state).flatMap(workspace=>workspace.orders).find(candidate=>candidate.id===pair.order_id);
+      assert(order&&markingIds[pair.order_id],`missing synthetic current marking generation for ${pair.order_id}`);
+      boundOrders.set(pair.order_id,{cis_code:pair.value,marking_id:markingIds[pair.order_id],code_id:null,supply_id:order.supply_id});
+    }
     return fulfill(requestId,body.pairs.map(p=>({order_id:p.order_id,status:'ok',code:'ok',bound_kiz:p.value})));
   }
   const copy=path.match(/\/scan-auto-print\/scan-(.+)\/reprint-claim$/);
-  if(copy)return fulfill(requestId,{claimed:true,started:false,kiz:cises[copy[1]==='wb-a-order'?0:1],code_id:null,has_label_artifact:false});
+  if(copy){
+    const orderId=copy[1],binding=boundOrders.get(orderId);
+    return fulfill(requestId,{claimed:true,started:false,kiz:binding?.cis_code??null,marking_id:binding?.marking_id??null,code_id:binding?.code_id??null,has_label_artifact:false});
+  }
+  if(path==='/operations/fbs-orders/print-bindings/validate'){
+    const valid=Array.isArray(body.bindings)&&body.bindings.length>0&&body.bindings.every(binding=>{
+      const current=boundOrders.get(binding.order_id);
+      return current&&binding.supply_id===current.supply_id&&binding.marking_id===current.marking_id&&binding.cis_code===current.cis_code;
+    });
+    if(!valid)return fulfill(requestId,{detail:{code:'print_binding_changed',message:'ЧЗ заказа изменён или удалён.'}},409);
+    return cdp.send('Fetch.fulfillRequest',{requestId,responseCode:204,responseHeaders:[{name:'Access-Control-Allow-Origin',value:'*'},{name:'Access-Control-Allow-Headers',value:'*'}]});
+  }
   if(path.endsWith('/print-claim'))return fulfill(requestId,{claimed:true,started:false});
   if(path.endsWith('/print-started'))return fulfill(requestId,{claimed:false,started:true});
   const task=path.match(/^\/operations\/packaging-tasks\/task-([^/]+)$/);
@@ -233,12 +285,29 @@ try {
     ids.forEach(id=>sessionStorage.setItem('wms:fbs:'+id+':stage','packing'));
   `});
   await cdp.send('Emulation.setDeviceMetricsOverride',{width:1600,height:1000,deviceScaleFactor:1,mobile:false});
-  for(const [id,query,many] of [['supply_id=A','supply_id=wb-a',false],['supply_ids=A','supply_ids=wb-a',false],['supply_ids=A,B','supply_ids=wb-a,wb-b',true]]){
+  const browserCases=previewOnly?[['print-preview-valid-fixture','supply_id=wb-a',false]]:[['supply_id=A','supply_id=wb-a',false],['supply_ids=A','supply_ids=wb-a',false],['supply_ids=A,B','supply_ids=wb-a,wb-b',true]];
+  for(const [id,query,many] of browserCases){
     try {
-    prepareState(many);requestLog=[];printLog=[];trace=[];blocked=[];errors=[];heldLookup=undefined;holdFirst=true;
-    report.currentCase=`WMS652.realQr[${id}]`;
+    prepareState(many);requestLog=[];printLog=[];trace=[];blocked=[];errors=[];assetResponses=[];heldLookup=undefined;holdFirst=true;
+    report.currentCase=previewOnly?'WMS652.printPreview[valid-fixture]':`WMS652.realQr[${id}]`;
     await cdp.send('Page.navigate',{url:`${ORIGIN}/app/ff/fbs?${query}`});
     await until(`document.querySelector('[data-order-id="wb-a-order"]')&&document.querySelector('[data-testid="fbs-unified-scan"]')`);
+    if(previewOnly){
+      await clickElement(`document.querySelector('[data-order-id="wb-a-order"] button[data-task-id="FBS-09"]')`,'row QR preview');
+      await until(`[...document.querySelectorAll('[role="dialog"] h2')].some(node=>node.innerText==='Проверка перед печатью')`);
+      await until(`[...document.querySelectorAll('[role="dialog"] img')].some(img=>img.complete&&img.naturalWidth>0&&img.naturalHeight>0)`);
+      const preview=await evaluate(`(()=>{const dialog=[...document.querySelectorAll('[role="dialog"]')].find(node=>node.innerText.includes('Проверка перед печатью'));const img=dialog?.querySelector('img');return {dialog:Boolean(dialog),title:dialog?.querySelector('h2')?.innerText,image:img?{alt:img.alt,width:img.naturalWidth,height:img.naturalHeight,complete:img.complete,srcPrefix:img.src.slice(0,32)}:null,errorFallback:Boolean(document.querySelector('[data-testid="client-error-fallback"]')),alerts:[...(dialog?.querySelectorAll('[role="alert"]')??[])].map(node=>node.innerText)}})()`);
+      assert(preview.dialog&&preview.title==='Проверка перед печатью','real print preview dialog is rendered');
+      assert(preview.image?.complete&&preview.image.width>0&&preview.image.height>0,'fixture image is loaded in the preview');
+      assert.equal(preview.errorFallback,false,'preview did not fall through to the client error boundary');
+      assert.deepEqual(preview.alerts,[],'preview has no visible error or missing-image alert');
+      assert.equal(assetResponses.length,1);assert.deepEqual(assetResponses[0].response,{requested:1,ready:1,missing:0,failed:0,
+        assets:[{id:'preview-order-sticker',kind:'order_sticker',status:'ready',content_type:'image/png',width_mm:58,height_mm:40,
+          preview_url:'/assets/qr-preview.png',download_url:null,checksum:null,applied_at:null,error:null}],order_errors:[]});
+      await writeFile(`${dir}/preview-valid-fixture.json`,JSON.stringify({requestLog,assetResponses,preview,blocked,errors},null,2));
+      report.cases.push({id:report.currentCase,status:'PASS'});console.log(`${report.currentCase}: PASS`);
+      continue;
+    }
     await scan(qrCodes[0]);
     for(let i=0;i<50&&!heldLookup;i++)await sleep(100);
     assert(heldLookup,'input must reach product-miss then sticker lookup');
@@ -256,6 +325,14 @@ try {
       [{order_id:'wb-next-order',value:cises[1],confirmed:false,scan_auto_print_id:'scan-wb-next-order'}],
     ]);
     assert(commits.every(r=>r.body.scan_no_wb_wait===true));
+    const bindingValidations=requestLog.filter(r=>r.path==='/operations/fbs-orders/print-bindings/validate');
+    const expectedBindings=[
+      {order_id:'wb-a-order',supply_id:'wb-a',marking_id:markingIds['wb-a-order'],cis_code:cises[0]},
+      {order_id:'wb-next-order',supply_id:many?'wb-b':'wb-a',marking_id:markingIds['wb-next-order'],cis_code:cises[1]},
+    ];
+    assert.deepEqual(bindingValidations.map(r=>r.body.bindings),[
+      [expectedBindings[0]],[expectedBindings[0]],[expectedBindings[1]],[expectedBindings[1]],
+    ],'every exact print copy validates its current order, supply, marking generation and full CIS');
     assert.deepEqual(printLog.map(p=>p.idempotencyKey),['scan-wb-a-order','scan-wb-a-order:copy','scan-wb-a-order:copy:c2',
       'scan-wb-next-order','scan-wb-next-order:copy','scan-wb-next-order:copy:c2']);
     assert.deepEqual(printLog.map(p=>[p.widthMm,p.heightMm]),Array(6).fill([60,80]));
@@ -283,6 +360,7 @@ try {
       console.error(`${report.currentCase}: ${e}`);
     }
   }
+  if(!previewOnly){
   await selectionContracts();
   await flagContracts();
   await geometryContracts({cdp,evaluate,until,click,clickElement,report,dir,origin:ORIGIN,
@@ -290,8 +368,9 @@ try {
     startSelection(data,list=false){mode=list?'geometry-list':'selection';selectionState=data;failedGroup='';groupAttempts={};addAttempts=0;createdRefs=[];heldAdd=undefined;resetGeometry();},
     logs:()=>({requestLog,printLog,trace,blocked,errors}),
   });
-  assert(report.cases.every(one=>one.status==='PASS'),'one or more real-screen cases failed');
   assert.deepEqual(report.cases.map(one=>one.id),JSON.parse(readFileSync(new URL('./cases.json',import.meta.url),'utf8')),'complete exact browser IDs must execute');
+  }else assert.equal(report.cases.length,1,'focused preview run executes only its named case');
+  assert(report.cases.every(one=>one.status==='PASS'),'one or more real-screen cases failed');
   report.status='PASS';
 }catch(e){if(report.currentCase&&!report.cases.some(one=>one.id===report.currentCase))report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});report.status='FAIL';report.failure=String(e);report.stack=e.stack;console.error(e);process.exitCode=1;}
 finally{

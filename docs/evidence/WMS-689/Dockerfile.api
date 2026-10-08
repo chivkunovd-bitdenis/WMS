@@ -1,0 +1,5 @@
+# Preserve the exact pre-hotfix production dependencies.
+FROM wms_prod-api:rollback-wms689-ce2113914
+ARG WMS_DEPLOY_SHA
+LABEL org.opencontainers.image.revision=$WMS_DEPLOY_SHA
+COPY app /app/app

@@ -30,6 +30,9 @@ from app.services.wildberries_credentials_service import get_decrypted_marketpla
 
 SALES_SOURCE = "/api/v1/supplier/sales"
 SALES_URL = "https://statistics-api.wildberries.ru" + SALES_SOURCE
+FINANCE_SOURCE = "/api/finance/v1/sales-reports/detailed"
+FINANCE_URL = "https://finance-api.wildberries.ru" + FINANCE_SOURCE
+FINANCE_HISTORY_START = datetime(2024, 1, 29, tzinfo=ZoneInfo("Europe/Moscow"))
 MOSCOW = ZoneInfo("Europe/Moscow")
 PAUSE_SECONDS = 61
 _local_next: dict[uuid.UUID, float] = {}
@@ -48,6 +51,36 @@ local now = tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)
 local slot = math.max(now + tonumber(ARGV[1]), tonumber(redis.call('GET', KEYS[1]) or '0'))
 redis.call('SET', KEYS[1], slot, 'PX', slot - now + 122000)
 redis.call('SET', KEYS[1] .. ':defer', ARGV[2], 'PX', slot - now + 122000)
+return 1
+"""
+
+# View readers share complete reports only. A crashed replica loses its lease
+# in 90s; live readers renew every 30s, including while the WB limiter waits.
+# Owner and waiter lifetimes are finite (15 minutes).
+_READER_LEASE_SECONDS = 90
+_READER_RENEW_SECONDS = 30
+_READER_TIMEOUT_SECONDS = 900
+_READER_POLL_SECONDS = 0.5
+_RENEW_READER = """
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call('EXPIRE', KEYS[1], ARGV[2])
+return 1
+"""
+_RELEASE_READER = """
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call('DEL', KEYS[1])
+return 1
+"""
+_PUBLISH_READER = """
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call('SET', KEYS[2], ARGV[2], 'EX', 300)
+redis.call('DEL', KEYS[1])
+return 1
+"""
+_FAIL_READER = """
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+redis.call('SET', KEYS[2], ARGV[2], 'EX', 60)
+redis.call('DEL', KEYS[1])
 return 1
 """
 
@@ -140,14 +173,17 @@ class SalesReport:
         assert order.wb_rid is not None
         row = self.by_rid[order.wb_rid]
         return {
-            "source": SALES_SOURCE,
+            "source": row.get("_source", SALES_SOURCE),
             "order_id": str(order.id),
             "srid": order.wb_rid,
             "saleID": row["saleID"],
             "date": row["date"],
             "lastChangeDate": row["lastChangeDate"],
             "finishedPrice": str(row.get("finishedPrice")),
-            "raw_sale": copy.deepcopy(row),
+            "raw_sale": copy.deepcopy(row.get("_financial_row", row)),
+            "price_field": "retailAmount"
+            if row.get("_source") == FINANCE_SOURCE
+            else "finishedPrice",
             "received_at": self.received_at.isoformat(),
             "complete": True,
             "dateFrom": self.date_from,
@@ -285,56 +321,278 @@ def _select_sales(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     }
 
 
-async def read_sales_report(
-    session: AsyncSession,
+def _encode_report(report: SalesReport) -> str:
+    return json.dumps(
+        {
+            "by_rid": report.by_rid,
+            "received_at": report.received_at.isoformat(),
+            "date_from": report.date_from,
+            "pages": report.pages,
+            "row_count": report.row_count,
+            "coverage_missing": [str(value) for value in report.coverage_missing],
+            "excluded_rows": report.excluded_rows,
+        }
+    )
+
+
+async def _cached_report(redis: Redis, cache_key: str) -> SalesReport | None:
+    cached = await redis.get(cache_key)
+    if not cached:
+        return None
+    try:
+        saved = json.loads(cached)
+        return SalesReport(
+            saved["by_rid"],
+            datetime.fromisoformat(saved["received_at"]),
+            saved["date_from"],
+            saved["pages"],
+            saved["row_count"],
+            frozenset(uuid.UUID(value) for value in saved["coverage_missing"]),
+            saved.get("excluded_rows", {}),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+async def _renew_reader(redis: Redis, key: str, owner: str, stop: asyncio.Event) -> None:
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=_READER_RENEW_SECONDS)
+            return
+        except TimeoutError:
+            renewed = await cast(
+                Awaitable[Any],
+                redis.eval(_RENEW_READER, 1, key, owner, str(_READER_LEASE_SECONDS)),
+            )
+            if not renewed:
+                raise WbSalesError("wb_sales_incomplete_reader_lease_lost") from None
+
+
+async def _owned_report(
+    redis: Redis,
+    owner_key: str,
+    cache_key: str,
+    owner: str,
+    read: Callable[[], Awaitable[SalesReport]],
+) -> SalesReport:
+    async def bounded_read() -> SalesReport:
+        try:
+            async with asyncio.timeout(_READER_TIMEOUT_SECONDS):
+                return await read()
+        except TimeoutError:
+            raise WbSalesError("wb_sales_incomplete_reader_timeout") from None
+
+    stop = asyncio.Event()
+    reader = asyncio.create_task(bounded_read())
+    renewal = asyncio.create_task(_renew_reader(redis, owner_key, owner, stop))
+    try:
+        await asyncio.wait((reader, renewal), return_when=asyncio.FIRST_COMPLETED)
+        if not reader.done():
+            # Lease loss or Redis failure stops the old reader before publication.
+            await renewal
+            raise WbSalesError("wb_sales_incomplete_reader_lease_lost")
+        report = await reader
+        published = await cast(
+            Awaitable[Any],
+            redis.eval(_PUBLISH_READER, 2, owner_key, cache_key, owner, _encode_report(report)),
+        )
+        if not published:
+            raise WbSalesError("wb_sales_incomplete_reader_lease_lost")
+        return report
+    except BaseException as error:
+        reader.cancel()
+        # Only existing followers observe the failure of this exact attempt.
+        # A new explicit reader can claim the released lease. Owner comparison
+        # prevents a delayed old reader from releasing a replacement lease.
+        code = str(error) if isinstance(error, WbSalesError) else "wb_sales_incomplete_transport"
+        if isinstance(error, asyncio.CancelledError):
+            code = "wb_sales_incomplete_reader_cancelled"
+        with suppress(RedisError):
+            await cast(
+                Awaitable[Any],
+                redis.eval(_FAIL_READER, 2, owner_key, owner_key + ":failed:" + owner, owner, code),
+            )
+        raise
+    finally:
+        stop.set()
+        reader.cancel()
+        renewal.cancel()
+        await asyncio.gather(reader, renewal, return_exceptions=True)
+
+
+async def _shared_report(
+    redis: Redis,
+    cache_key: str,
+    read: Callable[[], Awaitable[SalesReport]],
+    progress: Callable[[], Awaitable[None]] | None,
+) -> SalesReport:
+    owner_key = cache_key.replace(":complete:", ":reader:", 1)
+    observed_owner: str | None = None
+    deadline = time.monotonic() + _READER_TIMEOUT_SECONDS
+    heartbeat_at = time.monotonic()
+    while time.monotonic() < deadline:
+        if observed_owner is not None:
+            failed = await redis.get(owner_key + ":failed:" + observed_owner)
+            if failed:
+                raise WbSalesError(str(failed))
+        cached = await _cached_report(redis, cache_key)
+        if cached is not None:
+            return cached
+        current_owner = await redis.get(owner_key)
+        if current_owner is None:
+            owner = uuid.uuid4().hex
+            acquired = await redis.set(owner_key, owner, nx=True, ex=_READER_LEASE_SECONDS)
+            if acquired:
+                try:
+                    # Cover publication between the cache check and SET NX;
+                    # releasing this new lease must not extend the cached TTL.
+                    cached = await _cached_report(redis, cache_key)
+                except BaseException:
+                    with suppress(RedisError):
+                        await cast(Awaitable[Any], redis.eval(_RELEASE_READER, 1, owner_key, owner))
+                    raise
+                if cached is not None:
+                    await cast(Awaitable[Any], redis.eval(_RELEASE_READER, 1, owner_key, owner))
+                    return cached
+                return await _owned_report(redis, owner_key, cache_key, owner, read)
+        else:
+            observed_owner = str(current_owner)
+        # Scope was committed before waiting; keep any caller heartbeat active
+        # without holding database locks during sleeps.
+        if progress is not None and time.monotonic() >= heartbeat_at:
+            await progress()
+            heartbeat_at = time.monotonic() + _READER_RENEW_SECONDS
+        await asyncio.sleep(_READER_POLL_SECONDS)
+    raise WbSalesError("wb_sales_incomplete_reader_timeout")
+
+
+def _finance_events(rows: list[dict[str, Any]], rids: set[str]) -> list[dict[str, Any]]:
+    """Finance fees are not sales; retain exact one-unit sale/return evidence."""
+    events: list[dict[str, Any]] = []
+    for row in rows:
+        rid = row.get("srid")
+        operation = str(row.get("sellerOperName", "")).strip()
+        if rid not in rids:
+            continue
+        correction = "сторно" in operation.lower() or (
+            "корректиров" in operation.lower()
+            and any(word in operation.lower() for word in ("продаж", "возврат"))
+        )
+        if operation not in {"Продажа", "Возврат"} and not correction:
+            continue
+        identifier = row.get("rrdId")
+        if not isinstance(identifier, int) or isinstance(identifier, bool) or identifier <= 0:
+            raise WbSalesError("wb_finance_history_incomplete_identity")
+        sale = operation == "Продажа" and row.get("docTypeName") == "Продажа"
+        price = (
+            row.get("retailAmount")
+            if (
+                row.get("quantity") == 1
+                and not isinstance(row.get("quantity"), bool)
+                and row.get("currency") == "RUB"
+            )
+            else None
+        )
+        events.append(
+            {
+                "srid": rid,
+                "saleID": ("SF" if sale else "RF") + str(identifier),
+                "date": row.get("saleDt"),
+                "lastChangeDate": row.get("saleDt"),
+                "finishedPrice": price,
+                "nmId": row.get("nmId"),
+                "barcode": row.get("sku"),
+                "_source": FINANCE_SOURCE,
+                "_financial_row": copy.deepcopy(row),
+            }
+        )
+    return events
+
+
+async def _read_finance_history(
+    http: httpx.AsyncClient,
+    token: str,
+    seller_id: uuid.UUID,
+    redis: Redis | None,
+    since: datetime,
+    until: datetime,
+    progress: Callable[[], Awaitable[None]] | None,
+) -> tuple[list[dict[str, Any]], int]:
+    # This POST only reads a report; it neither submits a document nor mutates WB.
+    cursor = 0
+    pages = 0
+    rows: list[dict[str, Any]] = []
+    while True:
+        await _wait_slot(seller_id, redis, progress)
+        response = await http.post(
+            FINANCE_URL,
+            headers={"Authorization": token},
+            json={
+                "dateFrom": max(since, FINANCE_HISTORY_START).astimezone(MOSCOW).date().isoformat(),
+                "dateTo": until.astimezone(MOSCOW).date().isoformat(),
+                "limit": 100000,
+                "rrdId": cursor,
+                "period": "weekly",
+                "fields": [
+                    "rrdId",
+                    "srid",
+                    "sellerOperName",
+                    "docTypeName",
+                    "quantity",
+                    "retailAmount",
+                    "currency",
+                    "nmId",
+                    "sku",
+                    "saleDt",
+                    "reportId",
+                    "rrDate",
+                ],
+            },
+        )
+        pages += 1
+        if response.status_code == 204:
+            return rows, pages
+        if response.status_code != 200:
+            if response.status_code == 429:
+                await _defer(seller_id, redis, response.headers.get("Retry-After"))
+            raise WbSalesError(f"wb_finance_history_incomplete_http_{response.status_code}")
+        try:
+            page = json.loads(
+                response.content, parse_float=str, parse_int=_json_integer, parse_constant=str
+            )
+        except (ValueError, UnicodeDecodeError):
+            raise WbSalesError("wb_finance_history_incomplete_json") from None
+        if not isinstance(page, list) or any(not isinstance(row, dict) for row in page):
+            raise WbSalesError("wb_finance_history_incomplete_response")
+        if not page:
+            # WB documents 204 as the complete terminal response for this API.
+            raise WbSalesError("wb_finance_history_incomplete_empty_page")
+        next_cursor = page[-1].get("rrdId")
+        if (
+            not isinstance(next_cursor, int)
+            or isinstance(next_cursor, bool)
+            or next_cursor <= cursor
+        ):
+            raise WbSalesError("wb_finance_history_incomplete_stalled_cursor")
+        rows.extend(page)
+        cursor = next_cursor
+
+
+async def _read_complete_report(
     *,
-    tenant_id: uuid.UUID,
+    token: str,
+    redis: Redis | None,
     seller_id: uuid.UUID,
     orders: list[SalesOrder],
-    fresh: bool = True,
-    progress: Callable[[], Awaitable[None]] | None = None,
+    now: datetime,
+    initial_cursor: str,
+    progress: Callable[[], Awaitable[None]] | None,
 ) -> SalesReport:
-    now = datetime.now(UTC)
+    cursor = initial_cursor
     earliest = min((_aware(order.created_at_wb) for order in orders), default=now)
-    since = max(earliest, now - timedelta(days=90))
-    cursor = since.astimezone(MOSCOW).isoformat()
-    initial_cursor = cursor
-    token = await get_decrypted_marketplace_token(session, tenant_id, seller_id)
-    # Credentials/order reads are finished before any vendor wait: callers re-lock
-    # and revalidate local scope/bindings after the report is complete.
-    await session.commit()
-    if token is None:
-        raise WbSalesError("wb_sales_credentials_missing")
-    broker = settings.celery_broker_url
-    redis = Redis.from_url(broker, decode_responses=True) if broker else None
-    if redis is None and settings.withdrawal_environment == "production":
-        raise WbSalesError("wb_sales_shared_limiter_not_configured")
-    identity = "\n".join(
-        sorted(f"{order.id}:{order.wb_rid}:{order.created_at_wb.isoformat()}" for order in orders)
-    )
-    digest = hashlib.sha256(identity.encode()).hexdigest()
-    cache_key = f"wb:sales:complete:{tenant_id}:{seller_id}:{digest}"
     rows: list[dict[str, Any]] = []
     pages = 0
     try:
-        # Only completed reads can serve pagination. Preparation always bypasses
-        # this short cache, and failed refresh never publishes partial data.
-        if redis is not None and not fresh:
-            cached = await redis.get(cache_key)
-            if cached:
-                try:
-                    saved = json.loads(cached)
-                    return SalesReport(
-                        saved["by_rid"],
-                        datetime.fromisoformat(saved["received_at"]),
-                        saved["date_from"],
-                        saved["pages"],
-                        saved["row_count"],
-                        frozenset(uuid.UUID(value) for value in saved["coverage_missing"]),
-                        saved.get("excluded_rows", {}),
-                    )
-                except (KeyError, TypeError, ValueError):
-                    pass
         async with httpx.AsyncClient(timeout=30) as http:
             while True:
                 await _wait_slot(seller_id, redis, progress)
@@ -374,10 +632,38 @@ async def read_sales_report(
                 # Numeric lexemes stay exact and JSON evidence remains serializable.
                 rows.extend(json.loads(json.dumps(page, default=str)))
         by_rid = _select_sales(rows)
+        old_orders = [
+            order for order in orders if _aware(order.created_at_wb) < now - timedelta(days=90)
+        ]
+        archive_row_count = 0
+        if old_orders:
+            async with httpx.AsyncClient(timeout=60) as finance_http:
+                archive, archive_pages = await _read_finance_history(
+                    finance_http,
+                    token,
+                    seller_id,
+                    redis,
+                    earliest,
+                    now,
+                    progress,
+                )
+            archive_row_count = len(archive)
+            pages += archive_pages
+            events = _finance_events(archive, {order.wb_rid for order in old_orders})
+            archived_sales = _select_sales(events)
+            blocked = {event["srid"] for event in events} - archived_sales.keys()
+            # A recent operational return still excludes a historical sale.
+            operational_excluded = {row["srid"] for row in rows} - by_rid.keys()
+            for rid, row in archived_sales.items():
+                if rid not in operational_excluded:
+                    by_rid.setdefault(rid, row)
+            for rid in blocked:
+                by_rid.pop(rid, None)
+            rows.extend(events)
         coverage_missing = frozenset(
             order.id
-            for order in orders
-            if _aware(order.created_at_wb) < now - timedelta(days=90) and order.wb_rid not in by_rid
+            for order in old_orders
+            if _aware(order.created_at_wb) < FINANCE_HISTORY_START and order.wb_rid not in by_rid
         )
         # A report unit cannot authorize multiple local orders with the same rid.
         rid_orders: dict[str, set[uuid.UUID]] = {}
@@ -397,28 +683,73 @@ async def read_sales_report(
         report = SalesReport(
             by_rid,
             datetime.now(UTC),
-            initial_cursor,
+            max(earliest, FINANCE_HISTORY_START).astimezone(MOSCOW).isoformat()
+            if old_orders
+            else initial_cursor,
             pages,
-            len(rows),
+            len(rows) + archive_row_count - (len(events) if old_orders else 0),
             coverage_missing,
             excluded_rows,
         )
+        return report
+    except (httpx.HTTPError, RedisError):
+        raise WbSalesError("wb_sales_incomplete_transport") from None
+
+
+async def read_sales_report(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    orders: list[SalesOrder],
+    fresh: bool = True,
+    progress: Callable[[], Awaitable[None]] | None = None,
+) -> SalesReport:
+    now = datetime.now(UTC)
+    earliest = min((_aware(order.created_at_wb) for order in orders), default=now)
+    since = max(earliest, now - timedelta(days=90))
+    cursor = since.astimezone(MOSCOW).isoformat()
+    initial_cursor = cursor
+    token = await get_decrypted_marketplace_token(session, tenant_id, seller_id)
+    # Credentials/order reads are finished before any vendor wait: callers re-lock
+    # and revalidate local scope/bindings after the report is complete.
+    await session.commit()
+    if token is None:
+        raise WbSalesError("wb_sales_credentials_missing")
+    broker = settings.celery_broker_url
+    redis = (
+        Redis.from_url(
+            broker, decode_responses=True, socket_connect_timeout=5, socket_timeout=5
+        )
+        if broker
+        else None
+    )
+    if redis is None and settings.withdrawal_environment == "production":
+        raise WbSalesError("wb_sales_shared_limiter_not_configured")
+    identity = "\n".join(
+        sorted(f"{order.id}:{order.wb_rid}:{order.created_at_wb.isoformat()}" for order in orders)
+    )
+    digest = hashlib.sha256(identity.encode()).hexdigest()
+    cache_key = f"wb:sales:complete:history-v2:{tenant_id}:{seller_id}:{digest}"
+    async def read() -> SalesReport:
+        return await _read_complete_report(
+            token=token,
+            redis=redis,
+            seller_id=seller_id,
+            orders=orders,
+            now=now,
+            initial_cursor=initial_cursor,
+            progress=progress,
+        )
+
+    try:
+        if redis is not None and not fresh:
+            return await _shared_report(redis, cache_key, read, progress)
+        # Signature preparation always makes a separate complete vendor read;
+        # failure never replaces the previous completed report.
+        report = await read()
         if redis is not None:
-            await redis.set(
-                cache_key,
-                json.dumps(
-                    {
-                        "by_rid": report.by_rid,
-                        "received_at": report.received_at.isoformat(),
-                        "date_from": report.date_from,
-                        "pages": report.pages,
-                        "row_count": report.row_count,
-                        "coverage_missing": [str(value) for value in report.coverage_missing],
-                        "excluded_rows": report.excluded_rows,
-                    }
-                ),
-                ex=300,
-            )
+            await redis.set(cache_key, _encode_report(report), ex=300)
         return report
     except (httpx.HTTPError, RedisError):
         raise WbSalesError("wb_sales_incomplete_transport") from None

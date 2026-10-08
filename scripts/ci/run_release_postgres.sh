@@ -24,12 +24,32 @@ start_pg() {
 }
 start_pg wms-ci-662-contract 55462 wms_test_662
 start_pg wms-ci-662-f6 55467 wms_test_662_f6
-WMS_TEST_DATABASE_URL=postgresql+asyncpg://wms_test@127.0.0.1:55462/wms_test_662 \
+
+# The PostgreSQL suites below are independent diagnostics. Keep database startup
+# fail-fast because every later test depends on it, but collect each suite's
+# failure so one red contract does not hide the rest of the primary errors.
+failures=()
+run_suite() {
+  local label="$1"
+  shift
+  if "$@"; then
+    printf 'PASS: %s\n' "$label"
+  else
+    local status=$?
+    printf 'FAIL: %s (exit %s)\n' "$label" "$status"
+    failures+=("$label (exit $status)")
+  fi
+}
+
+run_suite 'WMS-662 PostgreSQL contracts' env \
+  WMS_TEST_DATABASE_URL=postgresql+asyncpg://wms_test@127.0.0.1:55462/wms_test_662 \
   pytest -n 0 -q tests/test_wms662_postgres.py --junitxml="$evidence/662.xml"
-WMS_TEST_DATABASE_URL=postgresql+asyncpg://wms_test@127.0.0.1:55467/wms_test_662_f6 \
+run_suite 'WMS-662 cancellation lock ordering' env \
+  WMS_TEST_DATABASE_URL=postgresql+asyncpg://wms_test@127.0.0.1:55467/wms_test_662_f6 \
   pytest -n 0 -q tests/test_wms662_cancellation_lock_order.py --junitxml="$evidence/662-f6.xml"
 cp ../scripts/ci/wms663-proof/c10_mixed.py tests/test_wms663_remote_c10.py
-WMS_TEST_DATABASE_URL=postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_517 \
+run_suite 'WMS-663/669/670/683 PostgreSQL contracts' env \
+  WMS_TEST_DATABASE_URL=postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_517 \
   pytest -n 0 -q \
     tests/test_wms663_customs_documents_contract.py::test_wms663_two_sessions_commit_one_posting_version_once \
     tests/test_wms663_remote_c10.py \
@@ -40,13 +60,15 @@ WMS_TEST_DATABASE_URL=postgresql+psycopg_async://postgres:fixture-only@127.0.0.1
     -o asyncio_default_fixture_loop_scope=session \
     -o asyncio_default_test_loop_scope=session \
     --junitxml="$evidence/663-669-670-683.xml"
-WMS_TEST_DATABASE_URL=postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_517 \
+run_suite 'WMS-663 release retry contract' env \
+  WMS_TEST_DATABASE_URL=postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_517 \
   pytest -n 0 -q tests/test_wms663_release_retry_contract.py \
     -o asyncio_default_fixture_loop_scope=session \
     -o asyncio_default_test_loop_scope=session \
     --junitxml="$evidence/663-release-retry.xml"
-WMS_CI_PG_PORT=5432 WMS_CI_NETWORK_REPORT="$evidence/fbs-network.json" \
-WMS_TEST_DATABASE_URL=postgresql+asyncpg://postgres:fixture-only@127.0.0.1:5432/wms_test_517 \
+run_suite 'FBS concurrency PostgreSQL contracts' env \
+  WMS_CI_PG_PORT=5432 WMS_CI_NETWORK_REPORT="$evidence/fbs-network.json" \
+  WMS_TEST_DATABASE_URL=postgresql+asyncpg://postgres:fixture-only@127.0.0.1:5432/wms_test_517 \
   python ../scripts/ci/run_isolated_pytest.py -n 0 -q \
     tests/test_fbs_supply_assembly.py::test_fbs_supply_add_order_concurrent_race \
     tests/test_fbs_picking.py::test_fbs_pick_concurrent_same_order_allocation_one_success \
@@ -57,14 +79,35 @@ WMS_TEST_DATABASE_URL=postgresql+asyncpg://postgres:fixture-only@127.0.0.1:5432/
     -o asyncio_default_fixture_loop_scope=session \
     -o asyncio_default_test_loop_scope=session \
     --junitxml="$evidence/fbs-concurrency.xml"
-python - "$evidence" <<'PY'
+report_status=0
+python - "$evidence" <<'PY' || report_status=$?
 import pathlib, sys, xml.etree.ElementTree as ET
 root = pathlib.Path(sys.argv[1])
-for name, expected in [('662.xml', 10), ('662-f6.xml', 4), ('663-669-670-683.xml', 6), ('663-release-retry.xml', 5), ('fbs-concurrency.xml', 6)]:
-    tree = ET.parse(root / name)
+expected_reports = [('662.xml', 10), ('662-f6.xml', 4), ('663-669-670-683.xml', 6), ('663-release-retry.xml', 5), ('fbs-concurrency.xml', 6)]
+failed = False
+for name, expected in expected_reports:
+    path = root / name
+    if not path.is_file():
+        print(f'{name}: missing execution report')
+        failed = True
+        continue
+    try:
+        tree = ET.parse(path)
+    except ET.ParseError as error:
+        print(f'{name}: malformed execution report: {error}')
+        failed = True
+        continue
     cases = tree.findall('.//testcase')
-    assert len(cases) == expected, (name, len(cases), expected)
-    for tag in ['skipped', 'failure', 'error']:
-        assert not tree.findall('.//' + tag), (name, tag)
-    print(f'{name}: {len(cases)} executed, no skipped/failure/error')
+    problems = [tag for tag in ['skipped', 'failure', 'error'] if tree.findall('.//' + tag)]
+    if len(cases) != expected or problems:
+        print(f'{name}: {len(cases)} executed; expected {expected}; report issues={problems}')
+        failed = True
+    else:
+        print(f'{name}: {len(cases)} executed, no skipped/failure/error')
+if failed:
+    sys.exit(1)
 PY
+if (( ${#failures[@]} > 0 || report_status != 0 )); then
+  printf 'Independent PostgreSQL failures: %s\n' "${failures[*]:-none}"
+  exit 1
+fi

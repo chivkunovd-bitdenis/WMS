@@ -1,0 +1,98 @@
+[
+  {
+    "id": "WMS666.actualPool[supply_id;normal]",
+    "status": "PASS"
+  },
+  {
+    "id": "WMS666.actualPool[supply_ids;normal]",
+    "status": "PASS"
+  },
+  {
+    "id": "WMS666.actualPool[supply_id;delete-before-claim]",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+  },
+  {
+    "id": "WMS666.actualPool[supply_id;delete-after-claim]",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+  },
+  {
+    "id": "WMS666.actualPool[supply_ids;delete-before-claim]",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+  },
+  {
+    "id": "WMS666.actualPool[supply_ids;delete-after-claim]",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+  },
+  {
+    "id": "WMS666.actualPool[supply_id;replace-before-claim]",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+  },
+  {
+    "id": "WMS666.actualPool[supply_id;replace-after-claim]",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+  },
+  {
+    "id": "WMS666.actualPool[supply_ids;replace-before-claim]",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+  },
+  {
+    "id": "WMS666.actualPool[supply_ids;replace-after-claim]",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+  },
+  {
+    "id": "WMS666.actualPool[supply_id;manual-then-delete-scan]",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: manual printed CIS must still belong to its original order after the other operator scan"
+  },
+  {
+    "id": "WMS666.actualPool[supply_ids;manual-then-delete-scan]",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: manual printed CIS must still belong to its original order after the other operator scan"
+  },
+  {
+    "id": "WMS666.actualPool[supply_id;controls]",
+    "status": "PASS"
+  },
+  {
+    "id": "WMS666.actualPool[supply_ids;controls]",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: proposed shared panel must expose selected/all actions in assembly too\n\nfalse !== true\n"
+  },
+  {
+    "id": "WMS666.actualPool[supply_id;rapid-scans]",
+    "status": "PASS"
+  },
+  {
+    "id": "WMS666.actualPool[supply_id;flags-after-claim]",
+    "status": "PASS"
+  },
+  {
+    "id": "WMS666.actualPool[supply_ids;rapid-scans]",
+    "status": "PASS"
+  },
+  {
+    "id": "WMS666.actualPool[supply_ids;flags-after-claim]",
+    "status": "PASS"
+  },
+  {
+    "id": "WMS666.actualPool[supply_ids;multi-seller]",
+    "status": "PASS"
+  },
+  {
+    "id": "WMS666.actualPool[supply_id;clear-partial]",
+    "status": "PASS"
+  },
+  {
+    "id": "WMS666.ozon-selected-button-scope",
+    "status": "FAIL",
+    "failure": "AssertionError [ERR_ASSERTION]: button labelled all(2) must print both postings\n+ actual - expected\n\n  [\n    'ozon-a-order',\n-   'ozon-a-second'\n  ]\n"
+  }
+]

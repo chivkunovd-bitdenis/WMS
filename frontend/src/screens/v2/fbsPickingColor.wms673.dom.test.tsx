@@ -18,11 +18,26 @@ beforeAll(() => {
 let host: HTMLDivElement, root: Root
 let fixtures: FbsWorkspace[], requests: Array<{ path: string; method: string; auth: string | null }>
 let pickFailure: boolean, waitPick: Promise<void> | null
-let options: Record<string, unknown[]>
+let options: Record<string, Array<{
+  product_id: string
+  picked_qty: number
+  locations: Array<{
+    storage_location_id: string
+    location_code: string
+    available: number
+    sources?: Array<{
+      available: number
+      is_loose: boolean
+      source_label?: string
+      container_path: Array<{ kind: string; id: string; code: string; label: string }>
+    }>
+  }>
+}>>
 let printed: string[], closed: boolean
 const originalFetch = globalThis.fetch
 const printWindow = () => ({
   opener: {}, get closed() { return closed },
+  close: () => { closed = true },
   document: { open: vi.fn(), close: vi.fn(), write: (html: string) => { if (html.startsWith('<!doctype')) printed.push(html) } },
 })
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -41,6 +56,24 @@ beforeEach(() => {
     if (one && path.endsWith('/pick-options')) {
       if (waitPick) await waitPick
       return pickFailure ? json({ detail: 'synthetic failure' }, 503) : json(options[one.supply.id] ?? [])
+    }
+    if (one && path.endsWith('/picking-context')) {
+      const contextByProduct = new Map<string, { product_id: string; inbound_supplies: string[]; locations: string[]; source_groups: { key: string; title: string; lines: string[] }[] }>()
+      for (const order of one.orders) {
+        const productIds = order.marketplace === 'ozon'
+          ? order.positions.map((position) => position.product_id).filter((id): id is string => Boolean(id))
+          : order.product.id ? [order.product.id] : []
+        for (const productId of productIds) {
+          if (contextByProduct.has(productId)) continue
+          const option = options[one.supply.id]?.find((item) => item.product_id === productId)
+          const locations = option?.locations?.flatMap((location) => location.sources?.length
+            ? location.sources.map((source) => `${location.location_code} · ${source.source_label ?? 'тара'}: ${location.available}`)
+            : [`${location.location_code}: ${location.available}`])
+            ?? (order.inventory.locations ?? []).map((location) => `${location.code}: ${location.available_unpacked}`)
+          contextByProduct.set(productId, { product_id: productId, inbound_supplies: [], locations, source_groups: [] })
+        }
+      }
+      return json([...contextByProduct.values()])
     }
     // Local read-only auxiliaries used by real picking screens when changing tabs.
     if (path.includes('/marketplace-products') || path.includes('/wb-products') || path.includes('/product-catalog')) return json({ items: [], total: 0 })
@@ -76,7 +109,7 @@ function colorCells(document: Document, marketplaceLabel: 'WB' | 'Ozon' | 'ма�
   const index = headers.indexOf('Цвет')
   expect(index, 'missing business column Цвет').toBe(4)
   expect(headers).toEqual([
-    '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара',
+    '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб',
     `Заказы ${marketplaceLabel}`, 'Стикер', 'Взять', 'Подобрано', 'Маркировка',
   ])
   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.children[index].textContent)
@@ -151,7 +184,7 @@ describe('WMS-673 business RED contract through real buttons and API fixtures', 
   it('C6 empty print colspan agrees with all eleven headers', async () => {
     fixtures = [wms673Workspace('empty', [])]; await open('group'); await print(); const document = doc()
     expect([...document.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
-      '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара',
+      '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб',
       'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка',
     ])
     expect(document.querySelector('tbody td')?.getAttribute('colspan')).toBe('12')
@@ -177,11 +210,16 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
       locations: [{ storage_location_id: 'loc-b', location_code: 'A-02', available: 7,
         sources: [{ available: 7, is_loose: false, source_label: 'Короб B-02', container_path: [{ kind: 'box', id: 'b2', code: 'B-02', label: 'Короб B-02' }] }] }] }]
     await open(kind); const beforeClick = requests.length; expect(printed).toHaveLength(0); await print()
-    expect(requests.slice(beforeClick).map(({ path, method }) => [method, path])).toEqual([['GET', '/operations/fbs-supplies/supply-a/pick-options']])
+    expect(requests.slice(beforeClick).map(({ path, method }) => [method, path])).toEqual([
+      ['GET', '/operations/fbs-supplies/supply-a/pick-options'],
+      ['GET', '/operations/fbs-supplies/supply-a/picking-context'],
+    ])
     expect(requests.every((r) => r.method === 'GET' && r.auth === 'Bearer synthetic-wms673')).toBe(true)
     expect(JSON.stringify(fixtures)).toBe(before)
     expect(cellsWithoutColor(doc())).toEqual([
-      ['1', '—', 'Товар red WB 1673 · WB-CODE-red', 'ART-red', '46', 'Нет свободного остатка', '№673000', 'S673 0000', '1', '1 / 1', 'sgtin'],
+      // Empty current location list uses the renderer's established wording;
+      // picked quantity still comes from the fresh pick-options response.
+      ['1', '—', 'Товар red WB 1673 · WB-CODE-red', 'ART-red', '46', 'Нет текущего остатка', '№673000', 'S673 0000', '1', '1 / 1', 'sgtin'],
       ['2', '—', 'Товар blue WB 1673 · WB-CODE-blue', 'ART-blue', '46', 'A-02 · Короб B-02: 7', '№673001', 'S673 0001', '1', '0 / 1', 'sgtin'],
     ])
   })

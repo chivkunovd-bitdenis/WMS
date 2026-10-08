@@ -53,8 +53,14 @@ let wbScanNeedsKiz: boolean
 let ozonLookupOrderIds: Record<string, string>
 let deferredStartSupplyIds: Set<string>
 let releaseDeferredStart: Record<string, (() => void) | undefined>
+let failedStartSupplyIds: Set<string>
+let taskMarkingAvailableBySupply: Record<string, number>
 let deferredLookupKeys: Set<string>
 let releaseDeferredLookup: Record<string, (() => void) | undefined>
+let deferredKizValidation = false
+let releaseDeferredKizValidation: (() => void) | undefined
+let kizValidationFailure: { code: string; message: string } | null = null
+let exhaustedScanSupplies: Set<string>
 let root: Root
 let host: HTMLDivElement
 const originalFetch = globalThis.fetch
@@ -145,7 +151,8 @@ function packagingTask(supplyId: string) {
       return productIds.map((productId, index) => ({
         id: `${supplyId}-line-${index}`, product_id: productId, sku_code: one.product.sku,
         product_name: one.positions[index]?.name ?? one.product.name, requires_honest_sign: false,
-        packaging_instructions: '', qty_total: 1, qty_need_pack: 1, marking_available_count: 0,
+        packaging_instructions: '', qty_total: 1, qty_need_pack: 1,
+        marking_available_count: taskMarkingAvailableBySupply[supplyId] ?? 0,
       }))
     }),
   }
@@ -169,6 +176,9 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const start = path.match(/^\/operations\/fbs-supplies\/([^/]+)\/start-work$/)
   if (start) {
     const next = state[start[1]!]!
+    if (failedStartSupplyIds.has(start[1]!)) {
+      return json({ detail: { code: 'task_unavailable', message: 'Задание временно недоступно' } }, 503)
+    }
     const complete = () => {
       next.supply.packaging_task_id ??= `task-${start[1]}`
       return json(clone(next))
@@ -184,12 +194,16 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const scan = path.match(/^\/operations\/fbs-supplies\/([^/]+)\/scan-auto-print$/)
   if (scan) {
     const supplyId = scan[1]!
-    const barcode = (body as { barcode?: string } | null)?.barcode
-    if (!supplyId.startsWith('wb') || barcode !== WB_BARCODE) {
+    const payload = body as { barcode?: string; order_id?: string } | null
+    const barcode = payload?.barcode
+    if (exhaustedScanSupplies.has(supplyId) && barcode === WB_BARCODE) {
+      return json({ detail: { code: 'scan_product_exhausted', message: 'Для товара больше нет доступных заказов' } }, 409)
+    }
+    if (!supplyId.startsWith('wb') || (barcode !== WB_BARCODE && !barcode?.startsWith('order:'))) {
       return json({ detail: { code: 'scan_product_not_found', message: 'Товар не найден' } }, 404)
     }
-    const queuedOrderId = wbScanOrderQueue[supplyId]?.shift()
-    const selectedOrder = state[supplyId]!.orders.find((one) => one.id === queuedOrderId)
+    const queuedOrderId = barcode === WB_BARCODE ? wbScanOrderQueue[supplyId]?.shift() : undefined
+    const selectedOrder = state[supplyId]!.orders.find((one) => one.id === payload?.order_id || one.id === queuedOrderId)
       ?? state[supplyId]!.orders[0]!
     return json({
       scan_id: `scan-${calls.length}`, order_id: selectedOrder.id, wb_order_id: selectedOrder.wb_order_id,
@@ -204,6 +218,25 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
         has_label_artifact: false, order_product_id: null,
       }] : [], shortage: 0, order_errors: [],
     })
+  }
+
+  if (path === '/operations/fbs-orders/kiz/validate') {
+    if (deferredKizValidation) {
+      return new Promise<Response>((resolve) => {
+        releaseDeferredKizValidation = () => resolve(json({ valid: true, hints: [] }))
+      })
+    }
+    if (kizValidationFailure) {
+      return json({ detail: kizValidationFailure }, 400)
+    }
+    return json({ valid: true, hints: [] })
+  }
+  if (path === '/operations/fbs-orders/kiz/commit') {
+    const pair = (body as { pairs: Array<{ order_id: string; value: string }> }).pairs[0]!
+    return json([{ order_id: pair.order_id, status: 'ok', code: 'ok', bound_kiz: pair.value }])
+  }
+  if (/^\/operations\/fbs-supplies\/[^/]+\/scan-auto-print\/[^/]+\/cancel$/.test(path)) {
+    return new Response(null, { status: 204 })
   }
 
   if (path === '/operations/fbs-orders/kiz/lookup') {
@@ -266,8 +299,14 @@ beforeEach(() => {
   ozonLookupOrderIds = {}
   deferredStartSupplyIds = new Set()
   releaseDeferredStart = {}
+  failedStartSupplyIds = new Set()
+  taskMarkingAvailableBySupply = {}
   deferredLookupKeys = new Set()
   releaseDeferredLookup = {}
+  deferredKizValidation = false
+  releaseDeferredKizValidation = undefined
+  kizValidationFailure = null
+  exhaustedScanSupplies = new Set()
   state = {
     'wb-a': workspace('wb-a', 'wb'),
     'wb-b': workspace('wb-b', 'wb'),
@@ -370,6 +409,45 @@ describe('WMS-666 C1/C2/C3: the same packing surface in every entry', () => {
     expect(calls.filter((call) => call.path.endsWith('/start-work'))).toHaveLength(1)
     await settleUntil(() => calls.filter((call) => call.path.endsWith('/scan-auto-print')).length === 2, 1_000)
     expect(calls.filter((call) => call.path.endsWith('/scan-auto-print'))).toHaveLength(2)
+  })
+})
+
+describe('WMS-666 C2: mixed-task group does not gate manual printing on a missing accounting task', () => {
+  it('uses each order current KIZ pool without substituting the group aggregate or another task line', async () => {
+    const bare = workspace('wb-new', 'wb', null as unknown as string)
+    bare.supply.status = 'assembling'
+    bare.supply.packaging_task_id = null
+    bare.orders[0]!.product.requires_honest_sign = true
+    bare.orders[0]!.metadata.required = ['sgtin']
+    Object.assign(bare.orders[0]!, { marking_available_count: 2 })
+    bare.marking_pool = { required: 1, available: 2, shortage: 0, orders_without_code: [] }
+    state['wb-new'] = bare
+    state['wb-b']!.supply.packaging_task_id = 'task-wb-b'
+    state['wb-b']!.orders[0]!.product.requires_honest_sign = true
+    state['wb-b']!.orders[0]!.metadata.required = ['sgtin']
+    taskMarkingAvailableBySupply['wb-b'] = 1
+    state['wb-b']!.marking_pool = { required: 1, available: 2, shortage: 0, orders_without_code: [] }
+    failedStartSupplyIds.add('wb-new')
+
+    await renderAssembly(['wb-new', 'wb-b'])
+    await settleUntil(() => calls.some((call) => call.path.endsWith('/start-work') && call.path.includes('/wb-new/')))
+    await settleUntil(() => document.body.textContent?.includes('Задание временно недоступно') ?? false)
+
+    expect(state['wb-new']!.supply.packaging_task_id).toBeNull()
+    expect(bare.marking_pool).toEqual({ required: 1, available: 2, shortage: 0, orders_without_code: [] })
+    expect((bare.orders[0] as typeof bare.orders[number] & { marking_available_count: number }).marking_available_count).toBe(2)
+    const bareRow = document.querySelector<HTMLElement>('[data-order-id="wb-new-order"]')!
+    const taskBackedRow = document.querySelector<HTMLElement>('[data-order-id="wb-b-order"]')!
+    expect(bareRow.textContent).toContain('2 · нужно 1')
+    expect(taskBackedRow.textContent).toContain('1 · нужно 1')
+    const print = bareRow.querySelector<HTMLButtonElement>('[aria-label="Печать ЧЗ и ШК"]')!
+    expect(print.disabled).toBe(false)
+    await act(async () => print.click())
+
+    expect(openMarkingPrint).toHaveBeenCalledTimes(1)
+    const [ctx] = openMarkingPrint.mock.calls[0]!
+    expect(ctx.markingAvailable).toBe(2)
+    expect(ctx.fbsTape).toMatchObject({ orders: [{ orderId: 'wb-new-order' }], markingShortage: 0 })
   })
 })
 
@@ -680,5 +758,100 @@ describe('WMS-666 third review regressions: exact Ozon position identity', () =>
     expect(calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a'))).toHaveLength(1)
     expect(selectedStateVisible()).toBe(true)
     expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')).toHaveLength(0)
+  })
+})
+
+describe('WMS-666 permanent ordinary-row scan recovery guards', () => {
+  const enterRowValue = async (orderId: string, value: string) => {
+    const input = document.querySelector<HTMLInputElement>(
+      `[data-order-id="${orderId}"] [data-testid="fbs-kiz-row-input"]`,
+    )
+    expect(input).not.toBeNull()
+    await act(async () => { input!.focus() })
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, value)
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    // Flush the controlled input update before Enter reads its value.
+    expect(input!.value).toBe(value)
+    await act(async () => {
+      input!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    })
+  }
+
+  const prepareRequiredKizOrder = (supplyId: string) => {
+    const selected = state[supplyId]!.orders[0]!
+    selected.product.requires_honest_sign = true
+    selected.metadata.required = ['sgtin']
+  }
+
+  it('shows the ordinary row validation rejection and makes no commit or print', async () => {
+    prepareRequiredKizOrder('wb-a')
+    saveFbsScanPrintPreferences(TOKEN, { printQr: true, printChz: false, reprintChz: false })
+    kizValidationFailure = { code: 'not_a_kiz', message: 'КИЗ не прошёл проверку' }
+    await renderSupply('wb-a')
+
+    await enterRowValue('wb-a-order', 'INVALID-CIS')
+    await settleUntil(() => calls.some((call) => call.path === '/operations/fbs-orders/kiz/validate'))
+    await settleUntil(() => document.querySelector('[role="alert"]')?.textContent?.includes('КИЗ не прошёл проверку') === true)
+
+    const validations = calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')
+    expect(validations).toHaveLength(1)
+    expect(validations[0]?.body).toEqual({ order_id: 'wb-a-order', value: 'INVALID-CIS' })
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/commit')).toHaveLength(0)
+    expect(dispatchPreparedQr).not.toHaveBeenCalled()
+    expect(calls.filter((call) => /\/print-(?:claim|started)$/.test(call.path))).toHaveLength(0)
+    const visibleError = document.querySelector('[role="alert"]')
+    expect(visibleError?.textContent).toContain('КИЗ не прошёл проверку')
+  })
+
+  it('queues Escape behind an accepted row validation, finishes that intent, then routes the next scan to B', async () => {
+    prepareRequiredKizOrder('wb-a')
+    const nextOrder = order('wb-a', 'wb')
+    nextOrder.id = 'wb-b-order'
+    nextOrder.wb_order_id = 666002
+    nextOrder.product.id = 'wb-a-product-b'
+    nextOrder.product.name = 'Футболка WB — заказ B'
+    nextOrder.sticker.code = '666002 0001'
+    state['wb-a']!.orders.push(nextOrder as typeof state['wb-a']['orders'][number])
+    saveFbsScanPrintPreferences(TOKEN, { printQr: true, printChz: false, reprintChz: false })
+    deferredKizValidation = true
+    wbScanOrderQueue['wb-a'] = ['wb-b-order']
+    await renderSupply('wb-a')
+
+    await enterRowValue('wb-a-order', '01A-WMS666-VALID-KIZ')
+    await settleUntil(() => calls.some((call) => call.path === '/operations/fbs-orders/kiz/validate'))
+    const validation = calls.find((call) => call.path === '/operations/fbs-orders/kiz/validate')
+    expect(validation?.body).toEqual({ order_id: 'wb-a-order', value: '01A-WMS666-VALID-KIZ' })
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')).toHaveLength(1)
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/commit')).toHaveLength(0)
+    expect(dispatchPreparedQr).not.toHaveBeenCalled()
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    })
+    expect(calls.filter((call) => call.path.endsWith('/cancel'))).toHaveLength(0)
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/commit')).toHaveLength(0)
+
+    deferredKizValidation = false
+    await act(async () => { releaseDeferredKizValidation?.() })
+    await settleUntil(() => calls.some((call) => call.method === 'POST' && call.path.includes('/lines/') && call.path.endsWith('/pack')))
+    await settleUntil(() => calls.filter((call) => call.path.endsWith('/cancel')).length > 0, 200)
+
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/commit')).toHaveLength(1)
+    expect(calls.filter((call) => call.path.endsWith('/cancel'))).toHaveLength(0)
+    expect(dispatchPreparedQr).toHaveBeenCalledTimes(1)
+    expect(calls.some((call) => call.method === 'POST' && call.path.includes('/lines/') && call.path.endsWith('/pack'))).toBe(true)
+
+    physicalScan(WB_BARCODE)
+    await settleUntil(() => calls.filter((call) => call.path.endsWith('/scan-auto-print')).length >= 2)
+    await settleUntil(() => calls.some((call) => call.method === 'POST' && call.path.includes('/lines/') && call.path.endsWith('/pack')
+      && call.body && (call.body as { order_id?: string }).order_id === 'wb-b-order'))
+
+    expect(calls.some((call) => call.method === 'POST' && call.path.includes('/lines/') && call.path.endsWith('/pack')
+      && (call.body as { order_id?: string } | null)?.order_id === 'wb-b-order')).toBe(true)
+    expect(dispatchPreparedQr).toHaveBeenCalledTimes(2)
+    expect(document.querySelector('[data-testid="fbs-kiz-scan-error"]')?.textContent ?? '').toBe('')
   })
 })

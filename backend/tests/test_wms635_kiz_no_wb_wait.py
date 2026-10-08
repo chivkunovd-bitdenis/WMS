@@ -23,7 +23,11 @@ from app.models.marking_code import STATUS_AVAILABLE, MarkingCode
 from app.models.packaging_task import STATUS_IN_PROGRESS, PackagingTask
 from app.services import fbs_kiz_service as kiz_svc
 from app.services import fbs_marking_service as fbs_marking_svc
-from app.services.wildberries_errors import WildberriesBusinessError, WildberriesClientError
+from app.services.wildberries_errors import (
+    MetaValidationFailItem,
+    WildberriesBusinessError,
+    WildberriesClientError,
+)
 from app.services.wildberries_fbs_client import MarketplaceMetaDetail, MarketplaceOrderMetaRow
 from tests.test_fbs_kiz import (
     _cis,
@@ -484,3 +488,96 @@ async def test_r_a5c_empty_wb_read_keeps_the_refused_kiz_red(
         f"/operations/fbs-supplies/{seed['supply_id']}/markings/sync", headers=seed["headers"]
     )
     assert (await marking_state())[0] == META_STATUS_ACCEPTED
+
+
+async def test_r_a5c_complete_wb_row_without_sgtin_keeps_the_refused_kiz_red(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A complete WB order row with no sgtin detail is not a refusal reversal."""
+    seed = await _seed(async_client, 635_606)
+    order, value = seed["order"], seed["value"]
+    remote_has_code = False
+    puts: list[str] = []
+
+    async def fake_put(*_args: Any, **_kwargs: Any) -> None:
+        puts.append("put")
+        raise WildberriesBusinessError(
+            "meta_validation_fail",
+            status_code=409,
+            meta_validation=[MetaValidationFailItem(
+                order_id=order.wb_order_id,
+                key="sgtin",
+                value=value,
+                decision="invalid",
+                reason="КИЗ отклонён Wildberries.",
+            )],
+        )
+
+    async def fake_get(*_args: Any, **_kwargs: Any) -> list[MarketplaceOrderMetaRow]:
+        if not remote_has_code:
+            # WB returned this order, so the poll is complete; it omitted the sgtin kind.
+            return [MarketplaceOrderMetaRow(order_id=order.wb_order_id, meta_details=(), meta={})]
+        return _wb_row(order.wb_order_id, value, "sgtinIntroduced")
+
+    monkeypatch.setattr(fbs_marking_svc, "put_marketplace_order_meta", fake_put)
+    monkeypatch.setattr(fbs_marking_svc, "fetch_marketplace_orders_meta_batch", fake_get)
+    committed = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=seed["headers"],
+        json={"idempotency_key": "w635-a5c-missing-kind", "pairs": [
+            {"order_id": str(order.order_id), "value": value, "confirmed": False},
+        ]},
+    )
+    assert committed.status_code == 200, committed.text
+    assert committed.json()[0]["code"] == "wb_rejected_kept"
+
+    # Read the committed failure in a fresh transaction before the seller poll.
+    async with SessionLocal() as session:
+        marking = await session.scalar(
+            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+        )
+        assert marking is not None
+        assert marking.value == value and marking.marking_code_id is not None
+        assert marking.meta_status == META_STATUS_REJECTED and marking.reason
+        pre_sync = (
+            marking.id, marking.marking_code_id, marking.value,
+            marking.meta_status, marking.reason,
+        )
+        operation = await session.scalar(
+            select(FbsWbOperation).where(FbsWbOperation.local_entity_id == marking.id)
+        )
+        assert operation is not None
+        assert operation.state == "failed" and operation.error_code == "meta_validation_fail"
+        await session.commit()
+
+    synced = await async_client.post(
+        f"/operations/fbs-supplies/{seed['supply_id']}/markings/sync", headers=seed["headers"]
+    )
+    assert synced.status_code == 200, synced.text
+    assert puts == ["put"]  # A read-only WB sync must not resend the rejected write.
+    async with SessionLocal() as session:
+        marking = await session.scalar(
+            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+        )
+        assert marking is not None
+        assert (
+            marking.id, marking.marking_code_id, marking.value,
+            marking.meta_status, marking.reason,
+        ) == pre_sync
+
+    # A later WB response containing the same CIS as accepted clears the refusal.
+    remote_has_code = True
+    accepted = await async_client.post(
+        f"/operations/fbs-supplies/{seed['supply_id']}/markings/sync", headers=seed["headers"]
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert puts == ["put"]
+    async with SessionLocal() as session:
+        marking = await session.scalar(
+            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+        )
+        assert marking is not None
+        assert marking.id == pre_sync[0] and marking.marking_code_id == pre_sync[1]
+        assert marking.value == value and marking.meta_status == META_STATUS_ACCEPTED
+        assert marking.reason is None

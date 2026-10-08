@@ -1,0 +1,249 @@
+{
+  "source_sha": "1a4b0d687392a91a2dbfde6fbcfe9013b9e09075",
+  "runner_path": "docs/evidence/WMS-666/release-1008/whole-process-native-prefix.mjs",
+  "runner_sha256": "f4bd2221e71491aba03320f3fdaf2f860d6b4d86dabf258fb457b441c537dc81",
+  "handler_source_identity": "docs/evidence/WMS-666/release-1008/p2-prefix/native/source-identity.json",
+  "handler_source_identity_sha256": "9c31d815185e092bec6e68c962c0851023ea656108b57f0321ba948f5b6d08e2",
+  "receiver_journal": "docs/evidence/WMS-666/release-1008/p2-prefix/native/sink-receipts.jsonl",
+  "receiver_journal_sha256": "7562754f2ea9111b13e100dcfdaf6806763b370c8b48532b1e14d120311df035",
+  "receiver_journal_is_cumulative": true,
+  "successful_case_runs": [
+    {
+      "run": "ordinary-r3",
+      "case_json": "docs/evidence/WMS-666/release-1008/p2-prefix/ordinary-r3/WMS666-whole-process-bare-ordinary-manual-before-scan.json",
+      "case_json_sha256": "cf2da3548f7535e3727087ca50cc3a4c26b6bbd2e52e6da25766a54d8d2f14dc",
+      "case_result": "docs/evidence/WMS-666/release-1008/p2-prefix/ordinary-r3/result.json",
+      "case_result_sha256": "e223485f2920923a35ab586d88cceaef49e9ceb36874027dd553de7c62440294",
+      "packed_orders": [
+        {
+          "id": "245ea2b2-eb98-4f9c-95ad-4e22b038435e",
+          "pack_status": "packed"
+        },
+        {
+          "id": "3a9d082d-44f9-4913-8b5a-5c57b9683459",
+          "pack_status": "packed"
+        }
+      ],
+      "current_markings": [
+        {
+          "order_id": "245ea2b2-eb98-4f9c-95ad-4e22b038435e",
+          "cis": "010460043993125321KIZTAPE0000000000"
+        },
+        {
+          "order_id": "3a9d082d-44f9-4913-8b5a-5c57b9683459",
+          "cis": "010460043993125321KIZTAPE0000000001"
+        }
+      ],
+      "stock_snapshot": {
+        "balances": [
+          {
+            "id": "67c85ee1-ea9f-477e-8f1b-25d17d0d043e",
+            "product_id": "1f139a84-b042-4cf6-8093-30a37c53fcc2",
+            "quantity": 3,
+            "quantity_unpacked": 3,
+            "quantity_packed": 0
+          }
+        ],
+        "reservations": [
+          {
+            "id": "460f293a-18d7-4541-9cb7-fb14d3ff1727",
+            "fbs_order_id": "3a9d082d-44f9-4913-8b5a-5c57b9683459",
+            "product_id": "1f139a84-b042-4cf6-8093-30a37c53fcc2",
+            "warehouse_id": "d928db34-5433-4b95-b5a0-95016955d517",
+            "quantity": 1
+          },
+          {
+            "id": "c833792a-26c4-46eb-b008-5597a258b0cd",
+            "fbs_order_id": "245ea2b2-eb98-4f9c-95ad-4e22b038435e",
+            "product_id": "1f139a84-b042-4cf6-8093-30a37c53fcc2",
+            "warehouse_id": "d928db34-5433-4b95-b5a0-95016955d517",
+            "quantity": 1
+          }
+        ],
+        "inventory_movement_count": 0
+      },
+      "browser_capture_decoding": "decoded field recorded by the current native-prefix browser runner; no independent pixel decode is claimed",
+      "handler_jobs": [
+        {
+          "idempotency_key": "593c2bb4-3023-4be4-85f1-c2d32419fffd",
+          "decoded_by_browser_capture": "*WMS666-800392",
+          "png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "handler_receipt_key": "593c2bb4-3023-4be4-85f1-c2d32419fffd",
+          "handler_png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "handler_accepted_at_utc": "2026-10-08T05:25:41.174657+00:00",
+          "handler_png_path": "sink/job-0001-8ee34fda516b.png"
+        },
+        {
+          "idempotency_key": "593c2bb4-3023-4be4-85f1-c2d32419fffd:chz",
+          "decoded_by_browser_capture": "010460043993125321KIZTAPE0000000000",
+          "png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_receipt_key": "593c2bb4-3023-4be4-85f1-c2d32419fffd:chz",
+          "handler_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_accepted_at_utc": "2026-10-08T05:25:41.330536+00:00",
+          "handler_png_path": "sink/job-0002-f2f4c4632159.png"
+        },
+        {
+          "idempotency_key": "593c2bb4-3023-4be4-85f1-c2d32419fffd:chz:c2",
+          "decoded_by_browser_capture": "010460043993125321KIZTAPE0000000000",
+          "png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_receipt_key": "593c2bb4-3023-4be4-85f1-c2d32419fffd:chz:c2",
+          "handler_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_accepted_at_utc": "2026-10-08T05:25:41.403376+00:00",
+          "handler_png_path": "sink/job-0003-f2f4c4632159.png"
+        },
+        {
+          "idempotency_key": "1e853752-f092-4117-8e84-2116e1bea3c4",
+          "decoded_by_browser_capture": "*WMS666-800393",
+          "png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "handler_receipt_key": "1e853752-f092-4117-8e84-2116e1bea3c4",
+          "handler_png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "handler_accepted_at_utc": "2026-10-08T05:25:42.642145+00:00",
+          "handler_png_path": "sink/job-0004-ffebd4debcd7.png"
+        },
+        {
+          "idempotency_key": "1e853752-f092-4117-8e84-2116e1bea3c4:chz",
+          "decoded_by_browser_capture": "010460043993125321KIZTAPE0000000001",
+          "png_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "handler_receipt_key": "1e853752-f092-4117-8e84-2116e1bea3c4:chz",
+          "handler_png_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "handler_accepted_at_utc": "2026-10-08T05:25:42.720134+00:00",
+          "handler_png_path": "sink/job-0005-cb9e8ba5ed4a.png"
+        },
+        {
+          "idempotency_key": "1e853752-f092-4117-8e84-2116e1bea3c4:chz:c2",
+          "decoded_by_browser_capture": "010460043993125321KIZTAPE0000000001",
+          "png_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "handler_receipt_key": "1e853752-f092-4117-8e84-2116e1bea3c4:chz:c2",
+          "handler_png_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "handler_accepted_at_utc": "2026-10-08T05:25:42.767179+00:00",
+          "handler_png_path": "sink/job-0006-cb9e8ba5ed4a.png"
+        }
+      ]
+    },
+    {
+      "run": "group-r2",
+      "case_json": "docs/evidence/WMS-666/release-1008/p2-prefix/group-r2/WMS666-whole-process-bare-group-manual-before-scan.json",
+      "case_json_sha256": "cebe9441c1c70380ae630e416b9d5512e28f75c585af33c7394d7279d047dbef",
+      "case_result": "docs/evidence/WMS-666/release-1008/p2-prefix/group-r2/result.json",
+      "case_result_sha256": "bbfa45f9f21f7ffbc611c5ac15dfa7c6b2911a79bb04accc9f2f9a0052738f6d",
+      "packed_orders": [
+        {
+          "id": "88683e8f-9850-4195-9aa3-b6b948ffbb48",
+          "pack_status": "packed"
+        },
+        {
+          "id": "6cb6ee6c-6df6-463c-aaae-1162d217d8dc",
+          "pack_status": "packed"
+        }
+      ],
+      "current_markings": [
+        {
+          "order_id": "88683e8f-9850-4195-9aa3-b6b948ffbb48",
+          "cis": "010460043993125321KIZTAPE0000000000"
+        },
+        {
+          "order_id": "6cb6ee6c-6df6-463c-aaae-1162d217d8dc",
+          "cis": "010460043993125321KIZTAPE0000000002"
+        }
+      ],
+      "stock_snapshot": {
+        "balances": [
+          {
+            "id": "0af27c92-0b0b-4135-81a1-b03487f2d562",
+            "product_id": "62f52e96-249d-4c66-a8e6-3ca9165e268e",
+            "quantity": 3,
+            "quantity_unpacked": 3,
+            "quantity_packed": 0
+          },
+          {
+            "id": "640ca438-a817-4a42-ba51-0cf1694137c9",
+            "product_id": "d14d4dfc-59ac-46fb-8ffa-d10c36f2d20c",
+            "quantity": 3,
+            "quantity_unpacked": 3,
+            "quantity_packed": 0
+          }
+        ],
+        "reservations": [
+          {
+            "id": "61b5622b-00eb-4087-9901-799d6476b20f",
+            "fbs_order_id": "6cb6ee6c-6df6-463c-aaae-1162d217d8dc",
+            "product_id": "62f52e96-249d-4c66-a8e6-3ca9165e268e",
+            "warehouse_id": "94d008d5-79b7-4611-951f-615e1c50f6a8",
+            "quantity": 1
+          },
+          {
+            "id": "719282d9-5189-4b7f-8b18-50b4d8bcd145",
+            "fbs_order_id": "88683e8f-9850-4195-9aa3-b6b948ffbb48",
+            "product_id": "d14d4dfc-59ac-46fb-8ffa-d10c36f2d20c",
+            "warehouse_id": "94d008d5-79b7-4611-951f-615e1c50f6a8",
+            "quantity": 1
+          }
+        ],
+        "inventory_movement_count": 0
+      },
+      "browser_capture_decoding": "decoded field recorded by the current native-prefix browser runner; no independent pixel decode is claimed",
+      "handler_jobs": [
+        {
+          "idempotency_key": "af0644fe-f1d5-412a-82b5-3284b8a72c22",
+          "decoded_by_browser_capture": "*WMS666-800392",
+          "png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "handler_receipt_key": "af0644fe-f1d5-412a-82b5-3284b8a72c22",
+          "handler_png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "handler_accepted_at_utc": "2026-10-08T05:27:03.743789+00:00",
+          "handler_png_path": "sink/job-0007-8ee34fda516b.png"
+        },
+        {
+          "idempotency_key": "af0644fe-f1d5-412a-82b5-3284b8a72c22:chz",
+          "decoded_by_browser_capture": "010460043993125321KIZTAPE0000000000",
+          "png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_receipt_key": "af0644fe-f1d5-412a-82b5-3284b8a72c22:chz",
+          "handler_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_accepted_at_utc": "2026-10-08T05:27:03.847480+00:00",
+          "handler_png_path": "sink/job-0008-f2f4c4632159.png"
+        },
+        {
+          "idempotency_key": "af0644fe-f1d5-412a-82b5-3284b8a72c22:chz:c2",
+          "decoded_by_browser_capture": "010460043993125321KIZTAPE0000000000",
+          "png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_receipt_key": "af0644fe-f1d5-412a-82b5-3284b8a72c22:chz:c2",
+          "handler_png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "handler_accepted_at_utc": "2026-10-08T05:27:03.905087+00:00",
+          "handler_png_path": "sink/job-0009-f2f4c4632159.png"
+        },
+        {
+          "idempotency_key": "af124efa-e782-46be-836c-b2ae6372c3bb",
+          "decoded_by_browser_capture": "*WMS666-800393",
+          "png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "handler_receipt_key": "af124efa-e782-46be-836c-b2ae6372c3bb",
+          "handler_png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "handler_accepted_at_utc": "2026-10-08T05:27:05.184421+00:00",
+          "handler_png_path": "sink/job-0010-ffebd4debcd7.png"
+        },
+        {
+          "idempotency_key": "af124efa-e782-46be-836c-b2ae6372c3bb:chz",
+          "decoded_by_browser_capture": "010460043993125321KIZTAPE0000000002",
+          "png_sha256": "09ea02b41440c702190c5adf1fa64973144322d4ba2fa52122c7aa40d7df9acf",
+          "handler_receipt_key": "af124efa-e782-46be-836c-b2ae6372c3bb:chz",
+          "handler_png_sha256": "09ea02b41440c702190c5adf1fa64973144322d4ba2fa52122c7aa40d7df9acf",
+          "handler_accepted_at_utc": "2026-10-08T05:27:05.271796+00:00",
+          "handler_png_path": "sink/job-0011-09ea02b41440.png"
+        },
+        {
+          "idempotency_key": "af124efa-e782-46be-836c-b2ae6372c3bb:chz:c2",
+          "decoded_by_browser_capture": "010460043993125321KIZTAPE0000000002",
+          "png_sha256": "09ea02b41440c702190c5adf1fa64973144322d4ba2fa52122c7aa40d7df9acf",
+          "handler_receipt_key": "af124efa-e782-46be-836c-b2ae6372c3bb:chz:c2",
+          "handler_png_sha256": "09ea02b41440c702190c5adf1fa64973144322d4ba2fa52122c7aa40d7df9acf",
+          "handler_accepted_at_utc": "2026-10-08T05:27:05.323066+00:00",
+          "handler_png_path": "sink/job-0012-09ea02b41440.png"
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "WB provider is a synthetic loopback HTTP emulator; request payloads and receiver rows are real local HTTP.",
+    "Direct Handler accepts into an emulated PNG sink; physical printer and paper output were not tested.",
+    "Each prefix stops before the separate WB verification/rejection and box workflows.",
+    "First ordinary count assertion and TypeError harness failures remain preserved in separate folders; neither is represented as product failure."
+  ]
+}
