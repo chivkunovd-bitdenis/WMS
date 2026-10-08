@@ -1,0 +1,38 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "physical_paper": "NOT_TESTED",
+  "case": "CHZ-only native print with two copies",
+  "target_order_id": "0c01f5d6-610b-4c96-8c0f-0fd8d1b6341f",
+  "enabled_outputs": {
+    "qr": false,
+    "chz": true,
+    "cis": "010460043993125321KIZTAPE0000000000"
+  },
+  "receipts": [
+    {
+      "job_key": "b6442ec9-dca2-4975-a7ad-16cb82f77f2f:chz",
+      "receipt": "emulator-0001-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "input_bytes": 40498,
+      "output_bytes": 40498,
+      "input_width": 720,
+      "input_height": 960
+    },
+    {
+      "job_key": "b6442ec9-dca2-4975-a7ad-16cb82f77f2f:chz:c2",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "input_bytes": 40498,
+      "output_bytes": 40498,
+      "input_width": 720,
+      "input_height": 960
+    }
+  ],
+  "stock_before": "([(UUID('125166c9-141a-4a00-bbfb-9125438f037a'), 3, 3, 0)], [(UUID('32d919c0-10cf-42b1-915f-b795dc6ef8c2'), 1), (UUID('b384ce41-0d06-4d0d-9dc6-ab43a4a1cd42'), 1)], 0)",
+  "stock_after": "([(UUID('125166c9-141a-4a00-bbfb-9125438f037a'), 3, 3, 0)], [(UUID('32d919c0-10cf-42b1-915f-b795dc6ef8c2'), 1), (UUID('b384ce41-0d06-4d0d-9dc6-ab43a4a1cd42'), 1)], 0)"
+}

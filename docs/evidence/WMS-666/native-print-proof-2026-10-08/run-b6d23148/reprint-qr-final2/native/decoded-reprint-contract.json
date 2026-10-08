@@ -1,0 +1,168 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "case": "2 completed UI intents with QR plus exact-current reprint; reprintChzCopies=2, printChz disabled",
+  "scan_ids": [
+    "afe54e15-5d93-4477-ad5e-2b9593c9f978",
+    "52ebe390-781a-4c12-bfa9-c1062f16fd4d"
+  ],
+  "target_order_ids": [
+    "be0f069e-5275-4d2d-998f-74e8e8e9c99e",
+    "d67e6d10-239a-4c12-911d-c6bbe39e4719"
+  ],
+  "exact_current_cis": "010460043993125321KIZTAPE0000000000",
+  "native_jobs": [
+    {
+      "job_key": "afe54e15-5d93-4477-ad5e-2b9593c9f978",
+      "order_id": "be0f069e-5275-4d2d-998f-74e8e8e9c99e",
+      "receipt": "emulator-0001-976f95677ac0",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "qr": "*WMS666-FINAL-ORDER-A",
+      "cis": null,
+      "bytes": 1069
+    },
+    {
+      "job_key": "afe54e15-5d93-4477-ad5e-2b9593c9f978:copy",
+      "order_id": "be0f069e-5275-4d2d-998f-74e8e8e9c99e",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "bytes": 40498
+    },
+    {
+      "job_key": "afe54e15-5d93-4477-ad5e-2b9593c9f978:copy:c2",
+      "order_id": "be0f069e-5275-4d2d-998f-74e8e8e9c99e",
+      "receipt": "emulator-0003-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "bytes": 40498
+    },
+    {
+      "job_key": "52ebe390-781a-4c12-bfa9-c1062f16fd4d",
+      "order_id": "d67e6d10-239a-4c12-911d-c6bbe39e4719",
+      "receipt": "emulator-0004-c2a439551dfe",
+      "sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07",
+      "qr": "*WMS666-FINAL-ORDER-B",
+      "cis": null,
+      "bytes": 1072
+    },
+    {
+      "job_key": "52ebe390-781a-4c12-bfa9-c1062f16fd4d:copy",
+      "order_id": "d67e6d10-239a-4c12-911d-c6bbe39e4719",
+      "receipt": "emulator-0005-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "bytes": 40214
+    },
+    {
+      "job_key": "52ebe390-781a-4c12-bfa9-c1062f16fd4d:copy:c2",
+      "order_id": "d67e6d10-239a-4c12-911d-c6bbe39e4719",
+      "receipt": "emulator-0006-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "bytes": 40214
+    }
+  ],
+  "pool_after_manual_binding_before_any_scan": [
+    {
+      "id": "cb7a7e2b-8888-40db-8ed7-586798df2405",
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "status": "available"
+    },
+    {
+      "id": "02d1a310-c77e-4586-ab4d-93fadccb951b",
+      "cis": "010460043993125321KIZTAPE0000000002",
+      "status": "available"
+    },
+    {
+      "id": "2513847f-f10e-44cf-b16f-784cc6a53bb7",
+      "cis": "010460043993125321KIZTAPE0000000003",
+      "status": "available"
+    },
+    {
+      "id": "b14364bb-73bc-408e-97b8-ccf77338e3f8",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "applied"
+    }
+  ],
+  "pool_after_A_exact_reprint_and_before_B_kiz": [
+    {
+      "id": "cb7a7e2b-8888-40db-8ed7-586798df2405",
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "status": "available"
+    },
+    {
+      "id": "02d1a310-c77e-4586-ab4d-93fadccb951b",
+      "cis": "010460043993125321KIZTAPE0000000002",
+      "status": "available"
+    },
+    {
+      "id": "2513847f-f10e-44cf-b16f-784cc6a53bb7",
+      "cis": "010460043993125321KIZTAPE0000000003",
+      "status": "available"
+    },
+    {
+      "id": "b14364bb-73bc-408e-97b8-ccf77338e3f8",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "applied"
+    }
+  ],
+  "pool_after_B_operator_bind_before_native_dispatch": [
+    {
+      "id": "02d1a310-c77e-4586-ab4d-93fadccb951b",
+      "cis": "010460043993125321KIZTAPE0000000002",
+      "status": "available"
+    },
+    {
+      "id": "2513847f-f10e-44cf-b16f-784cc6a53bb7",
+      "cis": "010460043993125321KIZTAPE0000000003",
+      "status": "available"
+    },
+    {
+      "id": "b14364bb-73bc-408e-97b8-ccf77338e3f8",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "applied"
+    },
+    {
+      "id": "cb7a7e2b-8888-40db-8ed7-586798df2405",
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "status": "applied"
+    }
+  ],
+  "pool_after_all_native_dispatch": [
+    {
+      "id": "02d1a310-c77e-4586-ab4d-93fadccb951b",
+      "cis": "010460043993125321KIZTAPE0000000002",
+      "status": "available"
+    },
+    {
+      "id": "2513847f-f10e-44cf-b16f-784cc6a53bb7",
+      "cis": "010460043993125321KIZTAPE0000000003",
+      "status": "available"
+    },
+    {
+      "id": "b14364bb-73bc-408e-97b8-ccf77338e3f8",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "applied"
+    },
+    {
+      "id": "cb7a7e2b-8888-40db-8ed7-586798df2405",
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "status": "applied"
+    }
+  ],
+  "pool_code_rows_before_after": {
+    "before_count": 4,
+    "after_count": 4
+  },
+  "stock_before_after": {
+    "before": "([(UUID('a85d5308-d604-4f3e-bbe5-a7e5180e5e9e'), 3, 3, 0)], [(UUID('d76994ac-1789-48e6-9d5f-366ddab6a799'), 1), (UUID('f509d279-eef9-4299-a8a0-8381d42623fe'), 1)], 0)",
+    "after": "([(UUID('a85d5308-d604-4f3e-bbe5-a7e5180e5e9e'), 3, 3, 0)], [(UUID('d76994ac-1789-48e6-9d5f-366ddab6a799'), 1), (UUID('f509d279-eef9-4299-a8a0-8381d42623fe'), 1)], 0)"
+  },
+  "provider_boundary": "manual current-code sync was explicitly synthetic; no outbound WB request is proven here",
+  "physical_paper": "NOT_TESTED"
+}

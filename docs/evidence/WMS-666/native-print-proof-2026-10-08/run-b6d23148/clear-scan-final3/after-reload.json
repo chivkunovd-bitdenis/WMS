@@ -1,0 +1,11 @@
+{
+  "url": "http://127.0.0.1:16696/app/ff/fbs?supply_id=f25072a5-a778-4a95-b9ba-416214aaaa77",
+  "undoVisible": true,
+  "placeholder": "Сканируйте штрихкод товара",
+  "activeRow": {
+    "present": false,
+    "text": null,
+    "html": null
+  },
+  "bodyText": "\tДата отгрузки\tПечать\n\n\nKIZ supply 1791422046377927000\n\nWB №WB-GI-KIZ-1791422046377927000-f62b7e6a\tTape race\t\n\nWB 99\n\nWMS: Tape race\t2 / 2\t0\t\nВ работе\n\t—\t\nQR\nKIZ supply 1791422046377927000\n\nTape race · № WB WB-GI-KIZ-1791422046377927000-f62b7e6a\n\nСклад WMS\n\nTape race\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 09.10.2026, 05:14:06\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\nУпаковка и маркировка\n\nНапечатано 0 из 2 · упаковано 0 из 2 · выбрано 0\n\nВыбрать всё\nПечать всего (2)\nПроверить в WB\nДействия с поставкой\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800392\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-A\n\nЧЗ\n\nТЗ\nQR\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800393\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-B\n\nЧЗ\n\nТЗ\nQR\nДалее: Короба →"
+}

@@ -1,0 +1,45 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "physical_paper": "NOT_TESTED",
+  "case": "React order-sticker scan, manual KIZ bind, QR-only native print through WMS Print Direct Handler",
+  "expected_sticker_qr": "*WMS666-FINAL-ORDER-A",
+  "actual_print_http_requests": 1,
+  "actual_handler_receipts": 1,
+  "native_receipts": [
+    {
+      "accepted_at_utc": "2026-10-08T00:36:29.124715+00:00",
+      "bytes": 1069,
+      "job_key": "2254524f-b17c-4f86-bb9f-cbca2a3d5022",
+      "png": "sink/job-0001-976f95677ac0.png",
+      "receipt": "emulator-0001-976f95677ac0",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "width": 150,
+      "height": 150,
+      "qr": "*WMS666-FINAL-ORDER-A",
+      "cis": null,
+      "input": {
+        "job_key": "2254524f-b17c-4f86-bb9f-cbca2a3d5022",
+        "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+        "bytes": 1069,
+        "qr": "*WMS666-FINAL-ORDER-A",
+        "cis": null,
+        "explicit_copies_field": null,
+        "width_mm": 60,
+        "height_mm": 80
+      }
+    }
+  ],
+  "decoded_inputs": [
+    {
+      "job_key": "2254524f-b17c-4f86-bb9f-cbca2a3d5022",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "bytes": 1069,
+      "qr": "*WMS666-FINAL-ORDER-A",
+      "cis": null,
+      "explicit_copies_field": null,
+      "width_mm": 60,
+      "height_mm": 80
+    }
+  ]
+}

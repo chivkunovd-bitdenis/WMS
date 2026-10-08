@@ -1,0 +1,55 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "case": "Only exact-current reprint; reprintChzCopies=2, printChz disabled",
+  "scan_id": "c2c61271-89b8-4c90-8f77-59c53594293f",
+  "target_order_id": "ff59a243-b4c8-4e90-981b-1648878407f2",
+  "exact_current_cis": "010460043993125321KIZTAPE0000000000",
+  "native_jobs": [
+    {
+      "job_key": "c2c61271-89b8-4c90-8f77-59c53594293f:copy",
+      "receipt": "emulator-0001-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "bytes": 40498
+    },
+    {
+      "job_key": "c2c61271-89b8-4c90-8f77-59c53594293f:copy:c2",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "bytes": 40498
+    }
+  ],
+  "marking_after": {
+    "id": "f183ebe1-8598-44b6-8a61-9de12b1a2289",
+    "order_id": "ff59a243-b4c8-4e90-981b-1648878407f2",
+    "cis": "010460043993125321KIZTAPE0000000000",
+    "code_id": "5e82deaf-9aa3-4ffe-a782-a3e067bb76f5",
+    "status": "accepted"
+  },
+  "pool_code_before_after": {
+    "before": {
+      "id": "5e82deaf-9aa3-4ffe-a782-a3e067bb76f5",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "available"
+    },
+    "after": {
+      "id": "5e82deaf-9aa3-4ffe-a782-a3e067bb76f5",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "applied"
+    }
+  },
+  "pool_code_rows_before_after": {
+    "before_count": 4,
+    "after_count": 4
+  },
+  "stock_before_after": {
+    "before": "([(UUID('2ab81de0-7315-4d08-a8ee-81dd9fa0933a'), 3, 3, 0)], [(UUID('14019d04-e59d-4d82-8e0c-40fff7c0089e'), 1), (UUID('3bfbd629-2b73-4907-9e75-f7e4368c18fd'), 1)], 0)",
+    "after": "([(UUID('2ab81de0-7315-4d08-a8ee-81dd9fa0933a'), 3, 3, 0)], [(UUID('14019d04-e59d-4d82-8e0c-40fff7c0089e'), 1), (UUID('3bfbd629-2b73-4907-9e75-f7e4368c18fd'), 1)], 0)"
+  },
+  "provider_boundary": "manual current-code sync was explicitly synthetic; no outbound WB request is proven here",
+  "physical_paper": "NOT_TESTED"
+}

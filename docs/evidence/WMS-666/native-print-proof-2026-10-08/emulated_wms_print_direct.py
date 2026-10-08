@@ -13,6 +13,7 @@ from contextlib import closing
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import sys
 import threading
@@ -20,15 +21,18 @@ from datetime import UTC, datetime
 from http.server import ThreadingHTTPServer
 
 
-EXPECTED_CANDIDATE = "28a7999fefd886de41f6ffda5b05b69cd49aa496"
-EXPECTED_SOURCE_BLOBS = {
-    "tools/print-agent/wms_print_direct.py": "81ebff2bb9c638f1d6d41e2f22f618282a5ba476",
-    "frontend/src/utils/printDirectQr.ts": "0a8ceaf8b7018ef1be3278b8d9f2806630f04050",
-    "frontend/src/utils/printPreparedQr.ts": "e62caa36019cca656716a9947bbab487713a1f5b",
-    "frontend/src/screens/v2/fbsSequentialPacking.ts": "82a6ad9f4584532c85b763b8d409a29d4ffd93a2",
-    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": "4de19896e0242264405ed3972a55657f08b4d3ed",
-}
-TEST_ORIGIN = "http://127.0.0.1:16696"
+PRODUCT_TREE_PATHS = ("backend/app", "frontend/src", "tools/print-agent")
+IDENTITY_FILES = (
+    "tools/print-agent/wms_print_direct.py",
+    "frontend/src/utils/printDirectQr.ts",
+    "frontend/src/utils/printPreparedQr.ts",
+    "frontend/src/screens/v2/fbsSequentialPacking.ts",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+    "backend/app/services/fbs_print_binding_service.py",
+    "backend/app/services/fbs_order_tape_print_service.py",
+    "backend/app/api/fbs_kiz.py",
+)
+TEST_ORIGIN = os.environ.get("WMS666_PRINT_ALLOWED_ORIGIN", "http://127.0.0.1:16696")
 
 
 def write_json_line(path: Path, value: dict) -> None:
@@ -36,25 +40,28 @@ def write_json_line(path: Path, value: dict) -> None:
         stream.write(json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def build_handler(checkout: Path, output: Path):
+def build_handler(checkout: Path, output: Path, expected_runtime: str, product_sha: str):
     import subprocess
 
     candidate = subprocess.check_output(
         ["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True,
     ).strip()
-    if candidate != EXPECTED_CANDIDATE:
-        raise RuntimeError(f"Expected candidate {EXPECTED_CANDIDATE}, found {candidate}")
+    if candidate != expected_runtime:
+        raise RuntimeError(f"Expected runtime checkout {expected_runtime}, found {candidate}")
+    subprocess.run(
+        ["git", "-C", str(checkout), "diff", "--quiet", product_sha, candidate, "--", *PRODUCT_TREE_PATHS],
+        check=True,
+    )
 
     direct_dir = checkout / "tools" / "print-agent"
     sys.path.insert(0, str(direct_dir))
     import wms_print_direct as native
 
-    for path, expected_blob in EXPECTED_SOURCE_BLOBS.items():
-        source_blob = subprocess.check_output(
+    source_blobs = {}
+    for path in IDENTITY_FILES:
+        source_blobs[path] = subprocess.check_output(
             ["git", "-C", str(checkout), "rev-parse", f"HEAD:{path}"], text=True,
         ).strip()
-        if source_blob != expected_blob:
-            raise RuntimeError(f"Unexpected candidate source blob for {path}: {source_blob}")
 
     output.mkdir(parents=True, exist_ok=True)
     sink_dir = output / "sink"
@@ -62,6 +69,13 @@ def build_handler(checkout: Path, output: Path):
     ledger_dir = output / "ledger"
     (output / "requests.jsonl").touch(exist_ok=True)
     (output / "sink-receipts.jsonl").touch(exist_ok=True)
+    (output / "source-identity.json").write_text(json.dumps({
+        "product_sha": product_sha,
+        "runtime_checkout_sha": candidate,
+        "product_tree_paths_compared": list(PRODUCT_TREE_PATHS),
+        "product_tree_matches": True,
+        "source_blobs": source_blobs,
+    }, indent=2) + "\n", encoding="utf-8")
 
     native.ALLOWED_ORIGINS.add(TEST_ORIGIN)
 
@@ -107,6 +121,8 @@ def build_handler(checkout: Path, output: Path):
                 self.respond(200, {
                     "drop_next_response": self.server.drop_next_response,
                     "accepted_png_count": self.server.printer.accepted,
+                    "product_sha": self.server.product_sha,
+                    "runtime_checkout_sha": self.server.runtime_checkout_sha,
                 })
                 return
             if self.path == "/print":
@@ -145,6 +161,8 @@ def build_handler(checkout: Path, output: Path):
             super().__init__(address, EvidenceHandler)
             self.printer = EmulatedPrinter()
             self.drop_next_response = False
+            self.product_sha = product_sha
+            self.runtime_checkout_sha = candidate
 
     return EvidenceServer
 
@@ -152,12 +170,14 @@ def build_handler(checkout: Path, output: Path):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkout", type=Path, required=True)
+    parser.add_argument("--product-sha", required=True)
+    parser.add_argument("--runtime-sha", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=17843)
     args = parser.parse_args()
-    server = build_handler(args.checkout.resolve(), args.output.resolve())((args.host, args.port))
-    print(f"WMS Print Direct handler listening on {args.host}:{args.port}; synthetic sink enabled")
+    server = build_handler(args.checkout.resolve(), args.output.resolve(), args.runtime_sha, args.product_sha)((args.host, args.port))
+    print(f"WMS Print Direct handler listening on {args.host}:{args.port}; product={args.product_sha}; runtime={args.runtime_sha}; synthetic sink enabled")
     try:
         server.serve_forever()
     finally:

@@ -1,0 +1,178 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "case": "2 completed UI intents with QR plus exact-current reprint; reprintChzCopies=2, printChz disabled",
+  "scan_ids": [
+    "81b2d94f-46d9-4ebb-9de6-fa20b5b04e3d",
+    "86172de1-b6ab-4783-a8d2-313b5d700d7a"
+  ],
+  "target_order_ids": [
+    "2a1f1c79-90bd-4f7f-82be-03ab3b28a9d6",
+    "453cd180-acbe-41ff-9a8f-c854901e4a60"
+  ],
+  "scan_inputs": [
+    {
+      "barcode": "order:2a1f1c79-90bd-4f7f-82be-03ab3b28a9d6",
+      "order_id": "2a1f1c79-90bd-4f7f-82be-03ab3b28a9d6"
+    },
+    {
+      "barcode": "460666AUDIT",
+      "order_id": "453cd180-acbe-41ff-9a8f-c854901e4a60"
+    }
+  ],
+  "exact_current_cis": "010460043993125321KIZTAPE0000000000",
+  "native_jobs": [
+    {
+      "job_key": "81b2d94f-46d9-4ebb-9de6-fa20b5b04e3d",
+      "order_id": "2a1f1c79-90bd-4f7f-82be-03ab3b28a9d6",
+      "receipt": "emulator-0001-976f95677ac0",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "qr": "*WMS666-FINAL-ORDER-A",
+      "cis": null,
+      "bytes": 1069
+    },
+    {
+      "job_key": "81b2d94f-46d9-4ebb-9de6-fa20b5b04e3d:copy",
+      "order_id": "2a1f1c79-90bd-4f7f-82be-03ab3b28a9d6",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "bytes": 40498
+    },
+    {
+      "job_key": "81b2d94f-46d9-4ebb-9de6-fa20b5b04e3d:copy:c2",
+      "order_id": "2a1f1c79-90bd-4f7f-82be-03ab3b28a9d6",
+      "receipt": "emulator-0003-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "bytes": 40498
+    },
+    {
+      "job_key": "86172de1-b6ab-4783-a8d2-313b5d700d7a",
+      "order_id": "453cd180-acbe-41ff-9a8f-c854901e4a60",
+      "receipt": "emulator-0004-c2a439551dfe",
+      "sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07",
+      "qr": "*WMS666-FINAL-ORDER-B",
+      "cis": null,
+      "bytes": 1072
+    },
+    {
+      "job_key": "86172de1-b6ab-4783-a8d2-313b5d700d7a:copy",
+      "order_id": "453cd180-acbe-41ff-9a8f-c854901e4a60",
+      "receipt": "emulator-0005-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "bytes": 40214
+    },
+    {
+      "job_key": "86172de1-b6ab-4783-a8d2-313b5d700d7a:copy:c2",
+      "order_id": "453cd180-acbe-41ff-9a8f-c854901e4a60",
+      "receipt": "emulator-0006-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "bytes": 40214
+    }
+  ],
+  "pool_after_row_KIZ_intent_A_and_before_product_scan_B": [
+    {
+      "id": "6d1fb2c2-ec48-4829-9cf6-1e3f901f923e",
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "status": "available"
+    },
+    {
+      "id": "7db304f3-d332-4395-8afb-88bc21a83c87",
+      "cis": "010460043993125321KIZTAPE0000000002",
+      "status": "available"
+    },
+    {
+      "id": "402df283-95a4-4d09-afe8-f6eb43836714",
+      "cis": "010460043993125321KIZTAPE0000000003",
+      "status": "available"
+    },
+    {
+      "id": "f8107239-7f77-4218-b7e3-87aa53e8be24",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "applied"
+    }
+  ],
+  "pool_after_A_exact_reprint_and_before_B_kiz": [
+    {
+      "id": "6d1fb2c2-ec48-4829-9cf6-1e3f901f923e",
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "status": "available"
+    },
+    {
+      "id": "7db304f3-d332-4395-8afb-88bc21a83c87",
+      "cis": "010460043993125321KIZTAPE0000000002",
+      "status": "available"
+    },
+    {
+      "id": "402df283-95a4-4d09-afe8-f6eb43836714",
+      "cis": "010460043993125321KIZTAPE0000000003",
+      "status": "available"
+    },
+    {
+      "id": "f8107239-7f77-4218-b7e3-87aa53e8be24",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "applied"
+    }
+  ],
+  "pool_after_B_operator_bind_before_native_dispatch": [
+    {
+      "id": "7db304f3-d332-4395-8afb-88bc21a83c87",
+      "cis": "010460043993125321KIZTAPE0000000002",
+      "status": "available"
+    },
+    {
+      "id": "402df283-95a4-4d09-afe8-f6eb43836714",
+      "cis": "010460043993125321KIZTAPE0000000003",
+      "status": "available"
+    },
+    {
+      "id": "f8107239-7f77-4218-b7e3-87aa53e8be24",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "applied"
+    },
+    {
+      "id": "6d1fb2c2-ec48-4829-9cf6-1e3f901f923e",
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "status": "applied"
+    }
+  ],
+  "pool_after_all_native_dispatch": [
+    {
+      "id": "7db304f3-d332-4395-8afb-88bc21a83c87",
+      "cis": "010460043993125321KIZTAPE0000000002",
+      "status": "available"
+    },
+    {
+      "id": "402df283-95a4-4d09-afe8-f6eb43836714",
+      "cis": "010460043993125321KIZTAPE0000000003",
+      "status": "available"
+    },
+    {
+      "id": "f8107239-7f77-4218-b7e3-87aa53e8be24",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "applied"
+    },
+    {
+      "id": "6d1fb2c2-ec48-4829-9cf6-1e3f901f923e",
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "status": "applied"
+    }
+  ],
+  "pool_code_rows_before_after": {
+    "before_count": 4,
+    "after_count": 4
+  },
+  "stock_before_after": {
+    "before": "([(UUID('793d4179-5682-44e7-b2a1-90ed1c1bfd8f'), 3, 3, 0)], [(UUID('75775602-85ca-4829-b050-8a3d8187035e'), 1), (UUID('c933b3d4-7727-4b03-b198-975c906c2681'), 1)], 0)",
+    "after": "([(UUID('793d4179-5682-44e7-b2a1-90ed1c1bfd8f'), 3, 3, 0)], [(UUID('75775602-85ca-4829-b050-8a3d8187035e'), 1), (UUID('c933b3d4-7727-4b03-b198-975c906c2681'), 1)], 0)"
+  },
+  "provider_boundary": "manual current-code sync was explicitly synthetic; no outbound WB request is proven here",
+  "physical_paper": "NOT_TESTED"
+}

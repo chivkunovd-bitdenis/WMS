@@ -1,0 +1,267 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "case": "real second scan, drop response after native acceptance, retry same product barcode",
+  "before": {
+    "drop_next_response": false,
+    "accepted_png_count": 3,
+    "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+    "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc"
+  },
+  "lostError": "Нет ответа WMS Print. Запустите программу. Если Chrome запросил доступ к этому компьютеру — разрешите его. Перед повтором проверьте очередь принтера.",
+  "lostKey": "8eaec59a-e680-47a4-9421-ef6108d0559f",
+  "after": {
+    "drop_next_response": false,
+    "accepted_png_count": 6,
+    "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+    "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc"
+  },
+  "requests": [
+    {
+      "key": "030f5217-219a-4875-9399-0843e66c5229",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "030f5217-219a-4875-9399-0843e66c5229:chz",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "030f5217-219a-4875-9399-0843e66c5229:chz:c2",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "8eaec59a-e680-47a4-9421-ef6108d0559f",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "8eaec59a-e680-47a4-9421-ef6108d0559f",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "8eaec59a-e680-47a4-9421-ef6108d0559f:chz",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "8eaec59a-e680-47a4-9421-ef6108d0559f:chz:c2",
+      "origin": "http://127.0.0.1:16696"
+    }
+  ],
+  "receipts": [
+    {
+      "accepted_at_utc": "2026-10-08T00:49:01.598318+00:00",
+      "bytes": 1069,
+      "job_key": "030f5217-219a-4875-9399-0843e66c5229",
+      "png": "sink/job-0001-976f95677ac0.png",
+      "receipt": "emulator-0001-976f95677ac0",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a"
+    },
+    {
+      "accepted_at_utc": "2026-10-08T00:49:01.698788+00:00",
+      "bytes": 40498,
+      "job_key": "030f5217-219a-4875-9399-0843e66c5229:chz",
+      "png": "sink/job-0002-f2f4c4632159.png",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261"
+    },
+    {
+      "accepted_at_utc": "2026-10-08T00:49:01.720434+00:00",
+      "bytes": 40498,
+      "job_key": "030f5217-219a-4875-9399-0843e66c5229:chz:c2",
+      "png": "sink/job-0003-f2f4c4632159.png",
+      "receipt": "emulator-0003-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261"
+    },
+    {
+      "accepted_at_utc": "2026-10-08T00:50:06.168011+00:00",
+      "bytes": 1072,
+      "job_key": "8eaec59a-e680-47a4-9421-ef6108d0559f",
+      "png": "sink/job-0004-c2a439551dfe.png",
+      "receipt": "emulator-0004-c2a439551dfe",
+      "sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07"
+    },
+    {
+      "accepted_at_utc": "2026-10-08T00:50:06.738827+00:00",
+      "bytes": 40214,
+      "job_key": "8eaec59a-e680-47a4-9421-ef6108d0559f:chz",
+      "png": "sink/job-0005-cb9e8ba5ed4a.png",
+      "receipt": "emulator-0005-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a"
+    },
+    {
+      "accepted_at_utc": "2026-10-08T00:50:06.760081+00:00",
+      "bytes": 40214,
+      "job_key": "8eaec59a-e680-47a4-9421-ef6108d0559f:chz:c2",
+      "png": "sink/job-0006-cb9e8ba5ed4a.png",
+      "receipt": "emulator-0006-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a"
+    }
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/proxy/fbs/assembly-time?from=2026-10-01T00%3A50%3A05.600Z&to=2026-10-08T00%3A50%3A05.600Z",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-assembly-tasks",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/4e612bb2-d422-4146-9ac3-bb84b4cf9326/workspace",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/df16f619-7955-4d17-bed1-b47a6ddd6940",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/4e612bb2-d422-4146-9ac3-bb84b4cf9326/scan-auto-print",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-print-assets/c613ca6c-aa6a-4c68-bfee-04b4bc8ddd83/content",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/4e612bb2-d422-4146-9ac3-bb84b4cf9326/scan-auto-print/8eaec59a-e680-47a4-9421-ef6108d0559f/print-claim",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/4e612bb2-d422-4146-9ac3-bb84b4cf9326/scan-auto-print/8eaec59a-e680-47a4-9421-ef6108d0559f/print-claim",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/4e612bb2-d422-4146-9ac3-bb84b4cf9326/scan-auto-print/8eaec59a-e680-47a4-9421-ef6108d0559f/print-started",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/4e612bb2-d422-4146-9ac3-bb84b4cf9326/scan-auto-print/8eaec59a-e680-47a4-9421-ef6108d0559f/print-claim",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+      "status": 204
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+      "status": 204
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/4e612bb2-d422-4146-9ac3-bb84b4cf9326/scan-auto-print/8eaec59a-e680-47a4-9421-ef6108d0559f/print-started",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/df16f619-7955-4d17-bed1-b47a6ddd6940",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/packaging-tasks/df16f619-7955-4d17-bed1-b47a6ddd6940/lines/b3527049-bb53-4b41-a1d7-58b6795a6cad/pack",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/df16f619-7955-4d17-bed1-b47a6ddd6940",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/4e612bb2-d422-4146-9ac3-bb84b4cf9326/workspace",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/4e612bb2-d422-4146-9ac3-bb84b4cf9326/workspace",
+      "status": 200
+    }
+  ],
+  "uiAfter": "2559923000-87d9ff5f\n\nСклад WMS\n\nTape race\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 09.10.2026, 04:48:42\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\n\n2\n\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\nУпаковка и маркировка\n\nНапечатано 0 из 2 · упаковано 2 из 2 · выбрано 0\n\nВыбрать всё\nПечать всего (2)\nПроверить в WB\nДействия с поставкой\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800393\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n2 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-B\n\nЧЗ\n\nТЗ\nQR\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800392\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n2 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-A\n\nЧЗ\n\nТЗ\nQR\nДалее: Короба →",
+  "dbAfter": {
+    "markings": [
+      {
+        "id": "5bd02cf8-fb40-4c1b-ab6a-45a93605d20e",
+        "order_id": "194ec627-af6b-4315-84b5-1866a20600ac",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "code_id": "f5b71691-6bed-40af-8a29-b935a798fc01",
+        "status": "unknown"
+      },
+      {
+        "id": "6a0ef178-a187-45f5-8e83-6c2e1d48c213",
+        "order_id": "742618dc-5d16-4ca8-80b2-0e180ebf36ad",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "code_id": "39dfe6ec-871b-4f61-945d-787b1f02c32f",
+        "status": "unknown"
+      }
+    ],
+    "codes": [
+      {
+        "id": "8de854f7-d7a2-48cc-adb8-14f9b24f73fb",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "e41874b7-68cc-4124-aec9-0453fac20137",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      },
+      {
+        "id": "f5b71691-6bed-40af-8a29-b935a798fc01",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "printed"
+      },
+      {
+        "id": "39dfe6ec-871b-4f61-945d-787b1f02c32f",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "printed"
+      }
+    ],
+    "orders": [
+      {
+        "id": "742618dc-5d16-4ca8-80b2-0e180ebf36ad",
+        "pack_status": "packed",
+        "sticker_code": "*WMS666-FINAL-ORDER-B",
+        "sticker_barcode": "*WMS666-FINAL-ORDER-B",
+        "supply_id": "4e612bb2-d422-4146-9ac3-bb84b4cf9326",
+        "seller_id": "1172f2aa-829a-4451-afd3-9896552fe0d2"
+      },
+      {
+        "id": "194ec627-af6b-4315-84b5-1866a20600ac",
+        "pack_status": "packed",
+        "sticker_code": "*WMS666-FINAL-ORDER-A",
+        "sticker_barcode": "*WMS666-FINAL-ORDER-A",
+        "supply_id": "4e612bb2-d422-4146-9ac3-bb84b4cf9326",
+        "seller_id": "1172f2aa-829a-4451-afd3-9896552fe0d2"
+      }
+    ],
+    "stock": "([(UUID('9269c509-b596-4ec2-ba23-5421332eff5e'), 3, 3, 0)], [(UUID('0e89c6e5-89a2-49ab-919c-c0f500fe52e2'), 1), (UUID('cd79bbe7-211e-4e65-9b82-3bfc163cc1b2'), 1)], 0)",
+    "synthetic_provider_readbacks": []
+  }
+}

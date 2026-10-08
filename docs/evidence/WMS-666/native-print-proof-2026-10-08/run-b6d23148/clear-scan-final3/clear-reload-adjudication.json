@@ -1,0 +1,32 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "verified_action": "operator pressed \u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0441\u043a\u0430\u043d (scan-undo) for the selected order-sticker intent; this is undo-last-scan, not a separate reset control",
+  "before": {
+    "selector": "[data-testid=\"fbs-kiz-row-active\"]",
+    "present": true,
+    "placeholder": "\u0421\u043a\u0430\u043d\u0438\u0440\u0443\u0439\u0442\u0435 \u0427\u0435\u0441\u0442\u043d\u044b\u0439 \u0437\u043d\u0430\u043a"
+  },
+  "undo_http_status": 200,
+  "undo_request": {
+    "order_id": "d6571fba-2f29-44bd-8182-44dcfff84103",
+    "scan_id": "e106c89e-f139-4480-9fc9-fb1852dfacc3",
+    "pack_idempotency_key": null,
+    "box_id": null,
+    "release_selection": true,
+    "kiz_keys": []
+  },
+  "after_reload": {
+    "same_selector": "[data-testid=\"fbs-kiz-row-active\"]",
+    "present": false,
+    "placeholder": "\u0421\u043a\u0430\u043d\u0438\u0440\u0443\u0439\u0442\u0435 \u0448\u0442\u0440\u0438\u0445\u043a\u043e\u0434 \u0442\u043e\u0432\u0430\u0440\u0430",
+    "undo_button_visible_but_disabled": true
+  },
+  "db_snapshot_equal_after_order_sort": true,
+  "native_receipt_delta": 0,
+  "preserved_failed_attempts": {
+    "clear-scan-final/reset-not-visible.json": "An earlier runner expected a separate reset selector; the actual control is fbs-scan-undo, and the successful run records its 200 response.",
+    "clear-scan-final2/reload-not-restored.json": "The earlier compound wait timed out despite the page showing the idle barcode placeholder and disabled undo button. Its debug capture omitted the QR checked property, so the exact failed conjunct remains unknown. The current final3 run rechecked the full post-reload state and same active-row selector successfully; the earlier failure remains preserved and is not relabeled."
+  },
+  "result": "PASS for scan-undo clearing active selection and reload restoring idle scanner on the same order row; no native submission, KIZ binding, stock movement, or packed-state change."
+}

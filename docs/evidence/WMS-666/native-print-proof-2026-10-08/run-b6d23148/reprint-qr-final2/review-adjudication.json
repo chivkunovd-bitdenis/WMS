@@ -1,0 +1,9 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "attempt_result": "runner failed its own scan-count assertion after native output was accepted",
+  "failing_assertion": "run_native_reprint_final.mjs expected one scan-auto-print intent and three native submissions; captured output showed two real intents and three submissions before the second intent reached its explicit KIZ-wait step",
+  "second_intent": "A separate product-barcode scan selected order B. With reprint enabled, print_chz=false, requires_honest_sign=true and no bound KIZ, the UI correctly waited for operator KIZ input; no second-order native output is claimed for this attempt.",
+  "handling": "The failed attempt is preserved unchanged. The runner was amended to require the second operator KIZ scan, wait for six outputs, and validate both order-bound QR/CIS sets. The final green rerun is ../reprint-qr-final3/native/ with decoded contract in that directory.",
+  "product_change": false
+}

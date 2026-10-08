@@ -1,0 +1,2 @@
+{"accepted_at_utc": "2026-10-08T00:51:51.772910+00:00", "bytes": 1069, "job_key": "ac4082e8-eeee-47d2-b7be-e3cac8607a11", "png": "sink/job-0001-976f95677ac0.png", "receipt": "emulator-0001-976f95677ac0", "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a"}
+{"accepted_at_utc": "2026-10-08T00:51:51.973720+00:00", "bytes": 40498, "job_key": "ac4082e8-eeee-47d2-b7be-e3cac8607a11:copy", "png": "sink/job-0002-f2f4c4632159.png", "receipt": "emulator-0002-f2f4c4632159", "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261"}

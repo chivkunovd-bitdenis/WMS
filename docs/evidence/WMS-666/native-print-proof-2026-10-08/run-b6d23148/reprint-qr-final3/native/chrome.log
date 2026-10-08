@@ -1,0 +1,10 @@
+
+DevTools listening on ws://127.0.0.1:16697/devtools/browser/5fab411f-49f2-40af-a86b-339e854fad74
+Trying to load the allocator multiple times. This is *not* supported.
+[19092:5931130:1008/051247.475028:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[19092:5931130:1008/051247.475457:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[19092:5931130:1008/051247.475547:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[19092:5931130:1008/051247.475630:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[19092:5931130:1008/051247.475719:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[19082:5931070:1008/051250.034490:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[19213:5931959:1008/051250.240253:ERROR:sandbox/mac/system_services.cc:31] SetApplicationIsDaemon: Error Domain=NSOSStatusErrorDomain Code=-50 "paramErr: error in user parameter list" (-50)

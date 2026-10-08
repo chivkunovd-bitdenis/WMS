@@ -1,0 +1,16 @@
+{
+  "order_sticker_barcode": "*WMS666-FINAL-ORDER-A",
+  "source_png_qr_text": "*WMS666-FINAL-ORDER-A",
+  "persisted_sticker_code": "*WMS666-FINAL-ORDER-A",
+  "order_id": "0ef5b214-eb09-41a1-adfc-b31acbd7befe",
+  "scan_id": "d76e2f12-ef7b-48d6-a93e-bc75357f5067",
+  "undo_endpoint": "/operations/fbs-supplies/bebea8b3-5f8b-46ca-ada2-d562611e64f2/scan-undo",
+  "undo_request": {
+    "order_id": "0ef5b214-eb09-41a1-adfc-b31acbd7befe",
+    "scan_id": "d76e2f12-ef7b-48d6-a93e-bc75357f5067",
+    "pack_idempotency_key": null,
+    "box_id": null,
+    "release_selection": true,
+    "kiz_keys": []
+  }
+}

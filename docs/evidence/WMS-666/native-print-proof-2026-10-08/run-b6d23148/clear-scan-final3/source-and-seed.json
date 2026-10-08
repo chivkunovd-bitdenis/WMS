@@ -1,0 +1,54 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "native_identity": {
+    "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+    "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+    "product_tree_paths_compared": [
+      "backend/app",
+      "frontend/src",
+      "tools/print-agent"
+    ],
+    "product_tree_matches": true,
+    "source_blobs": {
+      "tools/print-agent/wms_print_direct.py": "81ebff2bb9c638f1d6d41e2f22f618282a5ba476",
+      "frontend/src/utils/printDirectQr.ts": "0a8ceaf8b7018ef1be3278b8d9f2806630f04050",
+      "frontend/src/utils/printPreparedQr.ts": "e62caa36019cca656716a9947bbab487713a1f5b",
+      "frontend/src/screens/v2/fbsSequentialPacking.ts": "82a6ad9f4584532c85b763b8d409a29d4ffd93a2",
+      "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": "7939295325a1483667f595e1cbf08dfe1b4c2cdb",
+      "backend/app/services/fbs_print_binding_service.py": "dd6e655422fc91e8f929d633468fa0061da09891",
+      "backend/app/services/fbs_order_tape_print_service.py": "ce62f1b7b18575f82e107e489d840bb1f539c564",
+      "backend/app/api/fbs_kiz.py": "edbac0cdc3ab9243dc93c60d5d084933d2cd0911"
+    }
+  },
+  "seed": {
+    "supply_id": "f25072a5-a778-4a95-b9ba-416214aaaa77",
+    "order_ids": [
+      "d6571fba-2f29-44bd-8182-44dcfff84103",
+      "30c736d0-a49c-48e3-aa34-41db0703826c"
+    ],
+    "barcode": "460666AUDIT",
+    "sticker_codes": [
+      "*WMS666-FINAL-ORDER-A",
+      "*WMS666-FINAL-ORDER-B"
+    ],
+    "order_sticker_barcodes": [
+      "*WMS666-FINAL-ORDER-A",
+      "*WMS666-FINAL-ORDER-B"
+    ],
+    "synthetic_order_stickers": [
+      {
+        "text": "*WMS666-FINAL-ORDER-A",
+        "file": "fixtures/order-sticker-1.png",
+        "bytes": 1069,
+        "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a"
+      },
+      {
+        "text": "*WMS666-FINAL-ORDER-B",
+        "file": "fixtures/order-sticker-2.png",
+        "bytes": 1072,
+        "sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07"
+      }
+    ]
+  }
+}

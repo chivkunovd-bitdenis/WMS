@@ -1,0 +1,27 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "physical_paper": "NOT_TESTED",
+  "case": "QR-only native print",
+  "target_order_id": "d0ea3411-c657-4751-a3a2-af3fb02a6d99",
+  "enabled_outputs": {
+    "qr": true,
+    "chz": false,
+    "cis": null
+  },
+  "receipts": [
+    {
+      "job_key": "ff6ba97e-1aee-468d-be1c-9fa6931af53d",
+      "receipt": "emulator-0001-976f95677ac0",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "qr": "*WMS666-FINAL-ORDER-A",
+      "cis": null,
+      "input_bytes": 1069,
+      "output_bytes": 1069,
+      "input_width": 150,
+      "input_height": 150
+    }
+  ],
+  "stock_before": "([(UUID('c18c2ddd-6e46-4a11-b8c6-f133b3bc1713'), 3, 3, 0)], [(UUID('07a988fd-29ca-4268-a557-b1621990ca02'), 1), (UUID('7974de90-bdcd-4384-86b7-0555d92b32d0'), 1)], 0)",
+  "stock_after": "([(UUID('c18c2ddd-6e46-4a11-b8c6-f133b3bc1713'), 3, 3, 0)], [(UUID('07a988fd-29ca-4268-a557-b1621990ca02'), 1), (UUID('7974de90-bdcd-4384-86b7-0555d92b32d0'), 1)], 0)"
+}

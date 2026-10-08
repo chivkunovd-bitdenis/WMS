@@ -1,0 +1,63 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "case": "QR plus exact-current reprint; reprintChzCopies=2, printChz disabled",
+  "scan_id": "a7997623-cce4-445b-9bd2-b42fd70df0df",
+  "target_order_id": "340590d5-f6aa-4bad-b050-a29548fa92ad",
+  "exact_current_cis": "010460043993125321KIZTAPE0000000000",
+  "native_jobs": [
+    {
+      "job_key": "a7997623-cce4-445b-9bd2-b42fd70df0df",
+      "receipt": "emulator-0001-976f95677ac0",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "qr": "*WMS666-FINAL-ORDER-A",
+      "cis": null,
+      "bytes": 1069
+    },
+    {
+      "job_key": "a7997623-cce4-445b-9bd2-b42fd70df0df:copy",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "bytes": 40498
+    },
+    {
+      "job_key": "a7997623-cce4-445b-9bd2-b42fd70df0df:copy:c2",
+      "receipt": "emulator-0003-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "bytes": 40498
+    }
+  ],
+  "marking_after": {
+    "id": "67411b45-9474-4e9e-8ede-8003f3dccc0a",
+    "order_id": "340590d5-f6aa-4bad-b050-a29548fa92ad",
+    "cis": "010460043993125321KIZTAPE0000000000",
+    "code_id": "a9e0352d-32e7-4000-93f4-6c71ff13af53",
+    "status": "accepted"
+  },
+  "pool_code_before_after": {
+    "before": {
+      "id": "a9e0352d-32e7-4000-93f4-6c71ff13af53",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "available"
+    },
+    "after": {
+      "id": "a9e0352d-32e7-4000-93f4-6c71ff13af53",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "applied"
+    }
+  },
+  "pool_code_rows_before_after": {
+    "before_count": 4,
+    "after_count": 4
+  },
+  "stock_before_after": {
+    "before": "([(UUID('2b29d9da-ca0d-48e0-b7cc-c0e41d562f78'), 3, 3, 0)], [(UUID('44d6f45a-dfbe-4b80-a960-db2a5374d7e6'), 1), (UUID('4bb0f0b1-3f96-4c52-a84f-d50bff375030'), 1)], 0)",
+    "after": "([(UUID('2b29d9da-ca0d-48e0-b7cc-c0e41d562f78'), 3, 3, 0)], [(UUID('44d6f45a-dfbe-4b80-a960-db2a5374d7e6'), 1), (UUID('4bb0f0b1-3f96-4c52-a84f-d50bff375030'), 1)], 0)"
+  },
+  "provider_boundary": "manual current-code sync was explicitly synthetic; no outbound WB request is proven here",
+  "physical_paper": "NOT_TESTED"
+}

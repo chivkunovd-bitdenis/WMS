@@ -1,0 +1,123 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "physical_paper": "NOT_TESTED",
+  "outputs": [
+    {
+      "accepted_at_utc": "2026-10-08T00:38:12.784140+00:00",
+      "bytes": 1069,
+      "job_key": "8a3b80ba-60f4-43f8-8213-0c20053b0285",
+      "png": "sink/job-0001-976f95677ac0.png",
+      "receipt": "emulator-0001-976f95677ac0",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "qr": "*WMS666-FINAL-ORDER-A",
+      "cis": null,
+      "input": {
+        "job_key": "8a3b80ba-60f4-43f8-8213-0c20053b0285",
+        "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+        "qr": "*WMS666-FINAL-ORDER-A",
+        "cis": null,
+        "width_mm": 60,
+        "height_mm": 80
+      }
+    },
+    {
+      "accepted_at_utc": "2026-10-08T00:38:12.903209+00:00",
+      "bytes": 40498,
+      "job_key": "8a3b80ba-60f4-43f8-8213-0c20053b0285:chz",
+      "png": "sink/job-0002-f2f4c4632159.png",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "input": {
+        "job_key": "8a3b80ba-60f4-43f8-8213-0c20053b0285:chz",
+        "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+        "qr": null,
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "width_mm": 60,
+        "height_mm": 80
+      }
+    },
+    {
+      "accepted_at_utc": "2026-10-08T00:38:12.924514+00:00",
+      "bytes": 40498,
+      "job_key": "8a3b80ba-60f4-43f8-8213-0c20053b0285:chz:c2",
+      "png": "sink/job-0003-f2f4c4632159.png",
+      "receipt": "emulator-0003-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "input": {
+        "job_key": "8a3b80ba-60f4-43f8-8213-0c20053b0285:chz",
+        "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+        "qr": null,
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "width_mm": 60,
+        "height_mm": 80
+      }
+    },
+    {
+      "accepted_at_utc": "2026-10-08T00:38:13.261440+00:00",
+      "bytes": 1072,
+      "job_key": "841b537e-ec30-4e60-b7d9-c7cd5da171a6",
+      "png": "sink/job-0004-c2a439551dfe.png",
+      "receipt": "emulator-0004-c2a439551dfe",
+      "sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07",
+      "qr": "*WMS666-FINAL-ORDER-B",
+      "cis": null,
+      "input": {
+        "job_key": "841b537e-ec30-4e60-b7d9-c7cd5da171a6",
+        "sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07",
+        "qr": "*WMS666-FINAL-ORDER-B",
+        "cis": null,
+        "width_mm": 60,
+        "height_mm": 80
+      }
+    },
+    {
+      "accepted_at_utc": "2026-10-08T00:38:13.318297+00:00",
+      "bytes": 40214,
+      "job_key": "841b537e-ec30-4e60-b7d9-c7cd5da171a6:chz",
+      "png": "sink/job-0005-cb9e8ba5ed4a.png",
+      "receipt": "emulator-0005-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "input": {
+        "job_key": "841b537e-ec30-4e60-b7d9-c7cd5da171a6:chz",
+        "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+        "qr": null,
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "width_mm": 60,
+        "height_mm": 80
+      }
+    },
+    {
+      "accepted_at_utc": "2026-10-08T00:38:13.337967+00:00",
+      "bytes": 40214,
+      "job_key": "841b537e-ec30-4e60-b7d9-c7cd5da171a6:chz:c2",
+      "png": "sink/job-0006-cb9e8ba5ed4a.png",
+      "receipt": "emulator-0006-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "input": {
+        "job_key": "841b537e-ec30-4e60-b7d9-c7cd5da171a6:chz",
+        "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+        "qr": null,
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "width_mm": 60,
+        "height_mm": 80
+      }
+    }
+  ],
+  "checks": {
+    "both_flags_off_no_claim_or_job": true,
+    "two_rapid_product_scans_two_orders": true,
+    "one_qr_plus_two_same_cis_copies_per_order": true,
+    "direct_input_png_matches_handler_receipt_bytes": true,
+    "stock_unchanged": true,
+    "packed_orders": 2
+  }
+}
