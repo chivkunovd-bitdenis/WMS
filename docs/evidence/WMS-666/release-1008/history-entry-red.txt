@@ -1,0 +1,18 @@
+WMS-666 historical delivered-supply entry RED
+
+Product source: S `e6542576933184f7f6632b88703f54df02e82835`.
+Test branch: `codex/wms666-final-guards`; the test-only WMS611/WMS514 correction at `fa4087f73770d553dc9f178ec086b11deb93c50d` does not change product source.
+
+Command from `frontend/`:
+
+    npx vitest run src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx --maxWorkers=1 --minWorkers=1
+
+Observed result: exit 1; 1 test failed. The exact saved C19 `in_delivery` workspace had no packaging task and both order stickers were `code: null`, `status: not_requested`. On opening its packing view, the UI issued these requests before the read-only assertion:
+
+    POST /api/operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/print-assets
+      {"kind":"order_sticker","order_ids":["a9340736-3aca-4ecd-8f14-977bee259c36","fffe3861-b479-4637-8a74-0162abacf218"],"retry_missing":true}
+    POST /api/operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/start-work
+
+The failed assertion is the intended historical-state contract: the non-GET request list must be empty when reopening a delivered, taskless supply. The test intercepts both POSTs in memory; the `start-work` fixture returns 503, so no external system or persistent database is contacted or changed. The current code therefore demonstrates attempted asset preparation and task creation, not a persisted task/asset mutation.
+
+Vitest reported `1 failed`, duration `80.81s` (collection `79.83s`, test `496ms`).
