@@ -1,0 +1,442 @@
+{
+  "state": "already_applied",
+  "verification": {
+    "supply_id": "e40f5495-4f1f-5e7d-ba0c-035665fde995",
+    "workspace": {
+      "supply": {
+        "id": "e40f5495-4f1f-5e7d-ba0c-035665fde995",
+        "marketplace": "ozon",
+        "wb_supply_id": "PENDING-84039ffc-e1de-4e86-b86c-98bd22494fbd",
+        "external_supply_id": null,
+        "source": "wms",
+        "name": "FBS Ozon 08.10.2026 · Руруа",
+        "status": "assembling",
+        "delivery_type": "warehouse_sc",
+        "delivery_route": "Доставка Ozon самостоятельно, Москва",
+        "seller": {
+          "id": "c52ef05d-f787-4de5-acc5-76f9736691aa",
+          "name": "ИП Руруа"
+        },
+        "wb_warehouse": {
+          "id": 1020005025459970,
+          "name": null
+        },
+        "wms_warehouse": {
+          "id": "050fb5f6-dacf-4742-96ec-e9128a73cc81",
+          "name": "Основной"
+        },
+        "planned_destination": null,
+        "planned_shipment_date": null,
+        "nearest_deadline_at": "2026-10-08T13:30:00+00:00",
+        "packaging_task_id": "b9e868ba-d7c2-4678-9d70-0bab07674b1f",
+        "barcode_asset": null,
+        "honest_sign_skipped": false,
+        "boxes_without_distribution": false
+      },
+      "stage": "picking",
+      "progress": {
+        "picked": 0,
+        "packed": 0,
+        "metadata_ready": 3,
+        "stickers_ready": 0,
+        "total": 3
+      },
+      "blockers": [],
+      "orders": [
+        {
+          "id": "1f1febff-2ad0-47a8-a3b5-a2bd237f4e43",
+          "marketplace": "ozon",
+          "external_order_id": "0125883568-0126-1",
+          "wb_order_id": -4080248661437796195,
+          "status": "assembling",
+          "wb_status": "awaiting_deliver",
+          "supplier_status": "posting_transferring_to_delivery",
+          "seller": {
+            "id": "c52ef05d-f787-4de5-acc5-76f9736691aa",
+            "name": "ИП Руруа"
+          },
+          "wb_warehouse": {
+            "id": 1020005025459970,
+            "name": "Склад WB неизвестен"
+          },
+          "wms_warehouse": {
+            "id": "050fb5f6-dacf-4742-96ec-e9128a73cc81",
+            "name": "Основной"
+          },
+          "product": {
+            "id": "7002428c-a513-43af-aadb-b0ff968285a5",
+            "name": "Световой меч с искрами детский игрушечный светящийся",
+            "image_url": "https://ir.ozone.ru/s3/multimedia-1-5/13242184637.jpg",
+            "seller_article": "Меч с Искрами",
+            "wb_article": null,
+            "barcode": "OZN5282514171",
+            "sku": "5282514171",
+            "chrt_id": null,
+            "category": null,
+            "color": null,
+            "brand": null,
+            "composition": null,
+            "size": null,
+            "packaging_instructions": null,
+            "has_packaging_instructions": false,
+            "marketplace_bindings": [
+              {
+                "marketplace": "ozon",
+                "external_barcodes": [
+                  "OZN5282514171"
+                ]
+              }
+            ]
+          },
+          "positions": [
+            {
+              "marketplace_bindings": [
+                {
+                  "marketplace": "ozon",
+                  "external_barcodes": [
+                    "OZN5282514171"
+                  ]
+                }
+              ],
+              "id": "0279f173-0854-4fbb-a8e8-51bfdcefbc4b",
+              "image_url": "https://ir.ozone.ru/s3/multimedia-1-5/13242184637.jpg",
+              "barcode": "OZN5282514171",
+              "product_id": "7002428c-a513-43af-aadb-b0ff968285a5",
+              "name": "Световой меч с искрами детский игрушечный светящийся",
+              "seller_article": "Меч с Искрами",
+              "sku": "5282514171",
+              "size": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "quantity": 1,
+              "reserved_quantity": 0,
+              "picked_quantity": 0,
+              "packed_quantity": 0
+            }
+          ],
+          "inventory": {
+            "available_unpacked": 48,
+            "locations": [
+              {
+                "id": "b364bc84-ac01-418c-84aa-8fe2f501c841",
+                "code": "01 1.11",
+                "available_unpacked": 48
+              }
+            ]
+          },
+          "buyer_type": "individual",
+          "cargo_type": "unknown",
+          "can_pvz": false,
+          "delivery_route": "Доставка Ozon самостоятельно, Москва",
+          "metadata": {
+            "required": [],
+            "optional": [],
+            "states": [],
+            "delivery_allowed": true,
+            "last_checked_at": null
+          },
+          "sticker": {
+            "code": null,
+            "status": "not_requested",
+            "asset_url": null,
+            "applied_at": null
+          },
+          "pick": {
+            "status": "pending",
+            "location_code": null,
+            "picked_at": null
+          },
+          "pack": {
+            "status": "pending",
+            "packed_at": null
+          },
+          "created_at_wb": "2026-10-07T20:49:50+00:00",
+          "deadline_at": "2026-10-08T13:30:00+00:00",
+          "supply_id": "e40f5495-4f1f-5e7d-ba0c-035665fde995",
+          "selection_blockers": [
+            {
+              "code": "order_external_processing",
+              "message": "Заказ уже ушёл в кабинете Ozon."
+            },
+            {
+              "code": "already_in_supply",
+              "message": "Заказ уже в поставке."
+            }
+          ],
+          "tape_order_index": 2
+        },
+        {
+          "id": "9d87bd87-6e72-47a1-99f5-0359e3c0d77b",
+          "marketplace": "ozon",
+          "external_order_id": "0157163931-0186-1",
+          "wb_order_id": -5721786747227543374,
+          "status": "assembling",
+          "wb_status": "awaiting_deliver",
+          "supplier_status": "posting_transferring_to_delivery",
+          "seller": {
+            "id": "c52ef05d-f787-4de5-acc5-76f9736691aa",
+            "name": "ИП Руруа"
+          },
+          "wb_warehouse": {
+            "id": 1020005025459970,
+            "name": "Склад WB неизвестен"
+          },
+          "wms_warehouse": {
+            "id": "050fb5f6-dacf-4742-96ec-e9128a73cc81",
+            "name": "Основной"
+          },
+          "product": {
+            "id": "7002428c-a513-43af-aadb-b0ff968285a5",
+            "name": "Световой меч с искрами детский игрушечный светящийся",
+            "image_url": "https://ir.ozone.ru/s3/multimedia-1-5/13242184637.jpg",
+            "seller_article": "Меч с Искрами",
+            "wb_article": null,
+            "barcode": "OZN5282514171",
+            "sku": "5282514171",
+            "chrt_id": null,
+            "category": null,
+            "color": null,
+            "brand": null,
+            "composition": null,
+            "size": null,
+            "packaging_instructions": null,
+            "has_packaging_instructions": false,
+            "marketplace_bindings": [
+              {
+                "marketplace": "ozon",
+                "external_barcodes": [
+                  "OZN5282514171"
+                ]
+              }
+            ]
+          },
+          "positions": [
+            {
+              "marketplace_bindings": [
+                {
+                  "marketplace": "ozon",
+                  "external_barcodes": [
+                    "OZN5282514171"
+                  ]
+                }
+              ],
+              "id": "fa057e64-378c-464d-ae6f-003f7bccbad0",
+              "image_url": "https://ir.ozone.ru/s3/multimedia-1-5/13242184637.jpg",
+              "barcode": "OZN5282514171",
+              "product_id": "7002428c-a513-43af-aadb-b0ff968285a5",
+              "name": "Световой меч с искрами детский игрушечный светящийся",
+              "seller_article": "Меч с Искрами",
+              "sku": "5282514171",
+              "size": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "quantity": 1,
+              "reserved_quantity": 0,
+              "picked_quantity": 0,
+              "packed_quantity": 0
+            }
+          ],
+          "inventory": {
+            "available_unpacked": 48,
+            "locations": [
+              {
+                "id": "b364bc84-ac01-418c-84aa-8fe2f501c841",
+                "code": "01 1.11",
+                "available_unpacked": 48
+              }
+            ]
+          },
+          "buyer_type": "individual",
+          "cargo_type": "unknown",
+          "can_pvz": false,
+          "delivery_route": "Доставка Ozon самостоятельно, Москва",
+          "metadata": {
+            "required": [],
+            "optional": [],
+            "states": [],
+            "delivery_allowed": true,
+            "last_checked_at": null
+          },
+          "sticker": {
+            "code": null,
+            "status": "not_requested",
+            "asset_url": null,
+            "applied_at": null
+          },
+          "pick": {
+            "status": "pending",
+            "location_code": null,
+            "picked_at": null
+          },
+          "pack": {
+            "status": "pending",
+            "packed_at": null
+          },
+          "created_at_wb": "2026-10-07T17:03:30+00:00",
+          "deadline_at": "2026-10-08T13:30:00+00:00",
+          "supply_id": "e40f5495-4f1f-5e7d-ba0c-035665fde995",
+          "selection_blockers": [
+            {
+              "code": "order_external_processing",
+              "message": "Заказ уже ушёл в кабинете Ozon."
+            },
+            {
+              "code": "already_in_supply",
+              "message": "Заказ уже в поставке."
+            }
+          ],
+          "tape_order_index": 1
+        },
+        {
+          "id": "959f0737-f301-47b9-bb56-74cc77f17120",
+          "marketplace": "ozon",
+          "external_order_id": "41767844-0042-2",
+          "wb_order_id": -7364107932677453563,
+          "status": "assembling",
+          "wb_status": "awaiting_deliver",
+          "supplier_status": "posting_transferring_to_delivery",
+          "seller": {
+            "id": "c52ef05d-f787-4de5-acc5-76f9736691aa",
+            "name": "ИП Руруа"
+          },
+          "wb_warehouse": {
+            "id": 1020005025459970,
+            "name": "Склад WB неизвестен"
+          },
+          "wms_warehouse": {
+            "id": "050fb5f6-dacf-4742-96ec-e9128a73cc81",
+            "name": "Основной"
+          },
+          "product": {
+            "id": "7002428c-a513-43af-aadb-b0ff968285a5",
+            "name": "Световой меч с искрами детский игрушечный светящийся",
+            "image_url": "https://ir.ozone.ru/s3/multimedia-1-5/13242184637.jpg",
+            "seller_article": "Меч с Искрами",
+            "wb_article": null,
+            "barcode": "OZN5282514171",
+            "sku": "5282514171",
+            "chrt_id": null,
+            "category": null,
+            "color": null,
+            "brand": null,
+            "composition": null,
+            "size": null,
+            "packaging_instructions": null,
+            "has_packaging_instructions": false,
+            "marketplace_bindings": [
+              {
+                "marketplace": "ozon",
+                "external_barcodes": [
+                  "OZN5282514171"
+                ]
+              }
+            ]
+          },
+          "positions": [
+            {
+              "marketplace_bindings": [
+                {
+                  "marketplace": "ozon",
+                  "external_barcodes": [
+                    "OZN5282514171"
+                  ]
+                }
+              ],
+              "id": "969f530e-ba96-4a40-becd-421d5bd6bbb3",
+              "image_url": "https://ir.ozone.ru/s3/multimedia-1-5/13242184637.jpg",
+              "barcode": "OZN5282514171",
+              "product_id": "7002428c-a513-43af-aadb-b0ff968285a5",
+              "name": "Световой меч с искрами детский игрушечный светящийся",
+              "seller_article": "Меч с Искрами",
+              "sku": "5282514171",
+              "size": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "quantity": 1,
+              "reserved_quantity": 0,
+              "picked_quantity": 0,
+              "packed_quantity": 0
+            }
+          ],
+          "inventory": {
+            "available_unpacked": 48,
+            "locations": [
+              {
+                "id": "b364bc84-ac01-418c-84aa-8fe2f501c841",
+                "code": "01 1.11",
+                "available_unpacked": 48
+              }
+            ]
+          },
+          "buyer_type": "individual",
+          "cargo_type": "unknown",
+          "can_pvz": false,
+          "delivery_route": "Доставка Ozon самостоятельно, Москва",
+          "metadata": {
+            "required": [],
+            "optional": [],
+            "states": [],
+            "delivery_allowed": true,
+            "last_checked_at": null
+          },
+          "sticker": {
+            "code": null,
+            "status": "not_requested",
+            "asset_url": null,
+            "applied_at": null
+          },
+          "pick": {
+            "status": "pending",
+            "location_code": null,
+            "picked_at": null
+          },
+          "pack": {
+            "status": "pending",
+            "packed_at": null
+          },
+          "created_at_wb": "2026-10-07T17:51:36+00:00",
+          "deadline_at": "2026-10-08T13:30:00+00:00",
+          "supply_id": "e40f5495-4f1f-5e7d-ba0c-035665fde995",
+          "selection_blockers": [
+            {
+              "code": "order_external_processing",
+              "message": "Заказ уже ушёл в кабинете Ozon."
+            },
+            {
+              "code": "already_in_supply",
+              "message": "Заказ уже в поставке."
+            }
+          ],
+          "tape_order_index": 0
+        }
+      ],
+      "cargo_places": [],
+      "boxes": [],
+      "marking_pool": {
+        "required": 0,
+        "available": 0,
+        "shortage": 0,
+        "orders_without_code": []
+      },
+      "delivery_preflight": null,
+      "last_wb_sync_at": null,
+      "tracking_summary": null,
+      "partial_rejection": null,
+      "picking_auto_passed_reason": null,
+      "wb_sync_stale": false,
+      "last_delivery_error": null,
+      "server_now": "2026-10-08T07:42:40.957725+00:00"
+    },
+    "task_lines": [
+      {
+        "product_id": "7002428c-a513-43af-aadb-b0ff968285a5",
+        "quantity": 3,
+        "suggested_packed": 0
+      }
+    ],
+    "active_list_contains_supply": true
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "reviewer": "/root/rurua_recovery_path",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "script_sha256": "68298e760cba2d35f9a3e9622a3615f133f833a44670a8125332ddb54745a968",
+  "pre_apply_verdict": "PASS",
+  "independent_readback_at": "2026-10-08T07:44:50.480383Z",
+  "independent_readback_verdict": "PASS",
+  "method": "New docker exec Python process; SessionLocal; SET TRANSACTION READ ONLY; rollback; no_changes=true",
+  "supply_id": "e40f5495-4f1f-5e7d-ba0c-035665fde995",
+  "source": "wms",
+  "status": "assembling",
+  "exact_orders": 3,
+  "task_id": "b9e868ba-d7c2-4678-9d70-0bab07674b1f",
+  "task_status": "draft",
+  "task_lines": 1,
+  "task_quantity": 3,
+  "packed": 0,
+  "active_list_rows": 1,
+  "workspace_blockers": [],
+  "accounting": {
+    "balances": [
+      [
+        48,
+        48,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ]
+    ],
+    "movement_count": 4,
+    "ledger": 0,
+    "fulfillments": 0,
+    "boxes": 0
+  },
+  "validators": {
+    "_assert_supply_mutable": "PASS",
+    "_assert_ozon_orders_mutable": "PASS",
+    "resolve_order_for_pack_unit_each_exact_order": "PASS",
+    "fulfillment": "None",
+    "order_pack_complete": false
+  },
+  "limitations": [
+    "Browser requires login; no operator UI pass",
+    "No actual packing, physical print, Ozon ship or carriage calls"
+  ],
+  "frontend": {
+    "source_commit": "a19d02d31ba57763ce93a29005a95cc3f473e005",
+    "selection_blockers_usage": "FfFbsSupplyWorkspace.tsx:1227 only filters Add orders candidates",
+    "stage_banner": "workspace.blockers at 3224-3232 and 3721; production value []",
+    "packaging_editable": "!deliveryConfirmed at 3258; recovered assembling supply is editable",
+    "accessible_stage": "fbsUx.ts:155-168 returns boxes; picking does not lock packaging or boxes",
+    "browser_click_verified": false
+  }
+}
