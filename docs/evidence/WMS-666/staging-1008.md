@@ -4,23 +4,23 @@ Recorded 2026-10-08. This receipt separates the code SHA served by the test stag
 
 ## Deployment identity and health
 
-The release candidate `ff0110ddbbd2b6b28df2720ad44a9d2c86cdecca` was merged into `etalon` through PR [#412](https://github.com/chivkunovd-bitdenis/WMS/pull/412) using a regular merge, producing canonical commit `61012808c26ba8dabcd271ef21bbbc362caaffaa` at 2026-10-08 11:09:52 UTC. The test stage currently serves the candidate SHA `ff0110d`; it has not been redeployed from the merge commit.
+The release candidate `ff0110ddbbd2b6b28df2720ad44a9d2c86cdecca` was merged into `etalon` through PR [#412](https://github.com/chivkunovd-bitdenis/WMS/pull/412) using a regular merge, producing canonical commit `61012808c26ba8dabcd271ef21bbbc362caaffaa` at 2026-10-08 11:09:52 UTC. After the canonical SHA passed CI, the test stage was fast-forwarded to and redeployed from `61012808` with the standard staging script. Railway readback confirmed that all four WMS services now serve the merge SHA.
 
 The target is Railway project `loyal-wonder` (`c28e681d-4535-4c96-ac97-c7b600a7f8e4`), environment `58a08b66-1290-45a2-8737-e3d7408389e5`. Railway labels that environment `production`, but this is the authorized test stack, not the WMS production VPS.
 
 | Service | Service ID | Deployment ID | Source |
 | --- | --- | --- | --- |
-| WMS API | `e4a67f11-4318-4386-b9f9-fe5ae0d4f5cc` | `2c2d0ba4-f25a-4421-aae5-eb34e65ec663` | `ff0110ddbbd2b6b28df2720ad44a9d2c86cdecca` |
-| Web | `f2ad51a8-009d-488c-9d64-7054072ccac6` | `e95b4369-9db4-499b-b772-5bfd27013caa` | `ff0110ddbbd2b6b28df2720ad44a9d2c86cdecca` |
-| Worker | `ed8faf85-069f-4e94-8d6c-d76899165687` | `5b8c4bdf-ef89-4722-96b2-8ab497aae076` | `ff0110ddbbd2b6b28df2720ad44a9d2c86cdecca` |
-| Beat | `d3355f36-aa1e-48c9-b69c-9e6005c4e1d9` | `3325e0f2-8687-4f1e-828c-2ace8dc7d04e` | `ff0110ddbbd2b6b28df2720ad44a9d2c86cdecca` |
+| WMS API | `e4a67f11-4318-4386-b9f9-fe5ae0d4f5cc` | `adbccb56-f6c2-40d4-89e2-8eeaaa9103ff` | `61012808c26ba8dabcd271ef21bbbc362caaffaa` |
+| Web | `f2ad51a8-009d-488c-9d64-7054072ccac6` | `d18909ec-fad5-4e1f-ae38-605f39b6f1ab` | `61012808c26ba8dabcd271ef21bbbc362caaffaa` |
+| Worker | `ed8faf85-069f-4e94-8d6c-d76899165687` | `ceb97d6f-9485-4573-af82-98847582bfa4` | `61012808c26ba8dabcd271ef21bbbc362caaffaa` |
+| Beat | `d3355f36-aa1e-48c9-b69c-9e6005c4e1d9` | `3a48b80f-e999-4b12-abc2-bb4559487d8c` | `61012808c26ba8dabcd271ef21bbbc362caaffaa` |
 | WB emulator | `582b4add-d338-424c-be03-9bb66af6c8f0` | `bd4e28f4-40cb-4a13-8270-e328c89c8479` | Separate emulator service; no WMS source SHA |
 
-The four WMS services reported `SUCCESS/RUNNING`. The standard staging smoke returned HTTP 200 from the web root, the web `/api/health` proxy, and the backend `/health` endpoint. The non-secret `WILDBERRIES_MARKETPLACE_API_BASE` setting on WMS, worker, and beat points to `http://wb-emulator.railway.internal:8000`. The other WB API base settings have not been verified, so this receipt does not claim that every possible WB request is emulator-routed.
+The four WMS services reported `SUCCESS/RUNNING`. After the merge-SHA deployment, the standard staging smoke returned HTTP 200 from the web root, the web `/api/health` proxy, and the backend `/health` endpoint; the SPA shell loaded successfully. The non-secret `WILDBERRIES_MARKETPLACE_API_BASE` setting on WMS, worker, and beat points to `http://wb-emulator.railway.internal:8000`. The other WB API base settings have not been verified, so this receipt does not claim that every possible WB request is emulator-routed.
 
 ## CI on the canonical merge
 
-The exact merge SHA `61012808c26ba8dabcd271ef21bbbc362caaffaa` passed CI run [37768257092](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37768257092), including all 13 jobs. The dedicated real-stack workflows also passed: [FBS main screen 37768257020](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37768257020), [FBS picking 37768257059](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37768257059), and [WB packing stickers 37768257026](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37768257026). The dependent trusted process-integrity workflow was still pending when this receipt was written: run `37769789356`.
+The exact merge SHA `61012808c26ba8dabcd271ef21bbbc362caaffaa` passed CI run [37768257092](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37768257092), including all 13 jobs. The dedicated real-stack workflows also passed: [FBS main screen 37768257020](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37768257020), [FBS picking 37768257059](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37768257059), and [WB packing stickers 37768257026](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37768257026). The dependent trusted process-integrity workflow [37769789356](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37769789356) also succeeded.
 
 The runtime portions of `backend/app`, `frontend/src`, and `tools/print-agent` are unchanged between the accepted native-print proof source `af5b5aa15210167ee1f943943871f6052150c791` and deployed source `ff0110ddbbd2b6b28df2720ad44a9d2c86cdecca`; the intervening differences in those trees are test files only. The accepted print proof therefore covers the same print runtime as the staged candidate, but it is a local emulated-handler proof rather than a stage UI run.
 
