@@ -2212,18 +2212,6 @@ export function FfFbsSupplyWorkspace({
       refocusKizInput(true)
     }
   }
-  useEffect(() => {
-    if (!ordinaryWbPacking || !open || stage !== 'packing') return
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape' || !(packingSerialBusy() || sequentialScanner?.canCancel?.())) return
-      event.preventDefault()
-      event.stopPropagation()
-      void cancelUnifiedScanRef.current()
-    }
-    document.addEventListener('keydown', onKeyDown, true)
-    return () => document.removeEventListener('keydown', onKeyDown, true)
-  }, [ordinaryWbPacking, open, stage, sequentialScanner])
-
   // Один приём кода для поля скана и для слушателя всей вкладки (WMS-575):
   // что делает скан, решает прежняя логика — ожидание ЧЗ, поиск стикера,
   // галки WMS-514; код, пришедший во время обработки, ждёт в очереди.
