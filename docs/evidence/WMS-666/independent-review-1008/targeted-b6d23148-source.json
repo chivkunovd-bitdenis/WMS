@@ -1,0 +1,23 @@
+{
+  "product": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "base": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+  "remote_product_branch": "b6d23148f1571d08d13d83c6179c385e2f6a1efc\trefs/heads/codex/wms666-packing-release-1008",
+  "runtime_blobs": {
+    "backend/app/services/fbs_kiz_service.py": "23bbce6384bb44ce46b019f14df560c97d25f0a2",
+    "backend/app/services/fbs_order_tape_print_service.py": "ce62f1b7b18575f82e107e489d840bb1f539c564",
+    "backend/app/services/marking_code_service.py": "cf700e956373154e565f31967a84de196bda94fb",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": "7939295325a1483667f595e1cbf08dfe1b4c2cdb"
+  },
+  "checks": {
+    "normalize_scanned_cis_unchanged": true,
+    "_get_order_for_kiz_unchanged": true,
+    "_recount_line_markings_unchanged": true,
+    "_active_ozon_sgtin_markings_unchanged": true,
+    "workspace_only_count_precedence_changed": true,
+    "backend/app/services/fbs_print_binding_service.py_unchanged": true,
+    "backend/app/services/fbs_marking_service.py_unchanged": true,
+    "savepoint_contains_allocation_and_assignment": true,
+    "fallback_allocates_one_code": true
+  },
+  "scope": "Mechanical source identity and structure checks only; not API/browser/native execution or acceptance."
+}
