@@ -13,15 +13,15 @@ from sqlalchemy import select
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
     CHECK_STATUS_OK,
-    META_STATUS_ACCEPTED,
     MARKING_KIND_SGTIN,
+    META_STATUS_ACCEPTED,
     FbsOrder,
     FbsOrderMarking,
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.marking_code import EVENT_PRINTED, STATUS_AVAILABLE, MarkingCode, MarkingCodeEvent
-from app.models.product import Product
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.product import Product
 from app.services import fbs_order_tape_print_service as tape
 from tests.test_fbs_kiz import _patch_wb_acceptance
 from tests.test_fbs_order_tape_concurrency import stock_snapshot
@@ -363,6 +363,33 @@ async def test_task_with_missing_product_line_manual_tape_allocates_pool_cis(
         assert len(pool_after_response) == 1
         assert pool_after_response[0].id in {code.id for code in pool_before}
     assert await stock_snapshot() == before_stock
+    assert body["order_errors"] == []
+    assert body["ready"] == 1
+    assert body["missing"] == 0
+    printed = body["orders"][0]["printed_codes"]
+    assert len(printed) == 1
+    assert printed[0]["cis_code"] == body["orders"][0]["codes"][0]
+    assert sent_values == {700001: printed[0]["cis_code"]}
+    binding = {
+        "order_id": str(order_ids[0]),
+        "supply_id": str(supply_id),
+        "marking_id": printed[0]["marking_id"],
+        "cis_code": printed[0]["cis_code"],
+    }
+    assert binding["cis_code"] in {code.cis_code for code in pool_before}
+    validated = await async_client.post(
+        "/operations/fbs-orders/print-bindings/validate",
+        headers=headers,
+        json={"bindings": [binding]},
+    )
+    assert validated.status_code == 204, validated.text
+    async with SessionLocal() as session:
+        printed_code = await session.get(MarkingCode, uuid.UUID(printed[0]["id"]))
+        assigned = await session.get(FbsOrderMarking, uuid.UUID(printed[0]["marking_id"]))
+        assert printed_code is not None and printed_code.status == "printed"
+        assert assigned is not None and assigned.order_id == order_ids[0]
+        assert assigned.marking_code_id == printed_code.id
+    assert await stock_snapshot() == before_stock
 
 
 @pytest.mark.parametrize(
@@ -590,6 +617,11 @@ async def test_taskless_print_assignment_conflict_does_not_spend_unbound_pool_co
         assert current.meta_status == META_STATUS_ACCEPTED
         assert len(current_pool) == 2
         assert {code.id for code in current_pool} == {code.id for code in initial_pool}
-        assert all(code.status == STATUS_AVAILABLE for code in current_pool)
-        assert printed_events == []
+        assert (
+            all(code.status == STATUS_AVAILABLE for code in current_pool)
+            and not printed_events
+        ), {
+            "pool_statuses": [code.status for code in current_pool],
+            "printed_event_types": [event.event_type for event in printed_events],
+        }
     assert await stock_snapshot() == before_stock
