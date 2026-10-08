@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "e51352df978480e510fba0239121e9fb091d6c7fee38d36e02e8f41488d66ccd",
+    ".github/workflows/ci.yml": "9ff7264be9ba2218acb159b32d27ffbc53a5cac70ee62c33ab94847c7641fd4e",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -191,8 +191,8 @@
     "scripts/ci/tests/test_backend_shard_redis_setup.py": "756bc9ea158afae5624813781b9191bbc71d9408b4265115cc60b01694768884",
     "scripts/ci/tests/test_backend_shards.py": "4923d3d43a2b612537b335d875fe9f9647053bfbf871dd146f628fd47c467b2f",
     "scripts/ci/tests/test_ci_baseline.py": "00a7a6654c8bdfdddaafe6baab11adbb69a6c4dd0c5bcf076a5f253f53fa97e3",
-    "scripts/ci/tests/test_ci_release_additions.py": "f692a75b5fdda7f1fdac189d4b57a3be9b82d54aab62a955b86f9d951c590a7a",
-    "scripts/ci/tests/test_process_contracts.py": "2021d492450e1d1213e2e189fdfe736643043d86475d326290a9d730d2b19341",
+    "scripts/ci/tests/test_ci_release_additions.py": "5f82cb8d67fc474382521a37c7764f15c68cd0949cbe30a070f80f58695ffe61",
+    "scripts/ci/tests/test_process_contracts.py": "4deccd9b01837f30496ed8c127900f8bca45381fa9a14d7cc9d5fc10ede28340",
     "scripts/ci/tests/test_process_deploy_gate.py": "e7f31290a441da3f118674a208c4e5497ab3f11415e1d5d61670298a7a53d18f",
     "scripts/ci/tests/test_product_scope.py": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
     "scripts/ci/tests/test_promote_guards.py": "f28dd4e7d6ad1529c230aaa1de263c55f53e6de99198e31ec6068bea0e7e2e8f",
@@ -223,7 +223,7 @@
     "scripts/ops/tests/wms517-sold-kiz-filter.test.cjs": "f42323a96029cee237928b51221ea9b5837f485ccbb155111c40fe661e48c1f5",
     "tools/print-agent/test_wms_print_direct.py": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
     "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
-    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "b89b41b21070168f31c48caf57f18a000fafbeed5e3cd30b5057fd0c752e913d",
+    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "1ed20c66f25dc643a603d5955d61106cb9398c7a032617ebe6bdeac864682ba3",
     "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json": "baed9c233340bbd3c84a6963d2e69d063946514911e9079276b8c8fdb3319fbd",
     "docs/mockups/WMS-686/model.test.ts": "66d78f86881eb501b78f67df3a0f044a06bab6d7aac44648e135a14613eda7f1",
     "scripts/ci/promote_guards.py": "5c1ef28abcada5c2491cf5399ba9964756cdc1d50a1c99a2598fdedabb0efcc5",
@@ -232,7 +232,7 @@
     "frontend/src/sections/CatalogSection.wms654.test.tsx": "1dea22b72f6b8f8528d32ecf7835fcb1ad3b60ed95a82f4e3af7f19cf37b1ab6",
     "frontend/src/screens/ff/warehouse-map/CreateCellDialog.wms654-legacy.test.tsx": "66fba7e96a7e11c87a5ea1b7950c43ca7a97f8b2c76d152c068cd2e492dbd51a",
     "frontend/src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx": "b867cbaa669772a2d5b035265b802926f55c02e24e32b4c6a1a81be5cf372bfc",
-    "scripts/ci/check_task_documents.py": "fe50b1e860ca494d0dc4a28ef6f62568cb0a8426a5e0824ea3343d091591b65f",
+    "scripts/ci/check_task_documents.py": "3f5b1fa4e8278503b78b43fdc22a15304fd443ddc82e59ce3260812ca68b061d",
     "scripts/ci/test_check_task_documents.py": "a09cab8829cd79eb4fcb96a4c993ad92388b4c6df35ad4112c349e66ee081111",
     "scripts/ci/tests/fixtures/wms652_exact_reviewed_correction_chains.json": "0c5880a3cb800d50582c42eede5b73a690a95f54538ef057a50940d40f97cdeb",
     "frontend/src/screens/ff/FfInboundRequestView.wms684.pdf.test.tsx": "3fbd20b458e1f1752b515880f760cf7513df8c0b9eeda7d4f9baf34793cb8a7f",
@@ -282,7 +282,8 @@
     "scripts/ci/tests/test_reviewed_process_upgrade.py": "29b67659877a7653f0c43bf01901caf4000a7722084239d0254aa7fcd97d966e",
     "scripts/deploy/retain-web-assets.py": "bfb6d0bc7d465bf8c3e9b194a8415f6d257f7097db7426e0ab5362924c78b64c",
     "scripts/ci/tests/test_retain_web_assets.py": "776f150a5c489291b7bb38120c2cab036a3f1892667db9b6043c8d581be9a6df",
-    "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "7f977e87fffef38b7ca1f8e79a2ea77b3618866cfb399ceb25eeee2213b8089f"
+    "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "6552270ca0474dbc99f8e5fa157c604094c77be380eab23bf89c60c9644cd1b3",
+    "frontend/src/screens/v2/wms666ChangeScope.test.ts": "75917dca1dfcefce2c1e0d1cf53defb9678282752165e9952a972e6a8ff92b0d"
   },
   "suites": {
     "backend-fbs": {
@@ -1525,7 +1526,25 @@
         "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия общая inbound_intake: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
         "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия общая marketplace_unload: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
         "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия общая operational_outbound: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
-        "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия приёмка/возврат: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF"
+        "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия приёмка/возврат: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
+        "src/screens/v2/wms666ChangeScope.test.ts::rejects migrations, backend entities, stock logic and guard registry changes",
+        "src/screens/v2/wms666ChangeScope.test.ts::keeps the actual task diff inside the approved packing UI/test/document boundary",
+        "src/screens/v2/wms666ChangeScope.test.ts::accepts exact task proofs and rejects adjacent proof and correction namespaces",
+        "src/screens/v2/wms666ChangeScope.test.ts::reads advancing task history: foreign backend passes, new task backend or guards fail",
+        "src/screens/v2/wms666ChangeScope.test.ts::checks task merge resolutions while ignoring an imported foreign backend tree",
+        "src/screens/v2/wms666ChangeScope.test.ts::rejects a new task workflow edit and pending CI changes independently",
+        "src/screens/v2/wms666ChangeScope.test.ts::accepts only reviewed recovery commit/path/blob triples and rejects adjacent paths",
+        "src/screens/v2/wms666ChangeScope.test.ts::accepts only the exact immutable history checkout delta",
+        "src/screens/v2/wms666ChangeScope.test.ts::fails an accepted history lookup if its immutable source is missing",
+        "src/screens/v2/wms666ChangeScope.test.ts::accepts only exact doc-only historical commits and keeps their paths forbidden generally",
+        "src/screens/v2/wms666ChangeScope.test.ts::records only the five exact RC7 service blob pairs and each commit full path list",
+        "src/screens/v2/wms666ChangeScope.test.ts::rejects RC7 history when commit, path, blob, mode, or complete path list differs",
+        "src/screens/v2/wms666ChangeScope.test.ts::accepts only the exact WMS-517 financial fixture correction history",
+        "src/screens/v2/wms666ChangeScope.test.ts::rejects adjacent WMS-517 correction commits and mutated exact-history entries",
+        "src/screens/v2/wms666ChangeScope.test.ts::rejects future WMS-517 path commits and dirty, staged, or untracked changes",
+        "src/screens/v2/wms666ChangeScope.test.ts::fails closed when an exact RC7 source commit cannot be resolved",
+        "src/screens/v2/wms666ChangeScope.test.ts::rejects future committed, dirty and staged edits of every historical document path",
+        "src/screens/v2/wms666ChangeScope.test.ts::fails exact doc-history lookup when immutable objects are absent"
       ]
     },
     "print-672": {
@@ -1824,7 +1843,12 @@
         "scripts.ci.tests.test_retain_web_assets::test_image_selection_uses_current_compose_service_not_previous_container[None-production-images1-production-web]",
         "scripts.ci.tests.test_retain_web_assets::test_image_selection_uses_current_compose_service_not_previous_container[None-production-images2-production_web]",
         "scripts.ci.tests.test_retain_web_assets::test_image_selection_refuses_missing_or_ambiguous_build_target[images0]",
-        "scripts.ci.tests.test_retain_web_assets::test_image_selection_refuses_missing_or_ambiguous_build_target[images1]"
+        "scripts.ci.tests.test_retain_web_assets::test_image_selection_refuses_missing_or_ambiguous_build_target[images1]",
+        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_c71_final_binding_uses_exact_739_and_a_new_saved_acceptance_record",
+        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_c71_final_binding_rejects_mismatch_self_selecting_and_unreviewed_sources",
+        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_c71_final_binding_requires_a_new_saved_independent_acceptance_record",
+        "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_c71_all_wms666_c13_cases_are_protected_and_registered_without_suite_changes",
+        "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_c71_frontend_receipt_rejects_missing_skipped_or_misattributed_c13_cases"
       ]
     },
     "product-scope": {

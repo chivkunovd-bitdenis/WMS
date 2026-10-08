@@ -10,9 +10,10 @@
     "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
     "7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b",
     "d420f8db1e7d69212ad2ea4529a02044689363b0",
-    "8ba63eadd9a4ce65d92f31c18a7276e049548eac"
+    "8ba63eadd9a4ce65d92f31c18a7276e049548eac",
+    "739a63343fc38d2a3441d9b613b4652c7f0380e0"
   ],
-  "final_reviewed_source": "8ba63eadd9a4ce65d92f31c18a7276e049548eac",
+  "final_reviewed_source": "739a63343fc38d2a3441d9b613b4652c7f0380e0",
   "self_selecting_references": [
     "HEAD",
     "${GITHUB_SHA}"
@@ -34,7 +35,7 @@
     "unreviewed_candidate_source": "f71b99c0f19bdbf48e8e0b95b62aefe8709307fc"
   },
   "final_binding_rule": "After independent acceptance and freeze, replace final_reviewed_source and the exact workflow pin together; never select HEAD, the current CI SHA, or an unreviewed candidate.",
-  "frozen_source": "8ba63eadd9a4ce65d92f31c18a7276e049548eac",
+  "frozen_source": "739a63343fc38d2a3441d9b613b4652c7f0380e0",
   "independent_acceptance_record": "c2cbd700fbf7f03fb00465b27ee8214428f9386e",
   "independent_review_verdict": "PASS",
   "original_independent_review_commit": "033a5bcedaa6c680947d0c9ff411ec328d9574d1",
