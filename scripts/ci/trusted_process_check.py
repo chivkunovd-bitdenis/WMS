@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlencode
@@ -140,8 +141,22 @@ def load_approved_bootstrap():
     return bootstrap_pin(json_object(raw))
 
 
+def git_blob_oid(raw):
+    return hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+
+
+def require_current_policy_blob(rows, raw):
+    row = rows.get(POLICY_PATH)
+    if row is None or row.get('type') != 'blob' or row.get('mode') not in {'100644', '100755'}:
+        raise ValueError('Current process policy missing, non-blob or symlink')
+    if sha(row.get('sha')) != git_blob_oid(raw):
+        raise ValueError('Current process policy bytes do not match the Git tree')
+    return row
+
+
 def verified_policy_snapshot(get, root, ref, rows, cache):
-    data, _ = policy(get, root, ref)
+    data, raw = policy(get, root, ref)
+    require_current_policy_blob(rows, raw)
     for name, digest in data['files'].items():
         row = rows.get(name)
         if row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'}:
@@ -155,7 +170,8 @@ def verified_policy_snapshot(get, root, ref, rows, cache):
 def baseline_policy(get, root, base, approved_bootstrap):
     baseline_tree = tree(get, root, base)
     if POLICY_PATH in baseline_tree:
-        data, _ = policy(get, root, base)
+        data, raw = policy(get, root, base)
+        require_current_policy_blob(baseline_tree, raw)
         return data, baseline_tree, None
     if approved_bootstrap is None:
         raise ValueError('Trusted BASE has no process policy; bootstrap acceptance required')
@@ -259,7 +275,9 @@ def verify_pr(get, repository, number, *, download=None, approved_bootstrap=None
     # contracts. The CI report gate below checks every case the candidate lists;
     # independent diff review assesses intentional changes to that list.
     trees = [baseline_tree, tree(get, root, head), tree(get, root, merge)]
-    for data, candidate_policy in zip(trees[1:], (candidate, merged)):
+    for data, candidate_policy, raw_policy in zip(trees[1:], (candidate, merged),
+                                                   (candidate_raw, merged_raw)):
+        require_current_policy_blob(data, raw_policy)
         for name in candidate_policy['files']:
             row = data.get(name)
             if row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'}:
@@ -352,6 +370,20 @@ def verify_pr_evidence(get, download, repository, number, *, approved_bootstrap=
                         'docs_only': result['docs_only']}
             if any(type(metadata.get(key)) is not type(value) or metadata.get(key) != value for key, value in expected.items()):
                 raise ValueError('Proof does not belong to this exact merge/head/base/run/attempt/policy')
+            if not result['docs_only']:
+                from scripts.ci.process_contracts import verify_reports
+                current_policy, _ = policy(get, root, result['head_sha'])
+                with tempfile.TemporaryDirectory(prefix='wms-process-proof-') as folder:
+                    report_root = Path(folder)
+                    for suite in current_policy['suites'].values():
+                        report = suite['report']
+                        info = archive.getinfo(report)
+                        if info.is_dir() or info.file_size > MAX_EXPANDED:
+                            raise ValueError('Invalid or oversized required execution report')
+                        target = report_root.joinpath(*PurePosixPath(report).parts)
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_bytes(archive.read(info))
+                    verify_reports(current_policy, report_root, sha=result['merge_sha'])
         if verify_pr(get, repository, number, approved_bootstrap=approved_bootstrap) != result:
             raise ValueError('PR or latest CI changed during artifact verification')
         return {**result, 'artifact_id': artifact['id'], 'evidence_complete': True}

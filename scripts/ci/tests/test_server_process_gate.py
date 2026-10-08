@@ -19,9 +19,6 @@ ROOT = Path(__file__).resolve().parents[3]
 class ServerFixture(Fixture):
     def __init__(self):
         super().__init__()
-        self.jobs += [{'id': i, 'name': name, 'head_sha': SHA, 'run_id': 10,
-                       'status': 'completed', 'conclusion': 'success'} for i, name in enumerate(
-                           ['print-regressions', 'printer-windows', 'process-proof'], 50)]
         self.artifacts = [{'id': 90, 'name': f'process-proof-{SHA}-10-1', 'expired': False,
                            'size_in_bytes': 2000, 'workflow_run': {'id': 10, 'head_sha': SHA}}]
         self.change_after_artifact = False
@@ -62,6 +59,18 @@ class ServerGateTests(unittest.TestCase):
                         job = next(job for job in self.f.jobs if job['name'] == name)
                         job['status' if state == 'queued' else 'conclusion'] = state
                     with self.assertRaises(GateError): self.verify()
+
+    def test_docs_only_may_skip_heavy_jobs_but_never_process_proof(self):
+        self.f.changed = ['docs/requirements/WMS-704.md']
+        for name in ['print-regressions', 'printer-windows']:
+            next(job for job in self.f.jobs if job['name'] == name)['conclusion'] = 'skipped'
+        result = self.verify()
+        self.assertTrue(result['docs_only'])
+        self.f = ServerFixture()
+        self.f.changed = ['docs/requirements/WMS-704.md']
+        next(job for job in self.f.jobs if job['name'] == 'process-proof')['conclusion'] = 'skipped'
+        with self.assertRaises(GateError):
+            self.verify()
 
     def test_red_latest_run_wrong_sha_or_non_push_etalon_refuses(self):
         for mutation in ['new-red', 'sha', 'event', 'branch']:

@@ -167,7 +167,7 @@ class BackendWorkflowContracts(unittest.TestCase):
     def test_required_backend_aggregates_checks_and_both_shards_and_preserves_pg_steps(self):
         raw = (ROOT/'.github/workflows/ci.yml').read_text()
         backend = raw.split('\n  backend:\n', 1)[1].split('\n  print-regressions:', 1)[0]
-        self.assertIn('needs: [backend-checks, backend-shards]', backend)
+        self.assertIn('needs: [backend-checks, backend-shards, scope]', backend)
         self.assertIn('if: always()', backend)
         self.assertIn('needs.backend-checks.result', backend)
         self.assertIn('needs.backend-shards.result', backend)

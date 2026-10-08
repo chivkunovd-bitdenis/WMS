@@ -22,8 +22,9 @@ class AnchorFixture:
         self.policy = copy.deepcopy(self.base_policy)
         self.base_tree = [{'path': path, 'sha': str(i)*40, 'mode': '100644', 'type': 'blob'}
                           for i, path in enumerate(self.policy['files'], 1)]
-        self.base_tree.append({'path': 'guards/PROCESS_CONTRACTS.json', 'sha': 'f'*40,
-                               'mode': '100644', 'type': 'blob'})
+        base_raw = json.dumps(self.base_policy).encode()
+        self.base_tree.append({'path': 'guards/PROCESS_CONTRACTS.json',
+                               'sha': self.blob_oid(base_raw), 'mode': '100644', 'type': 'blob'})
         self.tree = copy.deepcopy(self.base_tree)
         self.run = {'id': 10, 'run_number': 5, 'run_attempt': 1, 'head_sha': H,
                     'event': 'pull_request', 'workflow_id': 6, 'path': '.github/workflows/ci.yml',
@@ -39,7 +40,12 @@ class AnchorFixture:
         self.change_head_after = False
         self.truncated = False
         self.bootstrap = False
+        self.override_policy_row_sha = None
         self.paths = []
+
+    @staticmethod
+    def blob_oid(raw):
+        return __import__('hashlib').sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
 
     def get(self, path):
         self.paths.append(path)
@@ -55,13 +61,19 @@ class AnchorFixture:
             ref = parse_qs(urlparse(path).query)['ref'][0]
             if self.bootstrap and ref == B: raise ValueError('no trusted baseline policy')
             policy = self.base_policy if ref == B else self.policy
+            raw = json.dumps(policy).encode()
             return {'path': 'guards/PROCESS_CONTRACTS.json', 'encoding': 'base64',
-                    'content': base64.b64encode(json.dumps(policy).encode()).decode()}
+                    'content': base64.b64encode(raw).decode()}
         if '/git/commits/' in route:
             return {'tree': {'sha': route.rsplit('/', 1)[-1]}}
         if '/git/trees/' in route:
             sha = route.rsplit('/', 1)[-1]
-            return {'truncated': self.truncated, 'tree': copy.deepcopy(self.base_tree if sha == B else self.tree)}
+            rows = copy.deepcopy(self.base_tree if sha == B else self.tree)
+            if sha != B:
+                row = next((row for row in rows if row['path'] == 'guards/PROCESS_CONTRACTS.json'), None)
+                if row is not None:
+                    row['sha'] = self.override_policy_row_sha or self.blob_oid(json.dumps(self.policy).encode())
+            return {'truncated': self.truncated, 'tree': rows}
         if route.endswith('/workflows/ci.yml'):
             return {'id': 6, 'path': '.github/workflows/ci.yml', 'state': 'active'}
         if '/workflows/6/runs' in route:

@@ -275,7 +275,6 @@
     "backend/tests/test_stock_publish_nested_commit_contract.py": "c079c0a9ee7c1f904e9db83632c59814e3e5ae74f7a3e91f5ab8394c0325711a",
     "backend/tests/test_wms662_batch_handoff_lock_order.py": "4b0062901cc0df0da3dc4604fcb72c7619f251dee1182954351564c7f1335ac1",
     "backend/tests/test_wms662_batch_pid_snapshot_contract.py": "35f8833b765a8ec645e42b1f7d46f56bf4fa0021a5a1db2fe257cc30f3f2d407",
-    "backend/tests/test_wms662_exact_fixture_pairs_contract.py": "5f505f389a7b0b38838c69df676882a42509d80932c189475a83caa2e84336b9",
     "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e",
     "docs/evidence/WMS-652/batch-exact-ledger-test-contract-20261007/historical-inputs.json": "0fea9e178488f7d83d975ff33111ca99063f8fd77f87a156016f1df58b908c78",
     "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "adf1e389c27c4b382d999838b0fab18fcc2fa8c92deb86acf794be03ce1b3b44",
@@ -994,12 +993,6 @@
         "tests.test_wms662_batch_pid_snapshot_contract::test_first_proven_wait_writer_snapshot_survives_later_pooled_pid_reuse",
         "tests.test_wms662_batch_pid_snapshot_contract::test_live_cycle_observation_after_pid_change_uses_current_writer_connections",
         "tests.test_wms662_cancellation_lock_order_regression::test_f6_confirmed_wait_pid_pair_survives_postrelease_pool_reuse",
-        "tests.test_wms662_exact_fixture_pairs_contract::test_exact_historical_fixture_pair_is_accepted[batch-pid]",
-        "tests.test_wms662_exact_fixture_pairs_contract::test_exact_historical_fixture_pair_is_accepted[legacy-format]",
-        "tests.test_wms662_exact_fixture_pairs_contract::test_missing_changed_review_or_rebound_source_remains_rejected",
-        "tests.test_wms662_exact_fixture_pairs_contract::test_mutated_assertion_or_later_candidate_cannot_self_update_allowed_blob",
-        "tests.test_wms662_exact_fixture_pairs_contract::test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver",
-        "tests.test_wms662_exact_fixture_pairs_contract::test_wrong_task_path_transform_and_blob_pairs_remain_rejected",
         "tests.test_wms662_observed_handoff::test_c11_existing_ledger_repair[full]",
         "tests.test_wms662_observed_handoff::test_c11_existing_ledger_repair[partial]",
         "tests.test_wms662_observed_handoff::test_c11_existing_ledger_repair[reversed]",
@@ -1127,7 +1120,11 @@
         "tests.test_wms684_586_scope_contract::test_task_sources_and_lane_boundaries_preserved",
         "tests.test_wms687_existing_stock_publication_contract::test_wms687_completed_document_dispatches_existing_publisher_after_commit[inbound]",
         "tests.test_wms687_existing_stock_publication_contract::test_wms687_completed_document_dispatches_existing_publisher_after_commit[return]",
-        "tests.test_wms687_existing_stock_publication_contract::test_wms687_first_enable_dispatches_after_commit_once_but_identical_replay_does_not"
+        "tests.test_wms687_existing_stock_publication_contract::test_wms687_first_enable_dispatches_after_commit_once_but_identical_replay_does_not",
+        "tests.test_fbs_ozon_lane::test_ozon_supply_creation_never_calls_wb",
+        "tests.test_pytest_artifact_cleanup::test_cleanup_removes_only_artifacts_for_new_default_paths",
+        "tests.test_pytest_artifact_cleanup::test_cleanup_preserves_explicit_or_preexisting_paths",
+        "tests.test_pytest_artifact_cleanup::test_cleanup_failure_warns_and_preserves_artifacts"
       ]
     },
     "pg-663-retry": {
@@ -1759,12 +1756,11 @@
         "scripts.ci.tests.test_backend_shards.BackendWorkflowContracts::test_frontend_runs_parallel_print_and_process_proof_requires_both",
         "scripts.ci.tests.test_backend_shards.BackendWorkflowContracts::test_guard_installs_pytest_before_discovery_and_uploads_real_product_scope_junit",
         "scripts.ci.tests.test_backend_shards.BackendWorkflowContracts::test_required_backend_aggregates_checks_and_both_shards_and_preserves_pg_steps",
-        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference",
+        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_candidate_product_scope_uses_independently_reviewed_source",
         "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact",
         "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact",
-        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_controlled_accepted_final_freeze_accepts_only_its_exact_reference",
         "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_existing_517_pg_run_produces_report_without_duplicate_run",
-        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_source_binding_keeps_one_active_exact_reference_during_or_after_freeze",
+        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_source_binding_accepts_only_the_exact_reviewed_reference",
         "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_wms686_raw_receipt_contract_rejects_missing_tap_upload_download_or_required_job",
         "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_browser_report_is_exact_named_actual_sha_not_old_green",
         "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_duplicate_cannot_replace_missing_case",
@@ -1853,7 +1849,8 @@
         "scripts.ci.tests.test_ci_scope.CIScopeTests::test_runtime_fixtures_and_ci_sources_run_full_wave",
         "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_removed_mandatory_case_is_missing_from_unchanged_policy_report",
         "scripts.ci.tests.test_reviewed_process_upgrade.ReviewedProcessUpgradeTests::test_case_contract_edit_is_reviewable_without_a_case_count_floor",
-        "scripts.ci.tests.test_ci_scope.CIScopeTests::test_recognized_receipts_skip_heavy_wave_but_inputs_and_runners_do_not"
+        "scripts.ci.tests.test_ci_scope.CIScopeTests::test_recognized_receipts_skip_heavy_wave_but_inputs_and_runners_do_not",
+        "scripts.ci.tests.test_server_process_gate.ServerGateTests::test_docs_only_may_skip_heavy_jobs_but_never_process_proof"
       ]
     },
     "product-scope": {

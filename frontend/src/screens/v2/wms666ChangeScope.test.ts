@@ -59,6 +59,10 @@ const WMS_666_ALLOWED_CODE_FILES = new Set([
   'frontend/src/screens/v2/fbsStickerPrefetch.test.ts',
   'frontend/src/screens/v2/fbsWorkspaceFreshness.ts',
   'frontend/src/screens/v2/fbsWorkspaceFreshness.test.ts',
+  'frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx',
+  'frontend/src/utils/wms680PrintContract.test.ts',
+  'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms680.test.ts',
+  'backend/tests/test_wms537_draft_supply_stickers.py',
   'frontend/src/screens/v2/FfFbsSupplyAssembly.dom.test.tsx',
   'backend/tests/fbs_picking_browser_verify.py',
 ])
@@ -206,6 +210,10 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       'frontend/src/screens/v2/FfFbsSupplyAssembly.tsx',
       'frontend/src/screens/v2/FfFbsSupplyAssembly.dom.test.tsx',
       'frontend/tests-e2e/wms652-critical/vite.native.config.ts',
+      'frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx',
+      'frontend/src/utils/wms680PrintContract.test.ts',
+      'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms680.test.ts',
+      'backend/tests/test_wms537_draft_supply_stickers.py',
       'backend/tests/fbs_picking_browser_verify.py',
     ]
     expect(wms666ScopeViolations(allowed)).toEqual([])

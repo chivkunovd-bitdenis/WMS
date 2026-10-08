@@ -28,25 +28,10 @@ class ReleaseCommandContracts(unittest.TestCase):
     def assert_binding_is_independently_reviewed(self, guard, binding):
         trusted_ref = self.trusted_reference(guard)
         self.assertRegex(trusted_ref, r'^[0-9a-f]{40}$')
-        self.assertIn(trusted_ref, binding['accepted_reviewed_sources'])
+        self.assertEqual(trusted_ref, binding['reviewed_source'])
         self.assertNotIn(trusted_ref, binding['self_selecting_references'])
         self.assertNotEqual(trusted_ref, binding['unreviewed_candidate_source'])
-        self.assertEqual(trusted_ref, self.active_reviewed_source(binding))
         return trusted_ref
-
-    def active_reviewed_source(self, binding):
-        if binding['status'] == 'pending-final-independent-freeze':
-            self.assertIsNone(binding['final_reviewed_source'])
-            self.assertEqual(binding['accepted_reviewed_sources'], [binding['current_reviewed_source']])
-            return binding['current_reviewed_source']
-        self.assertEqual(binding['status'], 'independently-accepted-final-freeze')
-        final = binding['final_reviewed_source']
-        self.assertRegex(final, r'^[0-9a-f]{40}$')
-        self.assertIn(final, binding['accepted_reviewed_sources'])
-        self.assertEqual(binding['frozen_source'], final)
-        self.assertRegex(binding['independent_acceptance_record'], r'^[0-9a-f]{40}$')
-        self.assertNotEqual(binding['independent_acceptance_record'], final)
-        return final
 
     def assert_wms686_raw_receipts(self, job, proof, receipt):
         self.assertEqual(receipt['test_count'], 11)
@@ -63,38 +48,26 @@ class ReleaseCommandContracts(unittest.TestCase):
         download = proof.split(artifact_name, 1)[1].split('- uses:', 1)[0]
         self.assertIn(f"path: {receipt['proof_download_path']}", download)
 
-    def test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference(self):
+    def test_actual_candidate_product_scope_uses_independently_reviewed_source(self):
         raw = (ROOT/'.github/workflows/ci.yml').read_text()
         guard = self.guard_section(raw)
         binding = self.source_binding()
-        expected = self.active_reviewed_source(binding)
+        expected = binding['reviewed_source']
         self.assertIn(PRODUCT_SCOPE_PREFIX + expected, guard)
         self.assertEqual(self.assert_binding_is_independently_reviewed(guard, binding), expected)
         self.assertIn('pytest -q scripts/ci/tests/test_product_scope.py --junitxml=', guard)
 
-    def test_source_binding_keeps_one_active_exact_reference_during_or_after_freeze(self):
+    def test_source_binding_accepts_only_the_exact_reviewed_reference(self):
         binding = self.source_binding()
         guard = self.guard_section((ROOT/'.github/workflows/ci.yml').read_text())
         self.assertEqual(self.assert_binding_is_independently_reviewed(guard, binding),
-                         self.active_reviewed_source(binding))
-
-    def test_controlled_accepted_final_freeze_accepts_only_its_exact_reference(self):
-        binding = self.source_binding()['controlled_accepted_final_binding']
-        guard = self.guard_section((ROOT/'.github/workflows/ci.yml').read_text())
-        current = self.trusted_reference(guard)
-        final_guard = guard.replace(PRODUCT_SCOPE_PREFIX + current,
-                                    PRODUCT_SCOPE_PREFIX + binding['final_reviewed_source'])
-        self.assertEqual(self.assert_binding_is_independently_reviewed(final_guard, binding),
-                         binding['final_reviewed_source'])
-        with self.subTest(rejected='previous-source-mismatch'):
-            with self.assertRaises(AssertionError):
-                self.assert_binding_is_independently_reviewed(guard, binding)
-        for rejected in [*binding['self_selecting_references'], binding['unreviewed_candidate_source']]:
-            with self.subTest(rejected=rejected):
-                candidate_guard = final_guard.replace(PRODUCT_SCOPE_PREFIX + binding['final_reviewed_source'],
-                                                PRODUCT_SCOPE_PREFIX + rejected)
-                with self.assertRaises(AssertionError):
-                    self.assert_binding_is_independently_reviewed(candidate_guard, binding)
+                         binding['reviewed_source'])
+        for rejected in [binding['previous_source'], *binding['self_selecting_references'],
+                         binding['unreviewed_candidate_source']]:
+            candidate_guard = guard.replace(PRODUCT_SCOPE_PREFIX + binding['reviewed_source'],
+                                            PRODUCT_SCOPE_PREFIX + rejected)
+            with self.subTest(rejected=rejected), self.assertRaises(AssertionError):
+                self.assert_binding_is_independently_reviewed(candidate_guard, binding)
 
     def test_wms686_raw_receipt_contract_rejects_missing_tap_upload_download_or_required_job(self):
         receipt = self.wms686_receipt()

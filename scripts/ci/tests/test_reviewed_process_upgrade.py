@@ -77,6 +77,13 @@ class ReviewedUpgradeFixture(ArtifactFixture):
         self.artifacts[0]['workflow_run']['head_sha'] = self.head
         self.metadata.update(sha=self.merge, head_sha=self.head, base_sha=self.base,
                              policy_sha256=self.digest())
+        import xml.etree.ElementTree as ET
+        report = ET.Element('testsuite', tests=str(len(self.policy['suites']['picking']['cases'])))
+        for nodeid in self.policy['suites']['picking']['cases']:
+            classname, name = nodeid.split('::', 1)
+            ET.SubElement(report, 'testcase', classname=classname, name=name, time='0')
+        self.entries = [('execution.json', None),
+                        ('picking.xml', ET.tostring(report, encoding='utf-8', xml_declaration=True))]
 
     def pin(self):
         return {'base_sha': self.base, 'source_sha': self.source}

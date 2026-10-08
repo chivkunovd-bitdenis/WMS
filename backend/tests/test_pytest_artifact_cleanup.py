@@ -30,7 +30,7 @@ def test_cleanup_removes_only_artifacts_for_new_default_paths(monkeypatch, tmp_p
     monkeypatch.setattr(conftest, "_AUTO_TEST_DATA_CLEANUP", True)
     monkeypatch.setattr(conftest, "engine", engine)
 
-    conftest._cleanup_generated_test_artifacts()
+    conftest.pytest_sessionfinish(session=None, exitstatus=0)
 
     assert engine.disposed
     assert not any(Path(f"{db_path}{suffix}").exists() for suffix in conftest._TEST_DB_SIDECARS)
