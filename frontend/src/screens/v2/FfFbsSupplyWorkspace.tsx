@@ -2129,9 +2129,11 @@ export function FfFbsSupplyWorkspace({
         return
       }
       if (ordinaryWbPacking) {
-        // The row target is read synchronously by the controller before any blur.
         setKizScanValue('')
-        acceptPackingScanRef.current(raw)
+        // Route row input through the visible unified scan bar. Its serial
+        // queue owns scan errors and Escape recovery; the selected row target
+        // remains available synchronously when the event is accepted.
+        document.dispatchEvent(new CustomEvent('fbs-packing-row-scan', { detail: raw }))
         return
       }
       // Detach the accepted hardware payload synchronously. No async branch is
