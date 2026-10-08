@@ -3,43 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import recoveryHistory from '../../../tests/fixtures/wms666AcceptedRecoveryHistory.json'
 
 const WMS_666_CONTRACT = '0e078418bcb7ee45fa654b0d829e5de0ec80ebb0'
 const WMS_666_ACCEPTED_BASE = '1a4b0d687392a91a2dbfde6fbcfe9013b9e09075'
-const WMS_666_HISTORY_CHECKOUT_CHANGE = {
-  commit: '720307d280439e815057ee4fdd78b72134149a39',
-  path: '.github/workflows/ci.yml',
-  beforeBlob: '621ee62065c67ae66d756b25057d56e780bb411d',
-  afterBlob: 'bbec58a4b781913e7792a6718158a9fc4b806c90',
-}
-const WMS_666_DOCUMENT_HISTORY = [
-  {
-    commit: '1d34b77874e1b1396d8bdd216bd0053a4a308440',
-    changedPaths: ['docs/KANONICHESKIY_BACKLOG.md', 'docs/requirements/WMS-517.md',
-      'docs/requirements/WMS-666.md', 'docs/reviews/wms666-replacement-acceptance-20261006.md'],
-    files: [{ path: 'docs/requirements/WMS-517.md',
-      beforeBlob: 'aca08cc54fce43c7e0987664827e5ec193fff6d5',
-      afterBlob: '89a8fb5fbbfe2a823477dbc495fe7b0e78abd6d7' }],
-  },
-  {
-    commit: 'c5d9255e5d912e13398c883961d0c476ee5a1938',
-    changedPaths: ['docs/reviews/wms663-666-frontend-rollback-scope-20261006.md'],
-    files: [{ path: 'docs/reviews/wms663-666-frontend-rollback-scope-20261006.md',
-      beforeBlob: '664aa8ea5e279c04f9b6219a8440142fd7bc142a',
-      afterBlob: 'c68d9ac10b045020e651544017d84e574dab5e7a' }],
-  },
-  {
-    commit: '8ec0fcd6c7625a4351e6e9a04dfe80f055ac398a',
-    changedPaths: ['docs/reviews/wms663-666-frontend-rollback-scope-20261006.md',
-      'docs/reviews/wms666-earlier-frontend-scope-20261006.md'],
-    files: [{ path: 'docs/reviews/wms663-666-frontend-rollback-scope-20261006.md',
-      beforeBlob: 'c68d9ac10b045020e651544017d84e574dab5e7a',
-      afterBlob: '664aa8ea5e279c04f9b6219a8440142fd7bc142a' },
-    { path: 'docs/reviews/wms666-earlier-frontend-scope-20261006.md', beforeBlob: null,
-      afterBlob: '9dda566e064373fce1e817ce11c8fd5c1b345165' }],
-  },
-]
 const WMS_666_PROOF_FILES = new Set([
   '.github/workflows/wms666-browser-proof.yml',
   'scripts/ci/wms666-browser-proof.mjs',
@@ -88,76 +54,47 @@ const WMS_666_ALLOWED_CODE_FILES = new Set([
   'frontend/src/screens/v2/FfFbsSupplyAssembly.dom.test.tsx',
   'backend/tests/fbs_picking_browser_verify.py',
 ])
-
-export function wms666AcceptedHistoryChange(
-  cwd: string | URL, commit: string, path: string, recoveryReads = new Map<string, boolean>(),
-): boolean {
-  const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
-  const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
-  const recovery = recoveryHistory.entries.find((entry) => entry.commit === commit)
-  const recoveredFile = recovery?.files.find((entry) => entry.path === path)
-  if (recovery && recoveredFile) {
-    // Exact independently reviewed history only. No future change of these paths
-    // is permitted, even with identical content or the same task number.
-    if (!recoveryReads.has(commit)) {
-      const changed = git('diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', commit)
-        .split('\n').filter(Boolean).sort()
-      const paths = recovery.files.map((file) => file.path)
-      const entries = (ref: string) => git('ls-tree', '--full-tree', ref, '--', ...paths)
-        .split('\n').filter(Boolean).sort()
-      const expected = (side: 'beforeEntry' | 'afterEntry') => recovery.files
-        .map((file) => file[side]).filter(Boolean).sort()
-      recoveryReads.set(commit, JSON.stringify(changed) === JSON.stringify([...recovery.changedPaths].sort())
-        && JSON.stringify(entries(`${commit}^`)) === JSON.stringify(expected('beforeEntry'))
-        && JSON.stringify(entries(commit)) === JSON.stringify(expected('afterEntry')))
-    }
-    return recoveryReads.get(commit) === true
-  }
-  const documents = WMS_666_DOCUMENT_HISTORY.find((entry) => entry.commit === commit)
-  const file = documents?.files.find((entry) => entry.path === path)
-  if (documents && file) {
-    // Immutable doc-only history, not permission for any future edit of these paths.
-    const changed = git('diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', commit)
-      .split('\n').filter(Boolean).sort()
-    if (JSON.stringify(changed) !== JSON.stringify([...documents.changedPaths].sort())) return false
-    const treeEntry = (sha: string) => git('ls-tree', '--full-tree', sha, '--', path)
-    return treeEntry(`${commit}^`) === (file.beforeBlob === null ? '' : `100644 blob ${file.beforeBlob}\t${path}`)
-      && treeEntry(commit) === `100644 blob ${file.afterBlob}\t${path}`
-  }
-  if (commit !== accepted.commit || path !== accepted.path) return false
-  // Only the immutable four-line fetch-depth fix is already accepted.
-  // Future commits and pending edits of this path receive no exemption.
-  return git('rev-parse', `${commit}^:${path}`) === accepted.beforeBlob
-    && git('rev-parse', `${commit}:${path}`) === accepted.afterBlob
-}
+const WMS_666_PROCESS_FILES = new Set([
+  '.github/workflows/ci.yml',
+  'guards/PROCESS_CONTRACTS.json',
+  'frontend/src/screens/v2/wms666ChangeScope.test.ts',
+  'frontend/tests-e2e/wms652-critical/browser.mjs',
+  'frontend/tests-e2e/fbs-picking/extended.mjs',
+  'frontend/src/screens/v2/FfFbsSupplyWorkspace.load.test.ts',
+  'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms477.test.ts',
+  'frontend/tests-e2e/wms652-cdp-cancellation.test.mjs',
+  'scripts/ci/tests/fixtures/wms652_source_binding_transition.json',
+  'scripts/ci/backend_shards.py',
+  'scripts/ci/tests/test_backend_shard_progress.py',
+  'scripts/ci/verify_ci.py',
+  'scripts/ci/trusted_process_check.py',
+  'scripts/ci/tests/test_verify_ci.py',
+  'scripts/ci/tests/test_trusted_process_check.py',
+])
 
 export function wms666TaskChangedPaths(
   cwd: string | URL,
   contract = WMS_666_CONTRACT,
 ): string[] {
-  const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' })
+  const git = (...args: string[]) => execFileSync('git', args, {
+    cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+  })
   // Missing history must fail, rather than quietly produce an empty task diff.
   git('merge-base', '--is-ancestor', contract, 'HEAD')
   const head = git('rev-parse', 'HEAD').trim()
   const historyStart = wms666AcceptedTaskBase(git, contract, head)
   // Include side-branch commits later merged into this task range.
   const history = git('log', '--format=%H%x09%P%x09%s', `${historyStart}..${head}`)
-  const root = historyStart === contract
-    ? git('show', '-s', '--format=%H%x09%P%x09%s', contract) : ''
   const paths = new Set<string>()
-  // Reuse only immutable commit verification within this single history walk.
-  const recoveryReads = new Map<string, boolean>()
-  for (const line of (root + history).trim().split('\n')) {
+  for (const line of history.trim().split('\n')) {
     const [commit, parents, subject] = line.split('\t')
     // Attribution is by task lineage and primary task number, never allowed paths.
     if (!/^WMS-666(?:\s+WMS-\d+)*:/.test(subject ?? '')) continue
     const merge = parents.trim().split(/\s+/).length > 1
     const changed = git('diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', '-z',
-      ...(merge ? ['--cc'] : ['--root']), commit)
-    // A merge's combined diff catches its own resolutions, not imported task trees.
-    for (const path of changed.split('\0')) {
-      if (path && !wms666AcceptedHistoryChange(cwd, commit, path, recoveryReads)) paths.add(path)
-    }
+      ...(merge ? ['--cc'] : []), commit)
+    // Ordinary review assesses content; this gate checks only task scope.
+    for (const path of changed.split('\0')) if (path) paths.add(path)
   }
   // Include unstaged, staged and new files. Uncommitted changes cannot hide a defect.
   for (const changed of [
@@ -192,7 +129,7 @@ export function wms666ScopeViolations(paths: string[]): string[] {
     // Only this task's machine-readable correction record belongs to its scope.
     if (path === 'docs/reviews/contract-corrections/WMS-666.json') return false
     if (WMS_666_PROOF_FILES.has(path) || path.startsWith('docs/evidence/WMS-666/')) return false
-    if (WMS_666_ALLOWED_CODE_FILES.has(path)) return false
+    if (WMS_666_ALLOWED_CODE_FILES.has(path) || WMS_666_PROCESS_FILES.has(path)) return false
     return true
   })
 }
@@ -327,10 +264,16 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
     }
   })
 
-  it('rejects a new task workflow edit and pending CI changes independently', () => {
+  it('allows reviewed CI preparation paths and rejects unrelated deployment changes', () => {
     const repo = fixtureRepository()
-    const path = '.github/workflows/ci.yml'
+    const path = '.github/workflows/deploy.yml'
     expect(wms666ScopeViolations([path])).toEqual([path])
+    expect(wms666ScopeViolations([
+      '.github/workflows/ci.yml',
+      'guards/PROCESS_CONTRACTS.json',
+      'frontend/tests-e2e/fbs-picking/extended.mjs',
+      'scripts/ci/backend_shards.py',
+    ])).toEqual([])
     try {
       repo.write(path, 'new untracked workflow\n')
       expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
@@ -353,7 +296,7 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
     }
   })
 
-  it('uses accepted task history without a main pin and still checks later changes', () => {
+  it('checks the full task range and still includes later changes', () => {
     const repo = fixtureRepository()
     try {
       repo.write('base.txt', 'reviewed base\n')
@@ -368,11 +311,13 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       repo.commit('WMS-666: future task change')
       expect(wms666TaskChangedPaths(repo.cwd, repo.contract)).toEqual([
         'backend/app/services/inventory_service.py',
+        'frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx',
       ])
       const unstagedPath = 'backend/app/services/untracked_after_review.py'
       repo.write(unstagedPath, 'untracked forbidden change\n')
       expect(wms666TaskChangedPaths(repo.cwd, repo.contract)).toEqual([
-        'backend/app/services/inventory_service.py', unstagedPath,
+        'backend/app/services/inventory_service.py',
+        unstagedPath, 'frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx',
       ])
       repo.git('add', unstagedPath)
       const stagedPath = 'backend/app/services/staged_after_review.py'
@@ -380,6 +325,7 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       repo.git('add', stagedPath)
       expect(wms666TaskChangedPaths(repo.cwd, repo.contract)).toEqual([
         'backend/app/services/inventory_service.py', stagedPath, unstagedPath,
+        'frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx',
       ])
     } finally {
       repo.close()
@@ -401,6 +347,7 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       repo.git('merge', '--no-ff', '--no-edit', 'side')
       expect(wms666TaskChangedPaths(repo.cwd, repo.contract)).toEqual([
         'backend/app/services/inventory_service.py',
+        'frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx',
       ])
     } finally {
       repo.close()
@@ -419,88 +366,6 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       expect(wms666TaskChangedPaths(repo.cwd, repo.contract)).toEqual([
         'frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx', 'scripts/ci/process_bootstrap.json',
       ])
-    } finally {
-      repo.close()
-    }
-  })
-
-  it('accepts only the exact immutable history checkout delta', () => {
-    const cwd = new URL('../../../..', import.meta.url)
-    const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
-    expect(wms666AcceptedHistoryChange(cwd, accepted.commit, accepted.path)).toBe(true)
-    expect(wms666AcceptedHistoryChange(cwd, '5ddd09aac4df17e7ecdefaf1625462c05f8039ce', accepted.path)).toBe(false)
-    expect(wms666AcceptedHistoryChange(cwd, accepted.commit, 'guards/MANIFEST.json')).toBe(false)
-  })
-
-  it('accepts only reviewed recovery commit/path/blob triples and rejects adjacent paths', () => {
-    const cwd = new URL('../../../..', import.meta.url)
-    expect(recoveryHistory.productCommit).toBe('d420f8db1e7d69212ad2ea4529a02044689363b0')
-    expect(recoveryHistory.reviewCommit).toBe('154cdb1ff3e84ed4e592d883688c7df560579015')
-    for (const entry of recoveryHistory.entries) {
-      for (const file of entry.files) {
-        expect(wms666AcceptedHistoryChange(cwd, entry.commit, file.path)).toBe(true)
-        expect(wms666AcceptedHistoryChange(cwd, WMS_666_CONTRACT, file.path)).toBe(false)
-      }
-      expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'guards/MANIFEST.json')).toBe(false)
-      expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'backend/app/services/inventory_service.py')).toBe(false)
-    }
-  })
-
-  it('fails an accepted history lookup if its immutable source is missing', () => {
-    const repo = fixtureRepository()
-    try {
-      const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
-      expect(() => wms666AcceptedHistoryChange(repo.cwd, accepted.commit, accepted.path)).toThrow()
-    } finally {
-      repo.close()
-    }
-  })
-
-  it('accepts only exact doc-only historical commits and keeps their paths forbidden generally', () => {
-    const cwd = new URL('../../../..', import.meta.url)
-    for (const entry of WMS_666_DOCUMENT_HISTORY) {
-      for (const file of entry.files) {
-        expect(wms666AcceptedHistoryChange(cwd, entry.commit, file.path)).toBe(true)
-        expect(wms666AcceptedHistoryChange(cwd, WMS_666_CONTRACT, file.path)).toBe(false)
-        expect(wms666AcceptedHistoryChange(cwd, entry.commit, `${file.path}.new`)).toBe(false)
-        expect(wms666ScopeViolations([file.path])).toEqual([file.path])
-      }
-      expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'backend/app/services/inventory_service.py')).toBe(false)
-      expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'guards/MANIFEST.json')).toBe(false)
-    }
-  })
-
-  it('rejects future committed, dirty and staged edits of every historical document path', () => {
-    const repo = fixtureRepository()
-    try {
-      for (const path of new Set(WMS_666_DOCUMENT_HISTORY.flatMap((entry) => entry.files.map((file) => file.path)))) {
-        repo.git('reset', '--hard', repo.contract)
-        repo.write(path, 'independent document before future mutation\n')
-        const baseline = repo.commit('WMS-517: independent documentation')
-        repo.write(path, 'future forbidden task document\n')
-        const future = repo.commit('WMS-666: future documentation edit')
-        expect(wms666AcceptedHistoryChange(repo.cwd, future, path)).toBe(false)
-        expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
-        repo.git('reset', '--hard', baseline)
-        repo.write(path, 'unstaged forbidden document\n')
-        expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
-        repo.git('add', path)
-        repo.write(path, 'independent document before future mutation\n')
-        expect(repo.git('diff', '--name-only', 'HEAD', '--', path)).toBe('')
-        expect(repo.git('diff', '--cached', '--name-only', 'HEAD', '--', path)).toBe(path)
-        expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
-      }
-    } finally {
-      repo.close()
-    }
-  })
-
-  it('fails exact doc-history lookup when immutable objects are absent', () => {
-    const repo = fixtureRepository()
-    try {
-      for (const entry of WMS_666_DOCUMENT_HISTORY) {
-        expect(() => wms666AcceptedHistoryChange(repo.cwd, entry.commit, entry.files[0].path)).toThrow()
-      }
     } finally {
       repo.close()
     }

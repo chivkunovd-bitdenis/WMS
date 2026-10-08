@@ -5,9 +5,13 @@ import json
 import re
 import subprocess
 import sys
+from pathlib import Path
 from urllib.parse import urlencode
 
-from scripts.ci.ci_scope import is_generated_evidence_output
+if __package__ in (None, ''):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.ci.ci_scope import is_generated_evidence_output, is_prose
 
 REQUIRED_JOBS = {"baseline", "backlog", "scope", "backend", "frontend-build", "охрана",
                  "print-regressions", "printer-windows", "wms686-mockup", "process-proof"}
@@ -119,9 +123,7 @@ def verify(get, repository, sha):
 
 
 def prose_path(path):
-    if path in {"AGENTS.md", "CLAUDE.md"} or path.startswith("docs/"):
-        return path.endswith((".md", ".rst"))
-    return path in {"README.md", "CONTRIBUTING.md"}
+    return is_prose(path) or is_generated_evidence_output(path)
 
 
 def prose_only_commit(get, root, sha):

@@ -15,6 +15,7 @@ class AnchorFixture:
         self.pr = {'number': 7, 'state': 'open', 'changed_files': 1,
                    'head': {'sha': H, 'repo': {'full_name': REPO}},
                    'base': {'sha': B, 'ref': 'etalon', 'repo': {'full_name': REPO}}, 'merge_commit_sha': M}
+        self.changed_files = ['frontend/src/app.ts']
         self.base_policy = {'version': 1, 'files': {'.github/workflows/ci.yml': '0'*64,
             '.github/workflows/deploy.yml': '1'*64, 'tests/scan.py': '2'*64},
             'suites': {'qr': {'report': 'qr.json', 'format': 'browser-json', 'exact': True, 'cases': ['first', 'next']}}}
@@ -49,7 +50,7 @@ class AnchorFixture:
                 self.pr['head']['sha'] = 'd'*40
             return copy.deepcopy(self.pr)
         if '/pulls/7/files' in route:
-            return [{'filename': 'frontend/src/app.ts'}]
+            return [{'filename': path} for path in self.changed_files]
         if '/contents/guards/PROCESS_CONTRACTS.json' in route:
             ref = parse_qs(urlparse(path).query)['ref'][0]
             if self.bootstrap and ref == B: raise ValueError('no trusted baseline policy')
@@ -78,6 +79,14 @@ class TrustedProcessCheckTests(unittest.TestCase):
         self.f = AnchorFixture()
 
     def verify(self): return self.m.verify_pr(self.f.get, REPO, 7)
+
+    def test_docs_only_classification_accepts_bounded_generated_outputs(self):
+        self.f.changed_files = [
+            'docs/evidence/WMS-666/release-1008/p2-prefix/critical-browser-full/result.json'
+        ]
+        self.assertTrue(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
+        self.f.changed_files = ['docs/evidence/WMS-704/fixture.json']
+        self.assertFalse(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
 
     def test_same_code_complete_exact_ci_is_accepted(self):
         self.assertEqual(self.verify()['head_sha'], H)

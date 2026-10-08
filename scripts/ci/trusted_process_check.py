@@ -15,6 +15,11 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlencode
 
+if __package__ in (None, ''):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.ci.ci_scope import is_generated_evidence_output, is_prose
+
 POLICY_PATH = 'guards/PROCESS_CONTRACTS.json'
 WORKFLOW_PATH = '.github/workflows/ci.yml'
 REQUIRED_JOBS = {'baseline', 'backlog', 'scope', 'backend', 'frontend-build', 'охрана',
@@ -208,9 +213,7 @@ def pr_identity(pr, repository, number):
 
 
 def is_prose_path(path):
-    if path in {'AGENTS.md', 'CLAUDE.md'} or path.startswith('docs/'):
-        return path.endswith(('.md', '.rst'))
-    return path in {'README.md', 'CONTRIBUTING.md'}
+    return is_prose(path) or is_generated_evidence_output(path)
 
 
 def pull_request_docs_only(get, root, number, expected_count):
