@@ -247,7 +247,8 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
       expect(button?.disabled, stage).toBe(false)
       if (stage === 'Подбор') {
         const headers = [...document.querySelectorAll('thead th')].map((th) => th.textContent?.trim())
-        expect(headers.slice(-3).map(value => value?.replace(/\s+/g, ''))).toEqual(['Остатоквкоробе', 'Собрать', 'Собрано'])
+        // WMS-709: владелец заменил «Собрать» (весь план в каждой строке) на «План» и «Осталось».
+        expect(headers.slice(-4).map(value => value?.replace(/\s+/g, ''))).toEqual(['План', 'Осталось', 'Остатоквкоробе', 'Собрано'])
         expect(headers).not.toContain('Цвет')
       }
       await print()
