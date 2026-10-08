@@ -1,5 +1,5 @@
 Product baseline: cedb428b5585b0214e27b390c93ef1a3665dbbbd
-Test HEAD: 201aad937ce7cb6bd243a41a4b9ea3781d7750ef
+Test HEAD: 125f1565365bcbf4ee6f4c16cbefdf38d9e54334
 Current fbs_kiz_service blob: 5e73abaca93b6e5cd14e4fdec215a79a919ffe6c
 cedb fbs_kiz_service blob: 5e73abaca93b6e5cd14e4fdec215a79a919ffe6c
 
@@ -9,8 +9,8 @@ FFF                                                                      [100%]
 =================================== FAILURES ===================================
 ____ test_taskless_printed_current_kiz_can_be_applied_without_creating_task ____
 
-async_client = <httpx.AsyncClient object at 0x115d32e40>
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x115d89480>
+async_client = <httpx.AsyncClient object at 0x115bd2e40>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x115b995b0>
 
     @pytest.mark.asyncio
     async def test_taskless_printed_current_kiz_can_be_applied_without_creating_task(
@@ -51,6 +51,8 @@ monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x115d89480>
                 ).order_by(MarkingCode.cis_code)
             )).all())
             assert len(initial_pool) == 2
+            initial_pool_ids = {code.id for code in initial_pool}
+            await session.commit()
         sent_values = _patch_wb_acceptance(monkeypatch)
         monkeypatch.setattr(
             tape.marking_svc, "require_marketplace_token", AsyncMock(return_value="test"),
@@ -104,17 +106,17 @@ monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x115d89480>
         assert applied_response.status_code == 200, applied_response.text
         applied_row = applied_response.json()[0]
 >       assert applied_row["status"] == "ok", applied_row
-E       AssertionError: {'order_id': '745365fe-13d4-4bb8-b3ad-bfb40ccc112d', 'status': 'error', 'code': 'packaging_line_not_found', 'message': 'packaging_line_not_found', ...}
+E       AssertionError: {'order_id': '816848a2-3b00-405c-aebb-1bdcb8356782', 'status': 'error', 'code': 'packaging_line_not_found', 'message': 'packaging_line_not_found', ...}
 E       assert 'error' == 'ok'
 E         
 E         - ok
 E         + error
 
-backend/tests/test_wms666_workspace_marking_pool.py:728: AssertionError
+backend/tests/test_wms666_workspace_marking_pool.py:730: AssertionError
 _______ test_taskless_manual_pool_binding_applies_without_packaging_task _______
 
-async_client = <httpx.AsyncClient object at 0x11743a190>
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x115d95bf0>
+async_client = <httpx.AsyncClient object at 0x116ce6060>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x115a51bf0>
 
     @pytest.mark.asyncio
     async def test_taskless_manual_pool_binding_applies_without_packaging_task(
@@ -160,7 +162,10 @@ monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x115d95bf0>
                 ).order_by(MarkingCode.cis_code)
             )).all())
             assert len(available_before) == 2
-        cis_code = available_before[0].cis_code
+            available_before_ids = [code.id for code in available_before]
+            available_before_values = [code.cis_code for code in available_before]
+            await session.commit()
+        cis_code = available_before_values[0]
         validation = await async_client.post(
             "/operations/fbs-orders/kiz/validate",
             headers=headers,
@@ -185,17 +190,17 @@ monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x115d95bf0>
         assert applied.status_code == 200, applied.text
         row = applied.json()[0]
 >       assert row["status"] == "ok", row
-E       AssertionError: {'order_id': '8a480acf-7c67-40e2-949c-f73a9f8e8d3f', 'status': 'error', 'code': 'packaging_line_not_found', 'message': 'packaging_line_not_found', ...}
+E       AssertionError: {'order_id': '484b3313-1107-4a9f-b5cb-1a8f0559c69f', 'status': 'error', 'code': 'packaging_line_not_found', 'message': 'packaging_line_not_found', ...}
 E       assert 'error' == 'ok'
 E         
 E         - ok
 E         + error
 
-backend/tests/test_wms666_workspace_marking_pool.py:836: AssertionError
+backend/tests/test_wms666_workspace_marking_pool.py:841: AssertionError
 ________ test_taskless_rejected_replacement_restores_previous_pool_kiz _________
 
-async_client = <httpx.AsyncClient object at 0x116b8d7f0>
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x117614150>
+async_client = <httpx.AsyncClient object at 0x1163bd910>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x116eab450>
 
     @pytest.mark.asyncio
     async def test_taskless_rejected_replacement_restores_previous_pool_kiz(
@@ -356,13 +361,13 @@ monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x117614150>
         assert response.status_code == 200, response.text
         row = response.json()[0]
 >       assert row["code"] == "meta_validation_fail", row
-E       AssertionError: {'order_id': '994fd205-a85c-41ea-aaa2-3d981fcbbd13', 'status': 'error', 'code': 'packaging_line_not_found', 'message': 'packaging_line_not_found', ...}
+E       AssertionError: {'order_id': '09fa2167-f207-4d65-8d8a-f16c4dc7cc2e', 'status': 'error', 'code': 'packaging_line_not_found', 'message': 'packaging_line_not_found', ...}
 E       assert 'packaging_line_not_found' == 'meta_validation_fail'
 E         
 E         - meta_validation_fail
 E         + packaging_line_not_found
 
-backend/tests/test_wms666_workspace_marking_pool.py:1044: AssertionError
+backend/tests/test_wms666_workspace_marking_pool.py:1049: AssertionError
 =============================== warnings summary ===============================
 backend/app/main.py:19
   /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-taskexists-no-line-contract/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
@@ -384,6 +389,6 @@ backend/app/main.py:19
 FAILED backend/tests/test_wms666_workspace_marking_pool.py::test_taskless_printed_current_kiz_can_be_applied_without_creating_task
 FAILED backend/tests/test_wms666_workspace_marking_pool.py::test_taskless_manual_pool_binding_applies_without_packaging_task
 FAILED backend/tests/test_wms666_workspace_marking_pool.py::test_taskless_rejected_replacement_restores_previous_pool_kiz
-3 failed, 6 warnings in 3.11s
+3 failed, 6 warnings in 3.49s
 
 Expected baseline RED exit code: 1
