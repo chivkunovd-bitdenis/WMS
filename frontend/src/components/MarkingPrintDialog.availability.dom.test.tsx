@@ -33,6 +33,7 @@ beforeEach(() => {
   window.localStorage.clear()
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response('{}', { status: 404 })))
   print.mockReset()
+  vi.mocked(printTapeSections).mockClear()
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
