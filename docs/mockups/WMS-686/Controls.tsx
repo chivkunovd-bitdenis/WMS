@@ -22,7 +22,7 @@ import { buildCzLabelHtml, buildTapePageCss, renderDataMatrixDataUrl } from '../
 import {
   activeShipmentId, getFbo, isBaseline, products, resetFbo, subscribeFbo,
 } from './mockApi'
-import { boxedQty, cells, isKizScan, kizFor, pickSourcesOf, productByBarcode, productById, returnSourceFor, sourceById, sources, type FboBox } from './fboModel'
+import { boxedQty, cells, isKizScan, pickSourcesOf, productByBarcode, productById, returnSourceFor, sourceById, sources, type FboBox } from './fboModel'
 
 // ─── состояние экрана макета (что подсвечено, что раскрыто, журнал демо-печати) ───
 
@@ -686,48 +686,29 @@ export function FboPassField({ shipmentId }: { shipmentId: string }) {
 
 // ─── Справочник демонстрационных кодов: сами коды нужно сканировать сканером ───
 
-type DemoScanCode = { title: string; code: string; kind: 'barcode' | 'datamatrix'; detail?: string }
+type DemoScanCode = { title: string; code: string; detail?: string }
 
 const cellScanCodes: DemoScanCode[] = [
-  { title: 'Ячейка А-1-1', code: 'LOC-A11', kind: 'barcode', detail: 'Короба INB-DEMO-001 и INB-DEMO-002' },
-  { title: 'Ячейка А-1-2', code: 'LOC-A12', kind: 'barcode', detail: 'Палета PLT-DEMO-01' },
+  { title: 'Ячейка А-1-1', code: 'LOC-A11', detail: 'Короба INB-DEMO-001 и INB-DEMO-002' },
+  { title: 'Ячейка А-1-2', code: 'LOC-A12', detail: 'Палета PLT-DEMO-01' },
 ]
 const sourceScanCodes: DemoScanCode[] = [
-  { title: 'Короб приёмки 1', code: 'INB-DEMO-001', kind: 'barcode', detail: 'Футболки, размеры 48 и 50' },
-  { title: 'Короб приёмки 2', code: 'INB-DEMO-002', kind: 'barcode', detail: 'Футболка 48 и носки' },
-  { title: 'Палета', code: 'PLT-DEMO-01', kind: 'barcode', detail: 'Ячейка А-1-2 · футболка 50' },
+  { title: 'Короб приёмки 1', code: 'INB-DEMO-001', detail: 'Футболки, размеры 48 и 50' },
+  { title: 'Короб приёмки 2', code: 'INB-DEMO-002', detail: 'Футболка 48 и носки' },
+  { title: 'Палета', code: 'PLT-DEMO-01', detail: 'Ячейка А-1-2 · футболка 50' },
 ]
 const productScanCodes: DemoScanCode[] = products.map((product) => ({
   title: `${product.sku} · размер ${product.size}`,
   code: product.barcode,
-  kind: 'barcode',
   detail: product.honestSign ? 'КИЗ можно отсканировать отдельно' : 'Без обязательного ЧЗ',
 }))
-const markingScanCodes: DemoScanCode[] = [
-  { title: 'КИЗ футболки 48 · приёмка 000041', code: kizFor(products[0], 'P1A0001'), kind: 'datamatrix' },
-  { title: 'КИЗ футболки 48 · отдельный', code: kizFor(products[0], 'P1X0001'), kind: 'datamatrix' },
-  { title: 'КИЗ футболки 50 · приёмка 000041', code: kizFor(products[1], 'P2A0001'), kind: 'datamatrix' },
-]
 
 function DemoScanCodeCard({ item }: { item: DemoScanCode }) {
-  const [image, setImage] = useState<string | null>(null)
-  useEffect(() => {
-    let current = true
-    try {
-      if (item.kind === 'barcode') setImage(renderBarcodeDataUrl(item.code, { variant: 'storageCell' }))
-      else void renderDataMatrixDataUrl(item.code).then((url) => { if (current) setImage(url) })
-        .catch(() => { if (current) setImage(null) })
-    } catch {
-      setImage(null)
-    }
-    return () => { current = false }
-  }, [item.code, item.kind])
   return (
     <Box sx={{ minWidth: 0, border: 1, borderColor: 'divider', borderRadius: 1, p: 0.75, bgcolor: 'background.paper' }}>
       <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, lineHeight: 1.25 }}>{item.title}</Typography>
-      {image ? (
-        <Box component="img" src={image} alt={`Штрихкод: ${item.title}`} sx={{ display: 'block', width: item.kind === 'datamatrix' ? 88 : '100%', height: item.kind === 'datamatrix' ? 88 : 40, objectFit: 'contain', mx: item.kind === 'datamatrix' ? 'auto' : 0, my: 0.25, imageRendering: 'pixelated' }} />
-      ) : <Box sx={{ height: 40 }} />}
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 9.5, lineHeight: 1.1 }}>Code 128</Typography>
+      <Box component="img" src={renderBarcodeDataUrl(item.code, { variant: 'storageCell' })} alt={`Штрихкод: ${item.title}`} sx={{ display: 'block', width: '100%', height: 40, objectFit: 'contain', my: 0.25, imageRendering: 'pixelated' }} />
       <Typography variant="caption" component="div" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10.5, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{item.code}</Typography>
       {item.detail ? <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.25, lineHeight: 1.2 }}>{item.detail}</Typography> : null}
     </Box>
@@ -752,7 +733,7 @@ export function DemoScanCodes() {
   const [open, setOpen] = useState(true)
   const ownBoxes = useMemo(() => fbo.boxes.filter((box) => box.shipmentId === activeShipmentId() && !box.whole), [fbo.boxes])
   if (isBaseline()) return null
-  const boxCodes: DemoScanCode[] = ownBoxes.map((box) => ({ title: `Короб отгрузки ${box.closed ? '· закрыт' : ''}`, code: box.code, kind: 'barcode' }))
+  const boxCodes: DemoScanCode[] = ownBoxes.map((box) => ({ title: `Короб отгрузки ${box.closed ? '· закрыт' : ''}`, code: box.code }))
   return (
     <>
       <Paper elevation={6} sx={{ position: 'fixed', right: 12, bottom: 76, zIndex: 2000, width: open ? 420 : 'auto', maxWidth: 'calc(100vw - 24px)', p: 1.25, opacity: 0.98 }} data-testid="demo-scan-codes">
@@ -774,7 +755,10 @@ export function DemoScanCodes() {
             <DemoScanCodeGroup title="Ячейки" items={cellScanCodes} />
             <DemoScanCodeGroup title="Короба и палета в ячейках" items={sourceScanCodes} />
             <DemoScanCodeGroup title="Товары · ШК" items={productScanCodes} />
-            <DemoScanCodeGroup title="Честный знак · КИЗ необязателен" items={markingScanCodes} />
+            <Stack direction="row" spacing={0.75} sx={{ mt: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Typography variant="caption" color="text.secondary">Коды КИЗ вынесены в отдельный крупный лист для сканирования.</Typography>
+              <Button size="small" component="a" href="/test-kiz-codes.pdf" target="_blank" rel="noreferrer">Открыть лист КИЗ (PDF)</Button>
+            </Stack>
             <DemoScanCodeGroup title="Короба отгрузки · создайте на вкладке «Упаковка»" items={boxCodes} />
             <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
               <Typography variant="caption" color="text.secondary">
