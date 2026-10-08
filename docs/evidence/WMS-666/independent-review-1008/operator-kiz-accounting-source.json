@@ -1,0 +1,37 @@
+{
+  "reviewed_head": "015355408c9f2dd55f04301b304f5f3297f8cec6",
+  "source_path": "backend/app/services/fbs_kiz_service.py",
+  "source_blob": "5e73abaca93b6e5cd14e4fdec215a79a919ffe6c",
+  "last_source_commit": "fa75678717216e54df4e85287739364e5dab0ae7",
+  "baseline": "212f19d548496fef7baf75c83204b771e304281b",
+  "helper_equal_to_deployed_baseline": true,
+  "helper_sha256": "b1519cef4bea4890c21cffaaa80d710d35b0005f71750e05bc81db32d3a6d0ab",
+  "source_finding_status": "Confirmed API-path defect: independent writer reports frozen real-API RED, source and test diff independently reviewed",
+  "flow": [
+    "API commit directly calls commit_kiz_pairs; no task creation",
+    "validate permits own current PRINTED/RESERVED binding",
+    "same current CIS commit requires _packaging_line_for_order before APPLIED/event",
+    "helper reads fulfillment or supply task line; missing context raises packaging_line_not_found"
+  ],
+  "adjacent_consumers": [
+    "new operator binding",
+    "previous binding restore",
+    "foreign printed-code occupancy fallback: absence must not bypass duplicate protection"
+  ],
+  "fix_invariants": [
+    "same marking/code identity",
+    "APPLIED ledger/source/document preserved",
+    "no pool allocation for same existing code",
+    "no stock mutation",
+    "task remains absent",
+    "existing line accounting updates retained when present"
+  ],
+  "frozen_test_commit": "84864e0e48318019474bb4c4e76b9711a69f0243",
+  "frozen_test": "backend/tests/test_wms666_workspace_marking_pool.py::test_taskless_printed_current_kiz_can_be_applied_without_creating_task",
+  "execution_provenance": "Independent testwriter execution on cedb; reviewer read immutable test diff and traced real caller, not a reviewer rerun",
+  "reported_api_result": {
+    "tape": "HTTP200; one pool CIS; fake WB accepts same value",
+    "validate": "HTTP200 {ok:true,hints:[]}",
+    "commit": "HTTP200 row status:error, code:packaging_line_not_found"
+  }
+}
