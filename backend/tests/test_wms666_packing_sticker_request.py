@@ -114,6 +114,134 @@ async def test_creation_sticker_http_releases_writer_and_persists_original_respo
 
 
 @pytest.mark.asyncio
+async def test_creation_preserves_completed_sticker_chunk_after_timeout_and_retries_missing_only(
+    async_client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy import select
+
+    from app.services import fbs_supply_service
+    from app.services.fbs_stock_publish_service import drain_background_stock_publish_tasks
+    from tests.test_fbs_supply_from_orders import (
+        _create_product,
+        _create_ready_order,
+    )
+    from tests.test_fbs_supply_from_orders import (
+        _register_ff_admin as register,
+    )
+    from tests.test_fbs_supply_from_orders import (
+        _setup_seller_with_token as setup,
+    )
+
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+    headers, suffix = await register(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant = uuid.UUID(me.json()["tenant_id"])
+    seller, warehouse, location = await setup(async_client, headers, suffix)
+    product = await _create_product(async_client, headers, seller, sku=f"chunks-{suffix}")
+    order_ids = [
+        await _create_ready_order(
+            tenant,
+            uuid.UUID(seller),
+            uuid.UUID(warehouse),
+            uuid.UUID(location),
+            product,
+            order_id=666778000 + index,
+        )
+        for index in range(101)
+    ]
+    await drain_background_stock_publish_tasks()
+    calls: list[list[int]] = []
+    second_chunk_writer_id = uuid.uuid4()
+    second_chunk_cancelled = False
+    assert fbs_supply_service.CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS == 8.0
+
+    async def stickers(client, *, api_token, order_ids, **kwargs):
+        nonlocal second_chunk_cancelled
+        calls.append(list(order_ids))
+        if len(calls) == 2:
+            # Persisting the previous chunk must not leave a writer locked
+            # while the next WB request is pending.
+            async with SessionLocal() as independent:
+                independent.add(Tenant(
+                    id=second_chunk_writer_id,
+                    name="Unrelated writer during second sticker chunk",
+                    slug=f"sticker-second-chunk-{second_chunk_writer_id.hex}",
+                ))
+                await independent.commit()
+            try:
+                # Exercise the real creation deadline after one complete WB
+                # response, not a shorter test-only timeout or provider error.
+                await asyncio.sleep(9)
+            except asyncio.CancelledError:
+                second_chunk_cancelled = True
+                raise
+        return [{
+            "orderId": wb_id,
+            "partA": "5877994",
+            "partB": str(wb_id),
+            "barcode": f"*fixture666-{wb_id}",
+            "file": base64.b64encode(PNG).decode(),
+        } for wb_id in order_ids]
+
+    monkeypatch.setattr(
+        "app.services.fbs_print_asset_service.fetch_marketplace_order_stickers", stickers
+    )
+    body = {
+        "name": "Persist each completed sticker chunk",
+        "order_ids": [str(order_id) for order_id in order_ids],
+        "planned_delivery_type": "warehouse_sc",
+        "idempotency_key": str(uuid.uuid4()),
+    }
+    response = await async_client.post(
+        "/operations/fbs-supplies/from-orders", headers=headers, json=body
+    )
+    assert response.status_code == 201, response.text
+    assert second_chunk_cancelled
+    assert [len(chunk) for chunk in calls] == [100, 1]
+    result = response.json()
+    supply_id = result["supply"]["id"]
+    assert result["supply"]["status"] == "draft"
+    assert result["supply"]["packaging_task_id"] is None
+    assert len(result["orders"]) == 101
+    completed, missing = set(calls[0]), set(calls[1])
+    assert completed.isdisjoint(missing)
+    assert completed | missing == set(range(666778000, 666778101))
+    async with SessionLocal() as independent:
+        assert await independent.get(Tenant, second_chunk_writer_id) is not None
+        saved = list((await independent.scalars(
+            select(FbsOrder).where(FbsOrder.id.in_(order_ids))
+        )).all())
+        assert len(saved) == 101
+        assert all(str(order.supply_id) == supply_id for order in saved)
+        saved_codes = {int(order.wb_order_id): order.sticker_code for order in saved}
+    assert {wb_id for wb_id, code in saved_codes.items() if code} == completed
+    for order in result["orders"]:
+        if order["wb_order_id"] in completed:
+            assert order["sticker"]["code"] == f"5877994 {order['wb_order_id']}"
+            assert order["sticker"]["asset_url"]
+        else:
+            assert order["sticker"]["code"] is None
+    completed_order = next(order for order in result["orders"] if order["wb_order_id"] in completed)
+    content = await async_client.get(completed_order["sticker"]["asset_url"], headers=headers)
+    assert content.status_code == 200 and content.content == PNG
+
+    repeated = await async_client.post(
+        "/operations/fbs-supplies/from-orders", headers=headers, json=body
+    )
+    assert repeated.status_code == 201, repeated.text
+    assert repeated.json()["supply"]["id"] == supply_id
+    assert calls[2:] == [calls[1]]
+    assert all(order["sticker"]["code"] for order in repeated.json()["orders"])
+    readback = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace", headers=headers
+    )
+    assert readback.status_code == 200, readback.text
+    assert len(readback.json()["orders"]) == 101
+    assert all(order["sticker"]["code"] for order in readback.json()["orders"])
+
+
+@pytest.mark.asyncio
 async def test_packing_request_calls_wb_and_returns_saved_sticker_content(
     async_client: httpx.AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
