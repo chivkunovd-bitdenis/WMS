@@ -93,7 +93,14 @@ const UNASSIGNED_LOCATION = 'Без ячеек'
 export function cellPickRowsOf(rows: PickRow[], objects: WarehouseObject[], cells: Cell[]): CellPickRow[] {
   const roots = new Map<string, CellPickBranch>()
   for (const row of rows) {
-    for (const place of row.places.length ? row.places : [null]) {
+    // WMS-709: у полностью подобранного товара остальные места не показываем —
+    // «Собрать» у них весь план, «Собрано 0», и строка выглядит долгом, а
+    // настоящий недобор теряется среди уже снятых штук на сортировке.
+    // Места, с которых снимали, остаются: правка и отмена работают как раньше.
+    const done = row.plan > 0 && row.left === 0
+    const places = done ? row.places.filter((place) => place.picked > 0) : row.places
+    if (done && places.length === 0) continue
+    for (const place of places.length ? places : [null]) {
       const { cell, chain } = place ? chainOf(place.holder, objects, cells) : { cell: null, chain: [] }
       const rootKey = cell ? cellRef(cell.id) : 'no-cell'
       const existingRoot = roots.get(rootKey)

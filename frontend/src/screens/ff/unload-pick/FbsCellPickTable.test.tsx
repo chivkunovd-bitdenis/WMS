@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { FbsCellPickTable } from './FbsCellPickTable'
 import { UnloadPickScreen } from './UnloadPickScreen'
-import { cellPickRowsOf, rowsOf } from './pickRows'
+import { cellPickRowsOf, pickKey, rowsOf } from './pickRows'
 import { cellRef, objRef, type Cell, type GoodsLine, type PickProduct, type WarehouseObject } from './pickStub'
 
 const cells: Cell[] = [
@@ -81,6 +81,24 @@ describe('FBS picking grouped by cell', () => {
     expect(cellPickRowsOf(withSorting, objects, [...cells, sortingCell]).flatMap((item) => (
       item.kind === 'cell' ? [item.title] : []
     ))).toEqual(['А 1', 'А 2', 'А 10', 'Без ячеек'])
+  })
+
+  it('WMS-709: hides untouched places of a fully picked product and keeps the real shortage visible', () => {
+    const sortingCell: Cell = { id: 'sorting', code: 'Без ячеек', barcode: 'Без ячеек' }
+    const allCells = [...cells, sortingCell]
+    const pickedRows = rowsOf(
+      [{ id: 'plan-a', productId: 'sku-a', plan: 1 }, { id: 'plan-b', productId: 'sku-b', plan: 1 }],
+      [
+        { id: 'a-1', productId: 'sku-a', qty: 3, holder: cellRef('c-1') },
+        { id: 'a-2', productId: 'sku-a', qty: 1, holder: cellRef('c-2') },
+        { id: 'a-sorted', productId: 'sku-a', qty: 1, holder: cellRef('sorting') },
+        { id: 'b-sorted', productId: 'sku-b', qty: 1, holder: cellRef('sorting') },
+      ],
+      objects, allCells, { [pickKey('sku-a', cellRef('c-1'))]: 1 }, products,
+    )
+    expect(cellPickRowsOf(pickedRows, objects, allCells).flatMap((item) => (
+      item.kind === 'goods' ? [`${item.row.product.id}@${item.place?.key ?? 'none'}`] : []
+    ))).toEqual([`sku-a@${cellRef('c-1')}`, `sku-b@${cellRef('sorting')}`])
   })
 
   it('keeps the existing place-specific picking action in the cell view', async () => {
