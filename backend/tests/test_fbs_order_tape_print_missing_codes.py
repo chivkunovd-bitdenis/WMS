@@ -100,7 +100,7 @@ async def test_reprint_without_code_or_requirement_still_has_nothing_to_reprint(
             AsyncMock(), uuid.uuid4(), order, SimpleNamespace(id=uuid.uuid4()),
             parse_layout({"units": [{"block": "cz", "copies": 1}]}),
             allow_partial=False, reprint=True, actor_user_id=uuid.uuid4(),
-            reprint_marking_ids=set(),
+            reprint_marking_ids=set(), document_number=None,
         )
     allocate.assert_not_awaited()
 

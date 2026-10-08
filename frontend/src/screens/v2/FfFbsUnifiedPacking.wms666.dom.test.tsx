@@ -53,6 +53,8 @@ let wbScanNeedsKiz: boolean
 let ozonLookupOrderIds: Record<string, string>
 let deferredStartSupplyIds: Set<string>
 let releaseDeferredStart: Record<string, (() => void) | undefined>
+let failedStartSupplyIds: Set<string>
+let taskMarkingAvailableBySupply: Record<string, number>
 let deferredLookupKeys: Set<string>
 let releaseDeferredLookup: Record<string, (() => void) | undefined>
 let root: Root
@@ -145,7 +147,8 @@ function packagingTask(supplyId: string) {
       return productIds.map((productId, index) => ({
         id: `${supplyId}-line-${index}`, product_id: productId, sku_code: one.product.sku,
         product_name: one.positions[index]?.name ?? one.product.name, requires_honest_sign: false,
-        packaging_instructions: '', qty_total: 1, qty_need_pack: 1, marking_available_count: 0,
+        packaging_instructions: '', qty_total: 1, qty_need_pack: 1,
+        marking_available_count: taskMarkingAvailableBySupply[supplyId] ?? 0,
       }))
     }),
   }
@@ -169,6 +172,9 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const start = path.match(/^\/operations\/fbs-supplies\/([^/]+)\/start-work$/)
   if (start) {
     const next = state[start[1]!]!
+    if (failedStartSupplyIds.has(start[1]!)) {
+      return json({ detail: { code: 'task_unavailable', message: 'Задание временно недоступно' } }, 503)
+    }
     const complete = () => {
       next.supply.packaging_task_id ??= `task-${start[1]}`
       return json(clone(next))
@@ -266,6 +272,8 @@ beforeEach(() => {
   ozonLookupOrderIds = {}
   deferredStartSupplyIds = new Set()
   releaseDeferredStart = {}
+  failedStartSupplyIds = new Set()
+  taskMarkingAvailableBySupply = {}
   deferredLookupKeys = new Set()
   releaseDeferredLookup = {}
   state = {
@@ -370,6 +378,45 @@ describe('WMS-666 C1/C2/C3: the same packing surface in every entry', () => {
     expect(calls.filter((call) => call.path.endsWith('/start-work'))).toHaveLength(1)
     await settleUntil(() => calls.filter((call) => call.path.endsWith('/scan-auto-print')).length === 2, 1_000)
     expect(calls.filter((call) => call.path.endsWith('/scan-auto-print'))).toHaveLength(2)
+  })
+})
+
+describe('WMS-666 C2: mixed-task group does not gate manual printing on a missing accounting task', () => {
+  it('uses each order current KIZ pool without substituting the group aggregate or another task line', async () => {
+    const bare = workspace('wb-new', 'wb', null as unknown as string)
+    bare.supply.status = 'assembling'
+    bare.supply.packaging_task_id = null
+    bare.orders[0]!.product.requires_honest_sign = true
+    bare.orders[0]!.metadata.required = ['sgtin']
+    Object.assign(bare.orders[0]!, { marking_available_count: 2 })
+    bare.marking_pool = { required: 1, available: 2, shortage: 0, orders_without_code: [] }
+    state['wb-new'] = bare
+    state['wb-b']!.supply.packaging_task_id = 'task-wb-b'
+    state['wb-b']!.orders[0]!.product.requires_honest_sign = true
+    state['wb-b']!.orders[0]!.metadata.required = ['sgtin']
+    taskMarkingAvailableBySupply['wb-b'] = 1
+    state['wb-b']!.marking_pool = { required: 1, available: 2, shortage: 0, orders_without_code: [] }
+    failedStartSupplyIds.add('wb-new')
+
+    await renderAssembly(['wb-new', 'wb-b'])
+    await settleUntil(() => calls.some((call) => call.path.endsWith('/start-work') && call.path.includes('/wb-new/')))
+    await settleUntil(() => document.body.textContent?.includes('Задание временно недоступно') ?? false)
+
+    expect(state['wb-new']!.supply.packaging_task_id).toBeNull()
+    expect(bare.marking_pool).toEqual({ required: 1, available: 2, shortage: 0, orders_without_code: [] })
+    expect((bare.orders[0] as typeof bare.orders[number] & { marking_available_count: number }).marking_available_count).toBe(2)
+    const bareRow = document.querySelector<HTMLElement>('[data-order-id="wb-new-order"]')!
+    const taskBackedRow = document.querySelector<HTMLElement>('[data-order-id="wb-b-order"]')!
+    expect(bareRow.textContent).toContain('2 · нужно 1')
+    expect(taskBackedRow.textContent).toContain('1 · нужно 1')
+    const print = bareRow.querySelector<HTMLButtonElement>('[aria-label="Печать ЧЗ и ШК"]')!
+    expect(print.disabled).toBe(false)
+    await act(async () => print.click())
+
+    expect(openMarkingPrint).toHaveBeenCalledTimes(1)
+    const [ctx] = openMarkingPrint.mock.calls[0]!
+    expect(ctx.markingAvailable).toBe(2)
+    expect(ctx.fbsTape).toMatchObject({ orders: [{ orderId: 'wb-new-order' }], markingShortage: 0 })
   })
 })
 
