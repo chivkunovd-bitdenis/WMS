@@ -41,7 +41,7 @@ def full_wave(paths: list[str], event: str) -> bool:
 
 def changed_paths(root: Path, base: str, head: str) -> list[str]:
     return subprocess.check_output(
-        ["git", "-C", str(root), "diff", "--name-only", "-z", f"{base}...{head}"]
+        ["git", "-C", str(root), "diff", "--no-renames", "--name-only", "-z", f"{base}...{head}"]
     ).decode().split("\0")[:-1]
 
 

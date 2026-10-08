@@ -56,7 +56,8 @@ class AnchorFixture:
                 self.pr['head']['sha'] = 'd'*40
             return copy.deepcopy(self.pr)
         if '/pulls/7/files' in route:
-            return [{'filename': path} for path in self.changed_files]
+            return [path if isinstance(path, dict) else {'filename': path}
+                    for path in self.changed_files]
         if '/contents/guards/PROCESS_CONTRACTS.json' in route:
             ref = parse_qs(urlparse(path).query)['ref'][0]
             if self.bootstrap and ref == B: raise ValueError('no trusted baseline policy')
@@ -98,6 +99,23 @@ class TrustedProcessCheckTests(unittest.TestCase):
         ]
         self.assertTrue(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
         self.f.changed_files = ['docs/evidence/WMS-704/fixture.json']
+        self.assertFalse(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
+
+    def test_renames_require_both_paths_to_be_docs_only(self):
+        self.f.changed_files = [{'filename': 'docs/removed-runtime.md',
+                                 'previous_filename': 'backend/app/services/runtime.py',
+                                 'status': 'renamed'}]
+        self.assertFalse(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
+        self.f.changed_files = [{'filename': 'docs/new-name.md',
+                                 'previous_filename': 'docs/old-name.md',
+                                 'status': 'renamed'}]
+        self.assertTrue(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
+        self.f.changed_files = [
+            {'filename': 'docs/middle.md', 'previous_filename': 'docs/old.md', 'status': 'renamed'},
+            {'filename': 'docs/new.md', 'previous_filename': 'docs/middle.md', 'status': 'renamed'},
+        ]
+        self.assertTrue(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 2))
+        self.f.changed_files = [{'filename': 'docs/renamed.md', 'status': 'renamed'}]
         self.assertFalse(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
 
     def test_same_code_complete_exact_ci_is_accepted(self):

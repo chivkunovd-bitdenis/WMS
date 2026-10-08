@@ -235,20 +235,36 @@ def is_prose_path(path):
 def pull_request_docs_only(get, root, number, expected_count):
     if type(expected_count) is not int or expected_count <= 0 or expected_count > 3000:
         return False
-    paths, seen = [], set()
+    paths, current_paths, previous_paths = [], set(), set()
+    file_count = 0
     for page in range(1, 31):
         batch = get(f'{root}/pulls/{number}/files?{urlencode({"per_page": 100, "page": page})}')
         if not isinstance(batch, list) or not batch:
             break
         for row in batch:
             path = row.get('filename') if isinstance(row, dict) else None
-            if not isinstance(path, str) or not path or path in seen:
+            if not isinstance(path, str) or not path:
                 raise ValueError('Pull request changed-file list is malformed or duplicated')
-            seen.add(path)
+            previous = row.get('previous_filename')
+            if row.get('status') == 'renamed' and previous is None:
+                return False
+            if previous is not None and (
+                not isinstance(previous, str) or not previous or previous == path
+            ):
+                raise ValueError('Pull request rename source is malformed')
+            if path in current_paths:
+                raise ValueError('Pull request changed-file list is malformed or duplicated')
+            current_paths.add(path)
             paths.append(path)
-        if len(paths) >= expected_count:
+            if previous is not None:
+                if previous in previous_paths:
+                    raise ValueError('Pull request rename source is duplicated')
+                previous_paths.add(previous)
+                paths.append(previous)
+            file_count += 1
+        if file_count >= expected_count:
             break
-    if len(paths) != expected_count:
+    if file_count != expected_count:
         raise ValueError('Pull request changed-file list is incomplete')
     return all(is_prose_path(path) for path in paths)
 
