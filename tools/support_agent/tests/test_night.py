@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from support_agent.hotfix import HotfixRunner
+from support_agent.hotfix import HotfixRunner, StepFailed
 from support_agent.llm import ExecResult, LlmError, LlmUnavailable
 from support_agent.night import NightRunner
 from support_agent.pipeline import ThreadPool
@@ -877,7 +877,9 @@ def test_tester_touching_product_code_stops_task(env: Any, tmp_path: Path) -> No
     assert "backend/app/svc.py" in task["reason"]
 
 
-def test_modified_contract_stops_before_tests_review_or_publication(env: Any, tmp_path: Path) -> None:
+def test_modified_contract_source_runs_and_continues_to_independent_review(
+    env: Any, tmp_path: Path,
+) -> None:
     runner, tid, root = _tester_repo(env, tmp_path)
     test = root / "backend/tests/test_frozen.py"
     test.write_text("def test_rule(): assert 2 == 2\n")
@@ -885,12 +887,92 @@ def test_modified_contract_stops_before_tests_review_or_publication(env: Any, tm
     task = state["tasks"]["WMS-700"]
     task.update(step="checks", tests=["backend/tests/test_frozen.py"])
     task["contract_hashes"] = runner._hashes(task, task["tests"])
-    test.write_text("def test_rule(): assert True\n")
+    test.write_text("def test_rule(): assert 2 == 2  # fixture/source correction\n")
     runner._save(tid, state)
     runner.development(tid)
     saved = runner._state(tid)["tasks"]["WMS-700"]
-    assert saved["status"] == "stopped" and saved["contract_changed"] is True
-    assert "контракт" in saved["reason"] and not env.llm.calls
+    assert saved["step"] == "review" and saved["contract_changed"] is True
+    assert any(call[0] == "test" and "tests/test_frozen.py" in call[1]
+               for call in runner.hotfix.calls)
+    assert not env.llm.calls
+
+
+def test_contract_rename_runs_destination_and_missing_test_needs_executable_replacement(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    old_path = "backend/tests/test_old.py"
+    new_path = "backend/tests/test_new.py"
+    (root / old_path).unlink(missing_ok=True)
+    (root / new_path).write_text("def test_rule(): assert True\n")
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    task.update(tests=[old_path], contract_commit="a" * 40,
+                contract_hashes={old_path: "old-digest"})
+    original_git = runner.hotfix.git
+
+    def renamed_git(*args: str, cwd: str | Path | None = None) -> str:
+        if args[:2] == ("log", "--first-parent"):
+            return "b" * 40
+        if args[:2] == ("diff-tree", "--no-commit-id"):
+            return f"R100\t{old_path}\t{new_path}\n"
+        return original_git(*args, cwd=cwd)
+
+    runner.hotfix.git = renamed_git  # type: ignore[method-assign]
+    runner._refresh_contract_tests(task)
+    runner._assert_contract(task)
+    assert task["tests"] == [new_path]
+    assert task["contract_changed"] is True
+    assert runner._run_contract(task) == []
+    assert any(call[0] == "test" and "tests/test_new.py" in call[1]
+               for call in runner.hotfix.calls)
+
+    fixture_path = "backend/tests/fixtures/sample.json"
+    (root / fixture_path).parent.mkdir(parents=True, exist_ok=True)
+    (root / fixture_path).write_text("{}\n")
+
+    def fixture_git(*args: str, cwd: str | Path | None = None) -> str:
+        if args[:2] == ("log", "--first-parent"):
+            return "b" * 40
+        if args[:2] == ("diff-tree", "--no-commit-id"):
+            return f"A\t{fixture_path}\n"
+        return original_git(*args, cwd=cwd)
+
+    runner.hotfix.git = fixture_git  # type: ignore[method-assign]
+    runner._refresh_contract_tests(task)
+    runner._assert_contract(task)
+    assert task["contract_paths_changed"] is True and task["contract_changed"] is True
+    assert task["tests"] == [new_path]
+
+    def deleted_git(*args: str, cwd: str | Path | None = None) -> str:
+        if args[:2] == ("log", "--first-parent"):
+            return "b" * 40
+        if args[:2] == ("diff-tree", "--no-commit-id"):
+            return f"D\t{new_path}\nA\tbackend/tests/conftest.py\n"
+        return original_git(*args, cwd=cwd)
+
+    runner.hotfix.git = deleted_git  # type: ignore[method-assign]
+    with pytest.raises(StepFailed, match="без замены"):
+        runner._refresh_contract_tests(task)
+
+
+def test_independent_review_is_prompted_to_check_changed_test_behavior(env: Any, tmp_path: Path) -> None:
+    runner, tid, _ = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="review", contract_commit="c" * 40, contract_changed=True)
+    runner._save(tid, state)
+
+    def review(prompt: str, _: dict[str, Any]) -> dict[str, Any]:
+        assert "исходный коммит тестового контракта" in prompt
+        assert "изменение тестов/фикстур/имён: да" in prompt
+        assert "отдельно изучи diff contract_commit" in prompt
+        assert "исходное обязательное поведение сохранилось" in prompt
+        return {"accepted": True, "summary": "контракт и поведение проверены"}
+
+    env.llm.on("review", "Проверь реализацию", review)
+    runner.development(tid)
+    saved = runner._state(tid)["tasks"]["WMS-700"]
+    assert saved["step"] == "acceptance"
 
 
 def test_review_acceptance_document_then_ci_on_exact_commit(env: Any, tmp_path: Path) -> None:
