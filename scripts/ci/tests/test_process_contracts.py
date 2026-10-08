@@ -7,9 +7,42 @@ import hashlib
 import importlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+PROCESS_POLICY = REPO_ROOT / 'guards/PROCESS_CONTRACTS.json'
+WMS666_C13_TEST_FILE = 'frontend/src/screens/v2/wms666ChangeScope.test.ts'
+WMS666_C13_CASES = (
+    'src/screens/v2/wms666ChangeScope.test.ts::rejects migrations, backend entities, stock logic and guard registry changes',
+    'src/screens/v2/wms666ChangeScope.test.ts::keeps the actual task diff inside the approved packing UI/test/document boundary',
+    'src/screens/v2/wms666ChangeScope.test.ts::accepts exact task proofs and rejects adjacent proof and correction namespaces',
+    'src/screens/v2/wms666ChangeScope.test.ts::reads advancing task history: foreign backend passes, new task backend or guards fail',
+    'src/screens/v2/wms666ChangeScope.test.ts::checks task merge resolutions while ignoring an imported foreign backend tree',
+    'src/screens/v2/wms666ChangeScope.test.ts::rejects a new task workflow edit and pending CI changes independently',
+    'src/screens/v2/wms666ChangeScope.test.ts::accepts only reviewed recovery commit/path/blob triples and rejects adjacent paths',
+    'src/screens/v2/wms666ChangeScope.test.ts::accepts only the exact immutable history checkout delta',
+    'src/screens/v2/wms666ChangeScope.test.ts::fails an accepted history lookup if its immutable source is missing',
+    'src/screens/v2/wms666ChangeScope.test.ts::accepts only exact doc-only historical commits and keeps their paths forbidden generally',
+    'src/screens/v2/wms666ChangeScope.test.ts::records only the five exact RC7 service blob pairs and each commit full path list',
+    'src/screens/v2/wms666ChangeScope.test.ts::rejects RC7 history when commit, path, blob, mode, or complete path list differs',
+    'src/screens/v2/wms666ChangeScope.test.ts::accepts only the exact WMS-517 financial fixture correction history',
+    'src/screens/v2/wms666ChangeScope.test.ts::rejects adjacent WMS-517 correction commits and mutated exact-history entries',
+    'src/screens/v2/wms666ChangeScope.test.ts::rejects future WMS-517 path commits and dirty, staged, or untracked changes',
+    'src/screens/v2/wms666ChangeScope.test.ts::fails closed when an exact RC7 source commit cannot be resolved',
+    'src/screens/v2/wms666ChangeScope.test.ts::rejects future committed, dirty and staged edits of every historical document path',
+    'src/screens/v2/wms666ChangeScope.test.ts::fails exact doc-history lookup when immutable objects are absent',
+)
+WMS652_C71_CASES = (
+    'scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_c71_final_binding_uses_exact_739_and_a_new_saved_acceptance_record',
+    'scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_c71_final_binding_rejects_mismatch_self_selecting_and_unreviewed_sources',
+    'scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_c71_final_binding_requires_a_new_saved_independent_acceptance_record',
+    'scripts.ci.tests.test_process_contracts.ProcessContractTests::test_c71_all_wms666_c13_cases_are_protected_and_registered_without_suite_changes',
+    'scripts.ci.tests.test_process_contracts.ProcessContractTests::test_c71_frontend_receipt_rejects_missing_skipped_or_misattributed_c13_cases',
+)
 
 
 def junit(rows):
@@ -99,6 +132,63 @@ class ProcessContractTests(unittest.TestCase):
         path.write_text(json.dumps(report))
         with self.assertRaises(ValueError):
             self.m.verify_reports(self.policy, self.root)
+
+    def test_c71_all_wms666_c13_cases_are_protected_and_registered_without_suite_changes(self):
+        manifest = json.loads(PROCESS_POLICY.read_text())
+        source_path = REPO_ROOT / WMS666_C13_TEST_FILE
+        source = source_path.read_bytes()
+        actual_names = re.findall(r"^\s*it\('([^']+)'", source.decode(), re.MULTILINE)
+        actual_cases = tuple('src/screens/v2/wms666ChangeScope.test.ts::' + name
+                             for name in actual_names)
+        self.assertEqual(actual_cases, WMS666_C13_CASES,
+                         'the C13 file must retain the exact 18 frozen case names')
+
+        self.assertIn(WMS666_C13_TEST_FILE, manifest['files'])
+        self.assertEqual(manifest['files'][WMS666_C13_TEST_FILE],
+                         hashlib.sha256(source).hexdigest())
+        suite = manifest['suites']['frontend-fbs']
+        self.assertEqual({key: suite[key] for key in ('report', 'format', 'exact')},
+                         {'report': 'frontend-all.json', 'format': 'vitest', 'exact': False})
+        self.assertEqual(len(suite['cases']), len(set(suite['cases'])))
+        self.assertTrue(set(WMS666_C13_CASES).issubset(suite['cases']))
+        self.assertEqual(len(manifest['files']), 283)
+        self.assertEqual(len(manifest['suites']), 29)
+        self.assertEqual(len(suite['cases']), 355)
+        self.assertTrue(set(WMS652_C71_CASES).issubset(manifest['suites']['ci-shards']['cases']))
+        self.assertEqual(sum(len(item['cases']) for item in manifest['suites'].values()), 1742)
+
+    def test_c71_frontend_receipt_rejects_missing_skipped_or_misattributed_c13_cases(self):
+        policy = {'version': 1, 'files': {}, 'suites': {
+            'frontend-fbs': {'report': 'frontend-all.json', 'format': 'vitest',
+                             'exact': False, 'cases': list(WMS666_C13_CASES)}}}
+        test_results = [{'name': '/runner/work/WMS/frontend/' + WMS666_C13_TEST_FILE,
+                         'assertionResults': [
+                             {'fullName': case.split('::', 1)[1], 'status': 'passed'}
+                             for case in WMS666_C13_CASES]}]
+        report = {'success': True, 'testResults': test_results}
+        report_path = self.root / 'frontend-all.json'
+        report_path.write_text(json.dumps(report))
+        self.assertEqual(self.m.verify_reports(policy, self.root),
+                         {'frontend-fbs': list(WMS666_C13_CASES)})
+
+        mutations = {}
+        missing = copy.deepcopy(report)
+        missing['testResults'][0]['assertionResults'].pop()
+        mutations['missing-case'] = missing
+        skipped = copy.deepcopy(report)
+        skipped['testResults'][0]['assertionResults'][0]['status'] = 'pending'
+        mutations['skipped-case'] = skipped
+        wrong_case = copy.deepcopy(report)
+        wrong_case['testResults'][0]['assertionResults'][0]['fullName'] = 'unrelated case'
+        mutations['wrong-case'] = wrong_case
+        wrong_file = copy.deepcopy(report)
+        wrong_file['testResults'][0]['name'] = '/runner/work/WMS/frontend/src/screens/v2/other.test.ts'
+        mutations['wrong-file'] = wrong_file
+        for name, candidate in mutations.items():
+            with self.subTest(mutation=name):
+                report_path.write_text(json.dumps(candidate))
+                with self.assertRaises(ValueError):
+                    self.m.verify_reports(policy, self.root)
 
     def test_no_external_paths_or_empty_policy(self):
         for report in ['../picking.xml', '/tmp/picking.xml', 'a/../../picking.xml']:
