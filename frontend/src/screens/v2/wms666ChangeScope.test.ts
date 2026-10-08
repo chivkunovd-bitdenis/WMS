@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -324,7 +324,7 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
     const repo = fixtureRepository()
     try {
       repo.write('base.txt', 'reviewed base\n')
-      const base = repo.commit('WMS-652: reviewed base')
+      repo.commit('WMS-652: reviewed base')
       repo.write('backend/app/services/inventory_service.py', 'reviewed historical backend change\n')
       repo.commit('WMS-666: source history before review')
       repo.write('frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx', 'reviewed source\n')
