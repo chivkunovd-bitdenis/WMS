@@ -234,6 +234,7 @@ jobs:
           python ../scripts/ci/backend_shards.py run
           --index ${{ matrix.index }} --output "$RUNNER_TEMP/backend-shard"
           -- -n auto
+          -vv --tb=short -o faulthandler_timeout=120
           --ignore=tests/test_wms662_batch_handoff_lock_order.py
           --ignore=tests/test_wms662_batch_handoff_steady_state.py
       - uses: actions/upload-artifact@v4
