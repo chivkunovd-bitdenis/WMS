@@ -1,0 +1,180 @@
+{
+  "classification": "real Wildberries client HTTP serialization to local synthetic loopback receiver; not live WB",
+  "product_sha": "c1e394325ef62c5b5508786f461cd20c1edd69f9",
+  "fixture": {
+    "supply_id": "ed8b4591-8432-48a9-aefe-30ba2be6ddcf",
+    "order_id": "0b78a561-c97e-45a3-8558-699ac98fafd0",
+    "wb_order_id": 800392
+  },
+  "before": {
+    "markings": [],
+    "available_codes": [
+      "010460043993125321KIZTAPE0000000000",
+      "010460043993125321KIZTAPE0000000001",
+      "010460043993125321KIZTAPE0000000002",
+      "010460043993125321KIZTAPE0000000003"
+    ]
+  },
+  "validation": {
+    "ok": true,
+    "hints": []
+  },
+  "first_commit": [
+    {
+      "order_id": "0b78a561-c97e-45a3-8558-699ac98fafd0",
+      "status": "ok",
+      "code": "ok",
+      "message": "ok",
+      "newly_bound": true,
+      "bound_kiz": "010460043993125321KIZTAPE0000000000"
+    }
+  ],
+  "replacement_validation": {
+    "ok": true,
+    "hints": []
+  },
+  "rejected_commit": [
+    {
+      "order_id": "0b78a561-c97e-45a3-8558-699ac98fafd0",
+      "status": "error",
+      "code": "meta_validation_fail",
+      "message": "synthetic local WB rejection",
+      "newly_bound": false
+    }
+  ],
+  "after": {
+    "markings": [
+      {
+        "id": "6fad7192-0d26-40d3-bb28-d19b28a91fff",
+        "order_id": "0b78a561-c97e-45a3-8558-699ac98fafd0",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "code_id": "d5506471-3610-4839-a8ce-4bd34993f11a",
+        "status": "accepted"
+      }
+    ],
+    "codes": [
+      {
+        "id": "f1e041ae-3ff5-4d67-90ce-ae1dee23e83e",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "af78d692-8fa4-46f0-936d-a26ac02d9516",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "28b9bdf8-dd93-4b55-8250-2accff87d95f",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      },
+      {
+        "id": "d5506471-3610-4839-a8ce-4bd34993f11a",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "applied"
+      }
+    ],
+    "stock": {
+      "balances": [
+        {
+          "id": "66e1063a-493d-45e9-a227-aae5400b86ab",
+          "product_id": "de577197-7e37-4401-862b-e0e73f1ba69e",
+          "quantity": 3,
+          "quantity_unpacked": 3,
+          "quantity_packed": 0
+        }
+      ],
+      "reservations": [
+        {
+          "id": "3bd33b78-fa3d-48d5-97db-db682cd5a415",
+          "fbs_order_id": "4236cf37-f1fe-49db-b30b-8e4b33e9cfe4",
+          "product_id": "de577197-7e37-4401-862b-e0e73f1ba69e",
+          "warehouse_id": "100cb4cb-2016-400c-8c80-747388e6dad4",
+          "quantity": 1
+        },
+        {
+          "id": "848d81a8-f86f-4993-a685-ffc34eed1359",
+          "fbs_order_id": "0b78a561-c97e-45a3-8558-699ac98fafd0",
+          "product_id": "de577197-7e37-4401-862b-e0e73f1ba69e",
+          "warehouse_id": "100cb4cb-2016-400c-8c80-747388e6dad4",
+          "quantity": 1
+        }
+      ],
+      "inventory_movement_count": 0
+    }
+  },
+  "receiver": {
+    "requests": [
+      {
+        "method": "PUT",
+        "path": "/api/v3/orders/800392/meta/sgtin",
+        "orderId": 800392,
+        "authorizationPresent": true,
+        "body": {
+          "sgtins": [
+            "010460043993125321KIZTAPE0000000000"
+          ]
+        },
+        "status": 204
+      },
+      {
+        "method": "POST",
+        "path": "/api/marketplace/v3/orders/meta",
+        "orderIds": [
+          800392
+        ],
+        "authorizationPresent": true,
+        "body": {
+          "orders": [
+            800392
+          ]
+        },
+        "status": 200
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v3/orders/800392/meta/sgtin",
+        "orderId": 800392,
+        "authorizationPresent": true,
+        "body": {
+          "sgtins": [
+            "010460043993125321KIZTAPE0000000001"
+          ]
+        },
+        "status": 409
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v3/orders/800392/meta/sgtin",
+        "orderId": 800392,
+        "authorizationPresent": true,
+        "body": {
+          "sgtins": [
+            "010460043993125321KIZTAPE0000000000"
+          ]
+        },
+        "status": 204
+      }
+    ],
+    "sgtinByOrder": {
+      "800392": "010460043993125321KIZTAPE0000000000"
+    }
+  },
+  "assertions": {
+    "same_exact_cis_restored_in_wms": true,
+    "same_exact_cis_restored_in_receiver": true,
+    "put_body_order": [
+      "010460043993125321KIZTAPE0000000000",
+      "010460043993125321KIZTAPE0000000001",
+      "010460043993125321KIZTAPE0000000000"
+    ],
+    "put_status_order": [
+      204,
+      409,
+      204
+    ],
+    "delete_count": 0,
+    "stock_unchanged": true,
+    "auth_header_present_only": true
+  }
+}

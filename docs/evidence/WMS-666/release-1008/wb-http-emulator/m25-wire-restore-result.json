@@ -1,0 +1,61 @@
+{
+  "phase": "first-bind",
+  "fixture": {
+    "supply_id": "c5b6c2b2-6002-4216-97b5-ee4dad061d7f",
+    "order_id": "10753b15-16a3-4bc9-ab3c-edf97c5b2ee0",
+    "wb_order_id": 800392
+  },
+  "available_codes": [
+    "010460043993125321KIZTAPE0000000000",
+    "010460043993125321KIZTAPE0000000001",
+    "010460043993125321KIZTAPE0000000002",
+    "010460043993125321KIZTAPE0000000003"
+  ],
+  "validation": {
+    "ok": true,
+    "hints": []
+  },
+  "first_commit": [
+    {
+      "order_id": "10753b15-16a3-4bc9-ab3c-edf97c5b2ee0",
+      "status": "ok",
+      "code": "ok",
+      "message": "ok",
+      "newly_bound": true,
+      "bound_kiz": "010460043993125321KIZTAPE0000000000"
+    }
+  ],
+  "receiver": {
+    "requests": [
+      {
+        "method": "PUT",
+        "path": "/api/v3/orders/800392/meta/sgtin",
+        "orderId": 800392,
+        "authorizationPresent": true,
+        "body": {
+          "sgtins": [
+            "010460043993125321KIZTAPE0000000000"
+          ]
+        },
+        "status": 204
+      },
+      {
+        "method": "POST",
+        "path": "/api/marketplace/v3/orders/meta",
+        "orderIds": [
+          800392
+        ],
+        "authorizationPresent": true,
+        "body": {
+          "orders": [
+            800392
+          ]
+        },
+        "status": 200
+      }
+    ],
+    "sgtinByOrder": {
+      "800392": "010460043993125321KIZTAPE0000000000"
+    }
+  }
+}
