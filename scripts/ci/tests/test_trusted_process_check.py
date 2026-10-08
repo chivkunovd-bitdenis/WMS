@@ -110,6 +110,11 @@ class TrustedProcessCheckTests(unittest.TestCase):
                                  'previous_filename': 'docs/old-name.md',
                                  'status': 'renamed'}]
         self.assertTrue(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
+        self.f.changed_files = [
+            {'filename': 'docs/middle.md', 'previous_filename': 'docs/old.md', 'status': 'renamed'},
+            {'filename': 'docs/new.md', 'previous_filename': 'docs/middle.md', 'status': 'renamed'},
+        ]
+        self.assertTrue(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 2))
         self.f.changed_files = [{'filename': 'docs/renamed.md', 'status': 'renamed'}]
         self.assertFalse(self.m.pull_request_docs_only(self.f.get, f'repos/{REPO}', 7, 1))
 
