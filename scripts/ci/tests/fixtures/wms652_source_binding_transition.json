@@ -8,6 +8,8 @@
     "98978e667bbc305cc08a9b541016fef06686388e",
     "10c018092ab6f76928a54115eb824a64adc637be",
     "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
+    "7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b",
+    "d420f8db1e7d69212ad2ea4529a02044689363b0",
     "ffb524e2950cfb250993ad4db3b0f394ca55f735"
   ],
   "final_reviewed_source": "ffb524e2950cfb250993ad4db3b0f394ca55f735",
@@ -35,7 +37,6 @@
   "frozen_source": "ffb524e2950cfb250993ad4db3b0f394ca55f735",
   "independent_acceptance_record": "a9fe9577ba25f5d18f6e96be59574fcf6b6fbbaa",
   "independent_review_verdict": "ACCEPT",
-  "final_independent_review_report": "docs/evidence/WMS-666/independent-review-1008/final-product-acceptance-ffb524e.md",
   "original_independent_review_commit": "033a5bcedaa6c680947d0c9ff411ec328d9574d1",
   "owner_authorized_targeted_correction": {
     "path": "docs/evidence/WMS-652/batch-receipt-path-correction-20261007/README.md",
@@ -44,5 +45,20 @@
     "repeat_independent_review": false,
     "scope": "sole new batch receipt path; source release authorized after completed whole-package review, original FAIL retained",
     "product_scope": "unchanged P independently confirmed in completed review; status describes product freeze, not a new SOURCE reviewer PASS"
-  }
+  },
+  "previous_final_binding": {
+    "final_reviewed_source": "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
+    "frozen_source": "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
+    "independent_acceptance_record": "0d8b163dca564e5e80623223f42dc713e47e849f",
+    "independent_review_verdict": "FAIL"
+  },
+  "owner_authorized_recovery": {
+    "product_commit": "d420f8db1e7d69212ad2ea4529a02044689363b0",
+    "base_production_commit": "212f19d548496fef7baf75c83204b771e304281b",
+    "fixture_commit": "b9b1a83ee943523cec795de021862fa10ce8f04b",
+    "acceptance_commit": "154cdb1ff3e84ed4e592d883688c7df560579015",
+    "acceptance_path": "docs/reviews/2026-10-07-day-audit/recovery-p2-source-review.md",
+    "scope": "WMS-666/689 recovery and WMS-693-698; product and exact fixtures accepted, release requires CI and deployed-source readback"
+  },
+  "final_independent_review_report": "docs/evidence/WMS-666/independent-review-1008/final-product-acceptance-ffb524e.md"
 }

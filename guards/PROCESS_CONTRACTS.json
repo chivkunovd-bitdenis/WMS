@@ -223,7 +223,7 @@
     "scripts/ops/tests/wms517-sold-kiz-filter.test.cjs": "f42323a96029cee237928b51221ea9b5837f485ccbb155111c40fe661e48c1f5",
     "tools/print-agent/test_wms_print_direct.py": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
     "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
-    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "4f940d83e97bf22bfabdd3daa5b847eebe441e035a923c65c318548e2df0fdeb",
+    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "cc476a5cb9290ca1097db6fb6282b5c7dbaa801b5300220a6f6a2eccb21583c2",
     "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json": "baed9c233340bbd3c84a6963d2e69d063946514911e9079276b8c8fdb3319fbd",
     "docs/mockups/WMS-686/model.test.ts": "66d78f86881eb501b78f67df3a0f044a06bab6d7aac44648e135a14613eda7f1",
     "scripts/ci/promote_guards.py": "5c1ef28abcada5c2491cf5399ba9964756cdc1d50a1c99a2598fdedabb0efcc5",
