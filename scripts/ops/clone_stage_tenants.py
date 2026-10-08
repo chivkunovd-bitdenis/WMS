@@ -392,36 +392,37 @@ async def apply_snapshot(envelope: dict[str, Any]) -> None:
     for tenant in rows["tenants"]:
         stocked = {r["product_id"] for r in rows.get("inventory_balances", [])
                    if r["tenant_id"] == tenant["id"] and r.get("quantity", 0) > 0}
-        candidates = [r for r in rows.get("products", [])
-                      if r["tenant_id"] == tenant["id"] and r.get("seller_id")
-                      and r["id"] in stocked][:3]
-        if not candidates:
-            candidates = [r for r in rows.get("products", [])
-                          if r["tenant_id"] == tenant["id"] and r.get("seller_id")][:1]
-        if not candidates:
+        products_by_seller: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for product in rows.get("products", []):
+            if product["tenant_id"] == tenant["id"] and product.get("seller_id"):
+                products_by_seller[product["seller_id"]].append(product)
+        if not products_by_seller:
             raise CloneError("No seller-owned product for synthetic marking")
-        for product in candidates:
+        for seller_id, products in products_by_seller.items():
             pool_id = str(uuid.uuid4())
             rows["marking_pools"].append({
-                "id": pool_id, "tenant_id": tenant["id"], "seller_id": product["seller_id"],
+                "id": pool_id, "tenant_id": tenant["id"], "seller_id": seller_id,
                 "gtin": "00000000000000", "title": "ТЕСТ — не настоящие КИЗы",})
-            rows["marking_pool_products"].append({
-                "id": str(uuid.uuid4()), "tenant_id": tenant["id"],
-                "pool_id": pool_id, "product_id": product["id"],})
+            linked = [product for product in products if product["id"] in stocked] or products[:1]
+            for product in linked:
+                rows["marking_pool_products"].append({
+                    "id": str(uuid.uuid4()), "tenant_id": tenant["id"],
+                    "pool_id": pool_id, "product_id": product["id"],})
             for _ in range(10):
                 serial = "TEST" + uuid.uuid4().hex[:9]
                 cis = "010000000000000021" + serial + "\x1d91TEST\x1d92NOTREAL"
                 pdf = build_datamatrix_label_pdf(cis)
                 rows["marking_codes"].append({
                     "id": str(uuid.uuid4()), "tenant_id": tenant["id"],
-                    "seller_id": product["seller_id"], "pool_id": pool_id,
-                    "product_id": product["id"], "cis_code": cis,
-                    "source": "pool", "gtin": "00000000000000", "serial": serial,
-                    "crypto_tail": "91TEST\x1d92NOTREAL", "status": "available",
-                    "label_artifact_pdf": "\\x" + pdf.hex(), "label_artifact_required": True,})
+                    "seller_id": seller_id, "pool_id": pool_id, "product_id": None,
+                    "cis_code": cis, "source": "pool", "gtin": "00000000000000",
+                    "serial": serial, "crypto_tail": "91TEST\x1d92NOTREAL",
+                    "status": "available", "label_artifact_pdf": "\\x" + pdf.hex(),
+                    "label_artifact_required": True,})
     order, deferred = preflight(snapshot["schema"], rows)
     async with engine.begin() as conn:
         await conn.execute(text("SELECT pg_advisory_xact_lock(70520261008)"))
+        await conn.execute(text("SELECT set_config('wms.document_event_writer', 'application', true)"))
         target_schema = (await conn.execute(text(SCHEMA_SQL))).scalar_one()
         source_schema = snapshot["schema"]
         if target_schema["revision"] != source_schema["revision"]:
