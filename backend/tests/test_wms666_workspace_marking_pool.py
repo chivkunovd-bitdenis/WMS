@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -29,6 +29,7 @@ from app.models.marking_code import (
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.services import fbs_order_tape_print_service as tape
+from app.services.wildberries_errors import MetaValidationFailItem, WildberriesBusinessError
 from tests.test_fbs_kiz import _patch_wb_acceptance
 from tests.test_fbs_order_tape_concurrency import stock_snapshot
 from tests.test_fbs_picking import (
@@ -658,6 +659,20 @@ async def test_taskless_printed_current_kiz_can_be_applied_without_creating_task
         order_count=1,
         pool_count=2,
     )
+    document_number = f"WMS666-APPLY-{suffix[-8:]}"
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        supply.document_number = document_number
+        initial_pool = list((await session.scalars(
+            select(MarkingCode).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.seller_id == seller_id,
+                MarkingCode.product_id == product_id,
+                MarkingCode.status == STATUS_AVAILABLE,
+            ).order_by(MarkingCode.cis_code)
+        )).all())
+        assert len(initial_pool) == 2
     sent_values = _patch_wb_acceptance(monkeypatch)
     monkeypatch.setattr(
         tape.marking_svc, "require_marketplace_token", AsyncMock(return_value="test"),
@@ -723,7 +738,9 @@ async def test_taskless_printed_current_kiz_can_be_applied_without_creating_task
                 MarkingCodeEvent.event_type == EVENT_APPLIED,
             )
         )).all())
-        assert supply is not None and supply.packaging_task_id is None
+        assert supply is not None
+        assert supply.packaging_task_id is None
+        assert supply.document_number == document_number
         assert code is not None and code.status == "applied"
         assert marking is not None
         assert marking.order_id == order_ids[0]
@@ -732,6 +749,337 @@ async def test_taskless_printed_current_kiz_can_be_applied_without_creating_task
         assert len(events) == 1
         assert events[0].packaging_task_id is None
         assert events[0].packaging_task_line_id is None
-        assert events[0].document_number is None
+        assert events[0].document_number == document_number
         assert events[0].meta_json == '{"source_process": "packing_fbs_print"}'
+        available_after = list((await session.scalars(
+            select(MarkingCode).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.seller_id == seller_id,
+                MarkingCode.product_id == product_id,
+                MarkingCode.status == STATUS_AVAILABLE,
+            )
+        )).all())
+        assert len(available_after) == 1
+        assert available_after[0].id in {item.id for item in initial_pool}
+        assert available_after[0].id != code_id
+    assert await stock_snapshot() == before_stock
+
+
+@pytest.mark.asyncio
+async def test_taskless_manual_pool_binding_applies_without_packaging_task(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix,
+    )
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"wms666-taskless-manual-{suffix[-8:]}",
+        barcode=f"2307{suffix[-9:]}",
+    )
+    supply_id, order_ids = await _bare_supply_with_pool(
+        async_client,
+        headers=headers,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        location_id=location_id,
+        product_id=product_id,
+        suffix=f"m{suffix}",
+        order_count=1,
+        pool_count=2,
+    )
+    document_number = f"WMS666-MANUAL-{suffix[-8:]}"
+    sent_values = _patch_wb_acceptance(monkeypatch)
+    monkeypatch.setattr(
+        tape.marking_svc, "require_marketplace_token", AsyncMock(return_value="test"),
+    )
+    before_stock = await stock_snapshot()
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        supply.document_number = document_number
+        available_before = list((await session.scalars(
+            select(MarkingCode).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.seller_id == seller_id,
+                MarkingCode.product_id == product_id,
+                MarkingCode.status == STATUS_AVAILABLE,
+            ).order_by(MarkingCode.cis_code)
+        )).all())
+        assert len(available_before) == 2
+    cis_code = available_before[0].cis_code
+    validation = await async_client.post(
+        "/operations/fbs-orders/kiz/validate",
+        headers=headers,
+        json={"order_id": str(order_ids[0]), "value": cis_code},
+    )
+    assert validation.status_code == 200, validation.text
+    assert validation.json() == {"ok": True, "hints": []}
+
+    applied = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={
+            "idempotency_key": f"wms666-manual-apply-{suffix}",
+            "pairs": [{
+                "order_id": str(order_ids[0]),
+                "value": cis_code,
+                "confirmed": False,
+            }],
+        },
+    )
+
+    assert applied.status_code == 200, applied.text
+    row = applied.json()[0]
+    assert row["status"] == "ok", row
+    assert row["newly_bound"] is True
+    assert row["bound_kiz"] == cis_code
+    assert sent_values == {700001: cis_code}
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        order_markings = list((await session.scalars(
+            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_ids[0])
+        )).all())
+        applied_code = await session.scalar(
+            select(MarkingCode).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.cis_code == cis_code,
+            )
+        )
+        assert supply is not None
+        assert supply.packaging_task_id is None
+        assert supply.document_number == document_number
+        assert len(order_markings) == 1
+        marking = order_markings[0]
+        assert marking.value == cis_code
+        assert marking.meta_status == META_STATUS_ACCEPTED
+        assert marking.marking_code_id is not None
+        assert applied_code is not None
+        assert marking.marking_code_id == applied_code.id
+        assert applied_code.status == "applied"
+        events = list((await session.scalars(
+            select(MarkingCodeEvent).where(
+                MarkingCodeEvent.code_id == applied_code.id,
+                MarkingCodeEvent.event_type == EVENT_APPLIED,
+            )
+        )).all())
+        assert len(events) == 1
+        assert events[0].document_number == document_number
+        assert events[0].packaging_task_id is None
+        assert events[0].packaging_task_line_id is None
+        assert events[0].meta_json == '{"source_process": "packing_fbs_print"}'
+        available_after = list((await session.scalars(
+            select(MarkingCode).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.seller_id == seller_id,
+                MarkingCode.product_id == product_id,
+                MarkingCode.status == STATUS_AVAILABLE,
+            )
+        )).all())
+        assert len(available_after) == 1
+        assert available_after[0].id == available_before[1].id
+    assert await stock_snapshot() == before_stock
+
+
+@pytest.mark.asyncio
+async def test_taskless_rejected_replacement_restores_previous_pool_kiz(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix,
+    )
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"wms666-taskless-restore-{suffix[-8:]}",
+        barcode=f"2308{suffix[-9:]}",
+    )
+    supply_id, order_ids = await _bare_supply_with_pool(
+        async_client,
+        headers=headers,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        location_id=location_id,
+        product_id=product_id,
+        suffix=f"r{suffix}",
+        order_count=1,
+        pool_count=2,
+    )
+    document_number = f"WMS666-RESTORE-{suffix[-8:]}"
+    old_value = ""
+    wb_value: dict[str, str | None] = {"value": None}
+    calls: list[tuple[str, str | None]] = []
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        order = await session.get(FbsOrder, order_ids[0])
+        assert supply is not None and order is not None
+        supply.document_number = document_number
+        available = list((await session.scalars(
+            select(MarkingCode).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.seller_id == seller_id,
+                MarkingCode.product_id == product_id,
+                MarkingCode.status == STATUS_AVAILABLE,
+            ).order_by(MarkingCode.cis_code)
+        )).all())
+        assert len(available) == 2
+        old_code, replacement_code = available
+        replacement_value = replacement_code.cis_code
+        old_code_value = old_code.cis_code
+        old_value = old_code_value
+        wb_value["value"] = old_value
+        old_code.status = "applied"
+        old_code.applied_at = datetime.now(UTC)
+        previous_marking = FbsOrderMarking(
+            order_id=order.id,
+            tenant_id=tenant_id,
+            kind=MARKING_KIND_SGTIN,
+            value=old_value,
+            source="pool",
+            check_status=CHECK_STATUS_OK,
+            meta_status=META_STATUS_ACCEPTED,
+            marking_code_id=old_code.id,
+        )
+        session.add_all([
+            previous_marking,
+            MarkingCodeEvent(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                code_id=old_code.id,
+                event_type=EVENT_APPLIED,
+                document_number=document_number,
+                meta_json='{"source_process": "packing_fbs_print"}',
+            ),
+        ])
+        await session.commit()
+        old_code_id = old_code.id
+        replacement_code_id = replacement_code.id
+        previous_marking_id = previous_marking.id
+
+    async def fake_delete(
+        client: object,
+        *,
+        api_token: str,
+        order_id: int,
+        key: str,
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        del client, api_token, order_id, key, marketplace_api_base
+        calls.append(("delete", wb_value["value"]))
+        wb_value["value"] = None
+
+    async def reject_new_put(
+        client: object,
+        *,
+        api_token: str,
+        order_id: int,
+        kind: str,
+        value: str,
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        del client, api_token, kind, marketplace_api_base
+        calls.append(("put_new", value))
+        raise WildberriesBusinessError(
+            "meta_validation_fail",
+            status_code=409,
+            meta_validation=[MetaValidationFailItem(
+                order_id=order_id,
+                key="sgtin",
+                value=value,
+                decision="invalid",
+                reason="synthetic WB rejection",
+            )],
+        )
+
+    async def restore_old_put(
+        client: object,
+        *,
+        api_token: str,
+        order_id: int,
+        kind: str,
+        value: str,
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        del client, api_token, order_id, kind, marketplace_api_base
+        calls.append(("restore_old", value))
+        wb_value["value"] = value
+
+    monkeypatch.setattr(
+        tape.marking_svc, "require_marketplace_token", AsyncMock(return_value="test"),
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_kiz_service.delete_marketplace_order_meta", fake_delete,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.put_marketplace_order_meta", reject_new_put,
+    )
+    monkeypatch.setattr("app.services.fbs_kiz_service.put_marketplace_order_meta", restore_old_put)
+    before_stock = await stock_snapshot()
+
+    validation = await async_client.post(
+        "/operations/fbs-orders/kiz/validate",
+        headers=headers,
+        json={"order_id": str(order_ids[0]), "value": replacement_value},
+    )
+    assert validation.status_code == 200, validation.text
+    assert validation.json() == {"ok": True, "hints": []}
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={
+            "idempotency_key": f"wms666-taskless-restore-{suffix}",
+            "pairs": [{
+                "order_id": str(order_ids[0]),
+                "value": replacement_value,
+                "confirmed": True,
+            }],
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    row = response.json()[0]
+    assert row["code"] == "meta_validation_fail", row
+    assert calls == [
+        ("delete", old_value),
+        ("put_new", replacement_value),
+        ("delete", None),
+        ("restore_old", old_value),
+    ]
+    assert wb_value["value"] == old_value
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        old_code = await session.get(MarkingCode, old_code_id)
+        new_code = await session.get(MarkingCode, replacement_code_id)
+        current = await session.get(FbsOrderMarking, previous_marking_id)
+        markings = list((await session.scalars(
+            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_ids[0])
+        )).all())
+        old_events = list((await session.scalars(
+            select(MarkingCodeEvent).where(
+                MarkingCodeEvent.code_id == old_code_id,
+                MarkingCodeEvent.event_type == EVENT_APPLIED,
+            )
+        )).all())
+        new_bindings = list((await session.scalars(
+            select(FbsOrderMarking).where(FbsOrderMarking.marking_code_id == replacement_code_id)
+        )).all())
+        assert supply is not None and supply.packaging_task_id is None
+        assert supply.document_number == document_number
+        assert old_code is not None and old_code.status == "applied"
+        assert new_code is not None and new_code.status == STATUS_AVAILABLE
+        assert current is not None
+        assert current.order_id == order_ids[0]
+        assert current.value == old_value
+        assert current.marking_code_id == old_code_id
+        assert current.meta_status == META_STATUS_ACCEPTED
+        assert markings == [current]
+        assert not new_bindings
+        assert len(old_events) == 1
+        assert old_events[0].document_number == document_number
+        assert old_events[0].packaging_task_id is None
+        assert old_events[0].packaging_task_line_id is None
+        assert old_events[0].meta_json == '{"source_process": "packing_fbs_print"}'
     assert await stock_snapshot() == before_stock
