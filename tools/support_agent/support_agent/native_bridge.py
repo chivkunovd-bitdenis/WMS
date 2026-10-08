@@ -26,13 +26,21 @@ class NativeBridge:
         self.journal = CaseJournal(self.store, archive_root(cfg))
 
     def _handling_rules(self) -> str:
-        return Path(__file__).with_name("agent_instructions.md").read_text(encoding="utf-8").split("## Макеты, работа и выпуск", 1)[0]
+        rules = Path(__file__).with_name("agent_instructions.md").read_text(encoding="utf-8").split("## Макеты, работа и выпуск", 1)[0]
+        if self.store.kv_get("native_owner_only", False):
+            rules = ("ТЕКУЩЕЕ РАСПОРЯЖЕНИЕ ВЛАДЕЛЬЦА: только сбор, смысловой разбор "
+                     "и карточки/обратная связь владельцу. Никаких сообщений, вопросов "
+                     "или файлов клиентам. Не менять данные WMS, не запускать разработку "
+                     "и выпуск. Новые сообщения объединять с существующими обращениями "
+                     "по смыслу; не переоткрывать старые решённые вопросы.\n\n" + rules)
+        return rules
 
     def status(self) -> dict[str, Any]:
         return {"handling_rules": self._handling_rules(), "paused": bool(self.store.kv_get("native_paused", True)),
                 "ready": bool(self.store.kv_get("native_ready", False)),
                 "moderator_thread_id": self.cfg.agent.moderator_thread_id,
                 "client_replies_enabled": self.cfg.agent.client_replies_enabled,
+                "owner_only": bool(self.store.kv_get("native_owner_only", False)),
                 "history_root": str(self.journal.root),
                 "latest_message_id": self.store.row("SELECT coalesce(max(id),0) n FROM messages")["n"],
                 "latest_edit_id": self.store.row("SELECT coalesce(max(id),0) n FROM message_revisions")["n"],
@@ -131,6 +139,9 @@ class NativeBridge:
              file_path: str | None = None,
              topic_id: str | int | None = None,
              message_kind: str = "answer") -> dict[str, Any]:
+        if (chat_id != self.cfg.telegram.owner_chat_id
+                and self.store.kv_get("native_owner_only", False)):
+            raise ValueError("Client sending is blocked by owner; owner-only analysis is active")
         agent = self._delivery()
         from .telegram import (
             flush_outbox,

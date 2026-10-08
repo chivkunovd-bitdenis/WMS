@@ -427,6 +427,11 @@ def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | Non
         # An explicit bridge action must never drain older queued messages.
         if only_ids is not None and int(item['id']) not in only_ids:
             continue
+        # The owner's current restriction also covers explicit native actions,
+        # scoped sends, files and previously queued replies. Leave intents pending.
+        if (item['chat_id'] != cfg.telegram.owner_chat_id
+                and store.kv_get('native_owner_only', False)):
+            continue
         explicit_send = (explicit_native_action and only_ids is not None
                          and item['key'].startswith('native-send:'))
         scoped_send = allow_scoped_client_replies and only_ids is not None
