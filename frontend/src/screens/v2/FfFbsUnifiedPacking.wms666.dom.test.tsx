@@ -57,6 +57,10 @@ let failedStartSupplyIds: Set<string>
 let taskMarkingAvailableBySupply: Record<string, number>
 let deferredLookupKeys: Set<string>
 let releaseDeferredLookup: Record<string, (() => void) | undefined>
+let deferredKizValidation = false
+let releaseDeferredKizValidation: (() => void) | undefined
+let kizValidationFailure: { code: string; message: string } | null = null
+let exhaustedScanSupplies: Set<string>
 let root: Root
 let host: HTMLDivElement
 const originalFetch = globalThis.fetch
@@ -190,12 +194,16 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const scan = path.match(/^\/operations\/fbs-supplies\/([^/]+)\/scan-auto-print$/)
   if (scan) {
     const supplyId = scan[1]!
-    const barcode = (body as { barcode?: string } | null)?.barcode
-    if (!supplyId.startsWith('wb') || barcode !== WB_BARCODE) {
+    const payload = body as { barcode?: string; order_id?: string } | null
+    const barcode = payload?.barcode
+    if (exhaustedScanSupplies.has(supplyId) && barcode === WB_BARCODE) {
+      return json({ detail: { code: 'scan_product_exhausted', message: 'Для товара больше нет доступных заказов' } }, 409)
+    }
+    if (!supplyId.startsWith('wb') || (barcode !== WB_BARCODE && !barcode?.startsWith('order:'))) {
       return json({ detail: { code: 'scan_product_not_found', message: 'Товар не найден' } }, 404)
     }
-    const queuedOrderId = wbScanOrderQueue[supplyId]?.shift()
-    const selectedOrder = state[supplyId]!.orders.find((one) => one.id === queuedOrderId)
+    const queuedOrderId = barcode === WB_BARCODE ? wbScanOrderQueue[supplyId]?.shift() : undefined
+    const selectedOrder = state[supplyId]!.orders.find((one) => one.id === payload?.order_id || one.id === queuedOrderId)
       ?? state[supplyId]!.orders[0]!
     return json({
       scan_id: `scan-${calls.length}`, order_id: selectedOrder.id, wb_order_id: selectedOrder.wb_order_id,
@@ -210,6 +218,25 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
         has_label_artifact: false, order_product_id: null,
       }] : [], shortage: 0, order_errors: [],
     })
+  }
+
+  if (path === '/operations/fbs-orders/kiz/validate') {
+    if (deferredKizValidation) {
+      return new Promise<Response>((resolve) => {
+        releaseDeferredKizValidation = () => resolve(json({ valid: true, hints: [] }))
+      })
+    }
+    if (kizValidationFailure) {
+      return json({ detail: kizValidationFailure }, 400)
+    }
+    return json({ valid: true, hints: [] })
+  }
+  if (path === '/operations/fbs-orders/kiz/commit') {
+    const pair = (body as { pairs: Array<{ order_id: string; value: string }> }).pairs[0]!
+    return json([{ order_id: pair.order_id, status: 'ok', code: 'ok', bound_kiz: pair.value }])
+  }
+  if (/^\/operations\/fbs-supplies\/[^/]+\/scan-auto-print\/[^/]+\/cancel$/.test(path)) {
+    return new Response(null, { status: 204 })
   }
 
   if (path === '/operations/fbs-orders/kiz/lookup') {
@@ -276,6 +303,10 @@ beforeEach(() => {
   taskMarkingAvailableBySupply = {}
   deferredLookupKeys = new Set()
   releaseDeferredLookup = {}
+  deferredKizValidation = false
+  releaseDeferredKizValidation = undefined
+  kizValidationFailure = null
+  exhaustedScanSupplies = new Set()
   state = {
     'wb-a': workspace('wb-a', 'wb'),
     'wb-b': workspace('wb-b', 'wb'),
@@ -727,5 +758,100 @@ describe('WMS-666 third review regressions: exact Ozon position identity', () =>
     expect(calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a'))).toHaveLength(1)
     expect(selectedStateVisible()).toBe(true)
     expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')).toHaveLength(0)
+  })
+})
+
+describe('WMS-666 permanent ordinary-row scan recovery guards', () => {
+  const enterRowValue = async (orderId: string, value: string) => {
+    const input = document.querySelector<HTMLInputElement>(
+      `[data-order-id="${orderId}"] [data-testid="fbs-kiz-row-input"]`,
+    )
+    expect(input).not.toBeNull()
+    await act(async () => { input!.focus() })
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, value)
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    // Flush the controlled input update before Enter reads its value.
+    expect(input!.value).toBe(value)
+    await act(async () => {
+      input!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    })
+  }
+
+  const prepareRequiredKizOrder = (supplyId: string) => {
+    const selected = state[supplyId]!.orders[0]!
+    selected.product.requires_honest_sign = true
+    selected.metadata.required = ['sgtin']
+  }
+
+  it('shows the ordinary row validation rejection and makes no commit or print', async () => {
+    prepareRequiredKizOrder('wb-a')
+    saveFbsScanPrintPreferences(TOKEN, { printQr: true, printChz: false, reprintChz: false })
+    kizValidationFailure = { code: 'not_a_kiz', message: 'КИЗ не прошёл проверку' }
+    await renderSupply('wb-a')
+
+    await enterRowValue('wb-a-order', 'INVALID-CIS')
+    await settleUntil(() => calls.some((call) => call.path === '/operations/fbs-orders/kiz/validate'))
+    await settleUntil(() => document.querySelector('[role="alert"]')?.textContent?.includes('КИЗ не прошёл проверку') === true)
+
+    const validations = calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')
+    expect(validations).toHaveLength(1)
+    expect(validations[0]?.body).toEqual({ order_id: 'wb-a-order', value: 'INVALID-CIS' })
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/commit')).toHaveLength(0)
+    expect(dispatchPreparedQr).not.toHaveBeenCalled()
+    expect(calls.filter((call) => /\/print-(?:claim|started)$/.test(call.path))).toHaveLength(0)
+    const visibleError = document.querySelector('[role="alert"]')
+    expect(visibleError?.textContent).toContain('КИЗ не прошёл проверку')
+  })
+
+  it('queues Escape behind an accepted row validation, finishes that intent, then routes the next scan to B', async () => {
+    prepareRequiredKizOrder('wb-a')
+    const nextOrder = order('wb-a', 'wb')
+    nextOrder.id = 'wb-b-order'
+    nextOrder.wb_order_id = 666002
+    nextOrder.product.id = 'wb-a-product-b'
+    nextOrder.product.name = 'Футболка WB — заказ B'
+    nextOrder.sticker.code = '666002 0001'
+    state['wb-a']!.orders.push(nextOrder as typeof state['wb-a']['orders'][number])
+    saveFbsScanPrintPreferences(TOKEN, { printQr: true, printChz: false, reprintChz: false })
+    deferredKizValidation = true
+    wbScanOrderQueue['wb-a'] = ['wb-b-order']
+    await renderSupply('wb-a')
+
+    await enterRowValue('wb-a-order', '01A-WMS666-VALID-KIZ')
+    await settleUntil(() => calls.some((call) => call.path === '/operations/fbs-orders/kiz/validate'))
+    const validation = calls.find((call) => call.path === '/operations/fbs-orders/kiz/validate')
+    expect(validation?.body).toEqual({ order_id: 'wb-a-order', value: '01A-WMS666-VALID-KIZ' })
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')).toHaveLength(1)
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/commit')).toHaveLength(0)
+    expect(dispatchPreparedQr).not.toHaveBeenCalled()
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    })
+    expect(calls.filter((call) => call.path.endsWith('/cancel'))).toHaveLength(0)
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/commit')).toHaveLength(0)
+
+    deferredKizValidation = false
+    await act(async () => { releaseDeferredKizValidation?.() })
+    await settleUntil(() => calls.some((call) => call.method === 'POST' && call.path.includes('/lines/') && call.path.endsWith('/pack')))
+    await settleUntil(() => calls.filter((call) => call.path.endsWith('/cancel')).length > 0, 200)
+
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/commit')).toHaveLength(1)
+    expect(calls.filter((call) => call.path.endsWith('/cancel'))).toHaveLength(0)
+    expect(dispatchPreparedQr).toHaveBeenCalledTimes(1)
+    expect(calls.some((call) => call.method === 'POST' && call.path.includes('/lines/') && call.path.endsWith('/pack'))).toBe(true)
+
+    physicalScan(WB_BARCODE)
+    await settleUntil(() => calls.filter((call) => call.path.endsWith('/scan-auto-print')).length >= 2)
+    await settleUntil(() => calls.some((call) => call.method === 'POST' && call.path.includes('/lines/') && call.path.endsWith('/pack')
+      && call.body && (call.body as { order_id?: string }).order_id === 'wb-b-order'))
+
+    expect(calls.some((call) => call.method === 'POST' && call.path.includes('/lines/') && call.path.endsWith('/pack')
+      && (call.body as { order_id?: string } | null)?.order_id === 'wb-b-order')).toBe(true)
+    expect(dispatchPreparedQr).toHaveBeenCalledTimes(2)
+    expect(document.querySelector('[data-testid="fbs-kiz-scan-error"]')?.textContent ?? '').toBe('')
   })
 })
