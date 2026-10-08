@@ -58,6 +58,7 @@ from app.models.marking_code import (
     MarkingCodeEvent,
     MarkingPoolProduct,
 )
+from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.product_barcode import ProductBarcode
 from app.services import fbs_kiz_service as fbs_kiz_svc
@@ -336,6 +337,36 @@ def _release_code(code: MarkingCode) -> None:
     внешний остаётся applied и может быть привязан заново, печатный остаётся printed.
     """
     code.marketplace_unload_line_id = None
+
+
+async def _release_codes(
+    session: AsyncSession, request_id: uuid.UUID, codes: Sequence[MarkingCode]
+) -> None:
+    """Снять привязку кодов к строкам этой отгрузки (R18, R20).
+
+    Код, перенесённый миграцией WMS-686, помимо строки отгрузки хранит старую привязку
+    к строке задания упаковки ЭТОЙ ЖЕ отгрузки. Она тоже снимается (после проверки,
+    что строка задания принадлежит заданию этой отгрузки), иначе код навсегда остаётся
+    «занятым» и его нельзя привязать заново. Статус кода и строки задания не меняются.
+    """
+    task_line_ids = list(
+        {code.packaging_task_line_id for code in codes if code.packaging_task_line_id is not None}
+    )
+    own_task_lines: set[uuid.UUID] = set()
+    for batch in chunked(task_line_ids, ID_IN_BATCH_SIZE):
+        rows = await session.scalars(
+            select(PackagingTaskLine.id)
+            .join(PackagingTask, PackagingTask.id == PackagingTaskLine.task_id)
+            .where(
+                PackagingTaskLine.id.in_(batch),
+                PackagingTask.marketplace_unload_request_id == request_id,
+            )
+        )
+        own_task_lines.update(rows.all())
+    for code in codes:
+        _release_code(code)
+        if code.packaging_task_line_id in own_task_lines:
+            code.packaging_task_line_id = None
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -652,7 +683,7 @@ async def remove_marking_code(
     if locked.marketplace_unload_line_id not in line_ids:
         await session.rollback()
         return False
-    _release_code(locked)
+    await _release_codes(session, request_id, [locked])
     await session.commit()
     return True
 
@@ -712,7 +743,7 @@ async def unlink_excess_codes(
     removed: list[UnlinkedCode] = []
     for code in ordered[:excess]:
         removed.append(UnlinkedCode(code.id, code.cis_code, code.product_id))
-        _release_code(code)
+    await _release_codes(session, request_id, ordered[:excess])
     logger.info(
         "marketplace unload %s product %s: unlinked %d KIZ above picked %d",
         request_id,
@@ -749,9 +780,8 @@ async def unlink_all_codes(
                 .with_for_update()
             )
         ).all()
-        for code in codes:
-            _release_code(code)
-            total += 1
+        await _release_codes(session, request_id, codes)
+        total += len(codes)
     return total
 
 
@@ -811,10 +841,19 @@ async def _issue_replay(
             select(MarkingCode).where(MarkingCode.tenant_id == tenant_id, MarkingCode.id.in_(batch))
         )
         by_id.update({code.id: code for code in rows.all()})
-    codes = [by_id[code_id] for code_id in code_ids if code_id in by_id]
-    # Код мог быть отвязан ✕ после выдачи: повтор возвращает то, что выдано сейчас
-    # привязанным к строке, а не новые коды.
-    codes = [code for code in codes if code.marketplace_unload_line_id is not None]
+    # Повтор возвращает ровно то, что было выдано. Если хоть один выданный код уже не
+    # привязан к исходной строке (отвязан ✕ или занят другой отгрузкой), результат
+    # изменился: ничего не печатаем и новых кодов не выдаём.
+    original_line = next(
+        (ln for ln in req.lines if str(ln.product_id) == str(request_payload.get("product_id"))),
+        None,
+    )
+    if original_line is None or any(
+        code_id not in by_id or by_id[code_id].marketplace_unload_line_id != original_line.id
+        for code_id in code_ids
+    ):
+        raise MarketplaceUnloadKizError("issue_result_changed")
+    codes = [by_id[code_id] for code_id in code_ids]
     items = await _build_items(session, tenant_id, req.document_number, codes)
     return IssueResult(items=items, shortage=int(saved.get("shortage") or 0))
 
@@ -949,12 +988,12 @@ async def issue_marking_codes(
     }
     await session.commit()
 
-    rows = await session.scalars(
-        select(MarkingCode).where(
-            MarkingCode.tenant_id == tenant_id, MarkingCode.id.in_(issued_ids)
+    by_id: dict[uuid.UUID, MarkingCode] = {}
+    for batch in chunked(issued_ids, ID_IN_BATCH_SIZE):
+        rows = await session.scalars(
+            select(MarkingCode).where(MarkingCode.tenant_id == tenant_id, MarkingCode.id.in_(batch))
         )
-    )
-    by_id = {code.id: code for code in rows.all()}
+        by_id.update({code.id: code for code in rows.all()})
     codes = [by_id[code_id] for code_id in issued_ids if code_id in by_id]
     items = await _build_items(session, tenant_id, req.document_number, codes)
     return IssueResult(items=items, shortage=shortage)

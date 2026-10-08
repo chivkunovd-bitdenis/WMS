@@ -131,19 +131,6 @@ def enter_collecting_if_needed(req: MarketplaceUnloadRequest) -> None:
         req.status = STATUS_COLLECTING
 
 
-async def _sync_packaging_task_for_unload(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    request_id: uuid.UUID,
-) -> None:
-    req = await get_request(session, tenant_id, request_id)
-    if req is None or req.status not in PACKAGING_SYNC_STATUSES:
-        return
-    from app.services import packaging_task_service as pkg_svc
-
-    await pkg_svc.ensure_task_for_unload(session, tenant_id, request_id)
-
-
 def _request_audit_fields(req: MarketplaceUnloadRequest) -> dict[str, object]:
     return {
         "request_id": req.id,
@@ -700,7 +687,6 @@ async def add_line(
         req.ff_modified = True
     await session.commit()
     await session.refresh(line, attribute_names=["product"])
-    await _sync_packaging_task_for_unload(session, tenant_id, request_id)
     return line
 
 
@@ -756,7 +742,6 @@ async def replace_lines(
             )
         )
     await session.commit()
-    await _sync_packaging_task_for_unload(session, tenant_id, request_id)
     r2 = await get_request(session, tenant_id, request_id)
     assert r2 is not None
     return r2
@@ -1326,4 +1311,3 @@ async def delete_line(
         raise MarketplaceUnloadError("line_not_found")
     await session.delete(line)
     await session.commit()
-    await _sync_packaging_task_for_unload(session, tenant_id, request_id)

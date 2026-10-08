@@ -656,17 +656,12 @@ async def _detail_with_packaging(
     *,
     warehouse_name: str,
     seller_name: str | None,
-    sync_packaging: bool = False,
     seller_plan_only: bool = False,
 ) -> MarketplaceUnloadRequestDetailOut:
     linked: LinkedPackagingTaskOut | None = None
     if not seller_plan_only:
-        progress = await pkg_svc.progress_for_unload(
-            session,
-            tenant_id,
-            r.id,
-            sync_from_pick=sync_packaging and r.status in ("confirmed", "collecting", "shipped"),
-        )
+        # WMS-686 D0.3: задание упаковки FBO — рудимент, при чтении карточки не пересчитывается.
+        progress = await pkg_svc.progress_for_unload(session, tenant_id, r.id)
         if progress is not None:
             linked = _linked_packaging_out(progress)
     return _detail_out(
@@ -978,7 +973,6 @@ async def get_marketplace_unload(
         r,
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
-        sync_packaging=True,
         seller_plan_only=_seller_plan_only(user),
     )
 

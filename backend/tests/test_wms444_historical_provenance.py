@@ -181,7 +181,6 @@ async def test_historical_partial_removal_preserves_ready_then_bills_new_work(db
 
     line = await _task_line(db_session, tenant.id, task.id)
     assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (1, 1)
-    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (1, 0)
     box_line = await db_session.get(MarketplaceUnloadBoxLine, historical_box.id)
     allocation = (
         await db_session.execute(
@@ -210,11 +209,9 @@ async def test_historical_partial_removal_preserves_ready_then_bills_new_work(db
         )
     ).one()
     assert tuple(map(int, balance)) == (1, 0)
-
-    completed = await pkg_svc.complete_task(
-        db_session, tenant.id, task.id, acting_user_id=actor.id
-    )
-    assert (completed.billing_units_packed, completed.billing_earned_kopecks) == (1, 700)
+    # WMS-686 D0.3: задание упаковки FBO — рудимент, подбор и укладка его не пересчитывают
+    # (строка задания выше осталась как была), поэтому «биллинг по пересчитанному заданию»
+    # после удаления исторической единицы здесь больше не проверяется.
 
 
 @pytest.mark.asyncio
@@ -242,8 +239,6 @@ async def test_historical_removal_to_zero_does_not_revive_on_recollect(db_sessio
         actor_user_id=actor.id,
     )
     line = await _task_line(db_session, tenant.id, task.id)
-    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (1, 0)
-    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (1, 0)
 
     await collect_svc.remove_from_box(
         db_session,
@@ -255,8 +250,6 @@ async def test_historical_removal_to_zero_does_not_revive_on_recollect(db_sessio
         actor_user_id=actor.id,
     )
     line = await _task_line(db_session, tenant.id, task.id)
-    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (0, 0)
-    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (0, 0)
 
     await collect_svc.collect_into_box(
         db_session,
@@ -339,7 +332,6 @@ async def test_pick_set_trims_only_uncovered_historical_box_units(db_session) ->
     assert box_line is not None
     assert (box_line.quantity, box_line.quantity_source_known) == (2, 1)
     assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (1, 1)
-    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (1, 0)
 
     await collect_svc.set_pick_allocation(
         db_session,
@@ -351,8 +343,6 @@ async def test_pick_set_trims_only_uncovered_historical_box_units(db_session) ->
         actor_user_id=actor.id,
     )
     line = await _task_line(db_session, tenant.id, task.id)
-    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (0, 0)
-    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (0, 0)
     assert (
         await db_session.scalar(
             select(func.count())
@@ -417,7 +407,7 @@ async def test_pick_set_keeps_boxed_coverage_and_other_known_source(db_session) 
         product,
         historical_location,
         request,
-        task,
+        _task,
         _task_line_before,
         box,
         _historical_box,
@@ -472,14 +462,11 @@ async def test_pick_set_keeps_boxed_coverage_and_other_known_source(db_session) 
             )
         )
     ).scalar_one()
-    line = await _task_line(db_session, tenant.id, task.id)
     assert (box_line.quantity, box_line.quantity_packed, box_line.quantity_source_known) == (
         2,
         1,
         1,
     )
-    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (2, 0)
-    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (1, 0)
 
     # A second reduction removes only the final old unknown unit. The packed
     # allocation/box line remains until its own absolute quantity is cleared.
@@ -500,14 +487,11 @@ async def test_pick_set_keeps_boxed_coverage_and_other_known_source(db_session) 
             )
         )
     ).scalar_one()
-    line = await _task_line(db_session, tenant.id, task.id)
     assert (box_line.quantity, box_line.quantity_packed, box_line.quantity_source_known) == (
         1,
         1,
         1,
     )
-    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (1, 0)
-    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (0, 0)
 
     await collect_svc.set_pick_allocation(
         db_session,
@@ -518,9 +502,6 @@ async def test_pick_set_keeps_boxed_coverage_and_other_known_source(db_session) 
         quantity=0,
         actor_user_id=actor.id,
     )
-    line = await _task_line(db_session, tenant.id, task.id)
-    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (0, 0)
-    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (0, 0)
     assert (
         await db_session.scalar(
             select(func.count())
@@ -548,7 +529,7 @@ async def test_pick_set_trims_unknown_box_units_not_covered_by_unpacked_pick(db_
         product,
         location,
         request,
-        task,
+        _task,
         _task_line_before,
         _box,
         historical_box,
@@ -593,9 +574,6 @@ async def test_pick_set_trims_unknown_box_units_not_covered_by_unpacked_pick(db_
     assert box_line is not None and box_line.quantity == 1
     assert allocation.quantity == 2
     assert int(balance) == 1
-    line = await _task_line(db_session, tenant.id, task.id)
-    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (1, 0)
-    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (1, 0)
 
 
 async def _source_location(
@@ -639,7 +617,7 @@ async def test_pick_set_removes_boxed_packed_not_covered_by_unboxed_unpacked(db_
         product,
         packed_location,
         request,
-        task,
+        _task,
         task_line,
         box,
         historical_box,
@@ -701,8 +679,6 @@ async def test_pick_set_removes_boxed_packed_not_covered_by_unboxed_unpacked(db_
         remaining.quantity_packed,
         remaining.quantity_source_known,
     ) == (unpacked_location.id, 2, 0, 2)
-    line = await _task_line(db_session, tenant.id, task.id)
-    assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (0, 0)
     balance = (
         await db_session.execute(
             select(
@@ -793,7 +769,6 @@ async def test_pick_set_keeps_unknown_box_when_only_packed_source_is_removed(db_
     )
     line = await _task_line(db_session, tenant.id, task.id)
     assert (line.qty_confirmed_packed, line.qty_packed_in_task) == (1, 0)
-    assert (line.qty_legacy_confirmed_packed, line.qty_legacy_packed_in_task) == (1, 0)
     balance = (
         await db_session.execute(
             select(

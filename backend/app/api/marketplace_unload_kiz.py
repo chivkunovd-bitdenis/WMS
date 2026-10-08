@@ -25,7 +25,12 @@ router = APIRouter(
 )
 
 _NOT_FOUND = {"not_found", "marking_code_not_found"}
-_CONFLICT = {"not_editable", "mutation_payload_mismatch", "mutation_result_missing"}
+_CONFLICT = {
+    "not_editable",
+    "mutation_payload_mismatch",
+    "mutation_result_missing",
+    "issue_result_changed",
+}
 
 
 class MarkingCodeScanBody(BaseModel):

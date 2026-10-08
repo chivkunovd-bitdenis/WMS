@@ -3253,6 +3253,7 @@ async def print_codes_for_packaging_line(
             MarkingCode.tenant_id == tenant_id,
             MarkingCode.seller_id == product.seller_id,
             MarkingCode.status == STATUS_AVAILABLE,
+            free_code_clause(),
             code_filter,
         )
         .order_by(MarkingCode.created_at.asc())
@@ -3388,6 +3389,7 @@ async def print_codes_for_product(
             MarkingCode.tenant_id == tenant_id,
             MarkingCode.seller_id == product.seller_id,
             MarkingCode.status == STATUS_AVAILABLE,
+            free_code_clause(),
             code_filter,
         )
         .order_by(MarkingCode.created_at.asc())

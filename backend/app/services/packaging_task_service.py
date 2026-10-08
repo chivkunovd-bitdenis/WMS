@@ -134,21 +134,15 @@ async def progress_for_unload(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     unload_id: uuid.UUID,
-    *,
-    sync_from_pick: bool = False,
 ) -> PackagingTaskProgress | None:
+    """Прогресс задания отгрузки только для чтения (WMS-686 D0.3).
+
+    Для FBO задание упаковки — рудимент: чтение карточки отгрузки его не пересчитывает
+    и не сохраняет, отдаётся то, что записано в базе.
+    """
     task = await get_task_for_unload(session, tenant_id, unload_id)
     if task is None:
         return None
-    if sync_from_pick:
-        synced = await sync_lines_from_pick_allocations(session, tenant_id, task)
-        task = synced.task
-    if _is_mp_unload_task(task):
-        await sync_mp_task_packed_from_boxes(session, tenant_id, task)
-        await session.commit()
-        loaded = await get_task(session, tenant_id, task.id)
-        assert loaded is not None
-        task = loaded
     return task_progress(task)
 
 

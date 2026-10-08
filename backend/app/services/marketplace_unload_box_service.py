@@ -360,17 +360,11 @@ async def _product_in_shipment(
 async def _finish_box_collection(
     session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
 ) -> None:
-    """Commit only after every requested line passed source and quantity checks."""
-    from app.services import packaging_task_service as pkg_svc
+    """Commit only after every requested line passed source and quantity checks.
 
-    task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
-    if task is not None:
-        # This existing synchronizer owns the final commit, including box/source changes.
-        await pkg_svc.sync_lines_from_pick_allocations(
-            session, tenant_id, task, reload_result=False
-        )
-    else:
-        await session.commit()
+    WMS-686 D0.3: задание упаковки для FBO — рудимент, его строки здесь не пересчитываются.
+    """
+    await session.commit()
 
 
 async def _source_location(
@@ -879,12 +873,7 @@ async def _place_picked_into_box(
         else:
             line.quantity_source_known = int(line.quantity_source_known) + source_known
 
-    from app.services import packaging_task_service as pkg_svc
-
-    task = await pkg_svc.get_task_for_unload(session, tenant_id, box.request_id)
     await session.flush()
-    if task is not None:
-        await pkg_svc.sync_mp_task_packed_from_boxes(session, tenant_id, task)
     line_id = line.id
     await session.flush()
     # Load the product for serialization; the public operation owns the commit.
@@ -998,6 +987,8 @@ async def attach_existing_box_by_barcode(
 
     Короб переносится целиком или не переносится вовсе: пока не доказано, что весь
     состав помещается в оставшийся план, в сессии нет ни одного изменения.
+    WMS-686 D1.7: остаток плана проверяется всегда; allow_over_plan из тела запроса
+    оставлен в сигнатуре только для совместимости старых клиентов и игнорируется.
     """
     preset = box_preset.strip()
     if preset not in ALLOWED_BOX_PRESETS:
@@ -1037,8 +1028,7 @@ async def attach_existing_box_by_barcode(
         raise MarketplaceUnloadBoxError("box_already_attached")
 
     whole = await _resolve_whole_box_source(session, tenant_id, req, barcode)
-    if not allow_over_plan:
-        await _assert_whole_box_fits_plan(session, req, whole.balances)
+    await _assert_whole_box_fits_plan(session, req, whole.balances)
 
     mp_box = MarketplaceUnloadBox(
         request_id=request_id,
@@ -1051,7 +1041,7 @@ async def attach_existing_box_by_barcode(
 
     await _collect_whole_box(
         session, tenant_id, req, mp_box.id, whole,
-        allow_over_plan=allow_over_plan, actor_user_id=actor_user_id,
+        allow_over_plan=False, actor_user_id=actor_user_id,
     )
 
     mp_box.closed_at = datetime.now(tz=UTC)
