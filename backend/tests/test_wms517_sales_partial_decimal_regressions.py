@@ -10,7 +10,6 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from fastapi import HTTPException
 from sqlalchemy import func, select
 from test_withdrawal_ledger import INN
 from test_withdrawal_orchestration import MOD, SIGNATURE, Emulator
@@ -21,6 +20,9 @@ from test_wms517_sales_contract import (
     sales_http,  # noqa: F401
 )
 from test_wms517_sales_regressions import redis_boundary  # noqa: F401
+from test_wms517_sales_report_singleflight_contract import (
+    redis_ownership_io,  # noqa: F401 -- actual Redis ownership Lua fixture
+)
 
 from app.api.deps import get_current_user
 from app.api.marking_withdrawals import withdrawal_products
@@ -221,15 +223,14 @@ async def test_old_missing_history_does_not_block_selected_current_sale(
         serial="oldhistory",
         age_days=100,
     )
-    # The complete accessible HTTP report proves current, but says nothing about old.
+    # The complete empty archive proves the old sale is absent; the current sale remains usable.
     sales_http.rows = [sale(current_order.wb_rid, identifier="S-current", price="7.89")]
-    with pytest.raises(WithdrawalError, match=r"history.*coverage|coverage.*incomplete"):
-        await registry(db_session, scope)
-    with pytest.raises(HTTPException) as products_error:
-        await withdrawal_products(db_session, scope, search=None, limit=100)
-    assert products_error.value.status_code == 409
-    assert products_error.value.detail == "wb_sales_history_coverage_90_days_incomplete"
-    with pytest.raises(WithdrawalError, match=r"history.*coverage|coverage.*incomplete"):
+    sales_http.finance_missing_archive = True
+    rows, total = await registry(db_session, scope)
+    assert total == 1 and rows[0]["row_id"] == current_mark.id
+    products = await withdrawal_products(db_session, scope, search=None, limit=100)
+    assert [row["id"] for row in products] == [current_order.product_id]
+    with pytest.raises(WithdrawalError, match="withdrawal_rows_not_found"):
         await create_operation(
             db_session,
             scope,

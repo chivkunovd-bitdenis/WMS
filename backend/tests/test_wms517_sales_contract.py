@@ -75,6 +75,8 @@ class SalesHTTP:
         self.status: int | None = None
         self.error: str | None = None
         self.requests: list[httpx.Request] = []
+        self.finance_requests: list[httpx.Request] = []
+        self.finance_missing_archive = False
         self.waits: list[float] = []
         self.tokens: dict[uuid.UUID, str] = {}
         self.rows_by_token: dict[str, list[dict[str, Any]]] = {}
@@ -86,6 +88,21 @@ class SalesHTTP:
         self.cursor_index = 0
 
     async def handle(self, request: httpx.Request) -> httpx.Response:
+        if request.url.host == "finance-api.wildberries.ru":
+            self.finance_requests.append(request)
+            assert request.method == "POST"
+            assert request.url.path == "/api/finance/v1/sales-reports/detailed"
+            assert self.finance_missing_archive, (
+                "Only an explicitly configured missing archive may return 204"
+            )
+            body = json.loads(request.content)
+            assert set(body) == {"dateFrom", "dateTo", "limit", "rrdId", "period", "fields"}
+            assert body["limit"] == 100000 and body["period"] == "weekly" and body["rrdId"] == 0
+            assert body["fields"] == [
+                "rrdId", "srid", "sellerOperName", "docTypeName", "quantity", "retailAmount",
+                "currency", "nmId", "sku", "saleDt", "reportId", "rrDate",
+            ]
+            return httpx.Response(204, request=request)
         assert request.method == "GET", "Sales audit must never mutate WB"
         assert request.url.path == "/api/v1/supplier/sales", "orders is not sale evidence"
         assert request.url.params.get("flag", "0") == "0", "flag=1 loses multi-day history"
@@ -385,11 +402,15 @@ async def test_sc6_old_missing_sale_reports_coverage_not_unsold(
     order.created_at_wb = datetime.now(UTC) - timedelta(days=120)
     supply.delivered_at = datetime.now(UTC) - timedelta(days=110)
     sales_http.rows = []
+    sales_http.finance_missing_archive = True
     await db_session.commit()
-    with pytest.raises(WithdrawalError, match=r"(?i)coverage|history|90|incomplete"):
+    with pytest.raises(WithdrawalError, match="withdrawal_rows_not_found"):
         await create_operation(
             db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4()
         )
+    assert len(sales_http.finance_requests) == 1
+    assert await db_session.scalar(select(func.count(WithdrawalDocument.id))) == 0
+    assert await db_session.scalar(select(func.count(WithdrawalOperation.id))) == 0
 
 
 async def test_sc5_failed_refresh_preserves_prior_useful_attempt(

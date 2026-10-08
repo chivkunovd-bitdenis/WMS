@@ -84,15 +84,45 @@ def legacy_sales_http(monkeypatch):
     from app.core.settings import settings
     from app.services import wb_sales_report
 
+    redis_values = {}
+
     class RedisBoundary:
+        def __init__(self):
+            self.values = redis_values
+
         async def eval(self, *args):
+            script, numkeys, *keys_and_args = args
+            keys = keys_and_args[:numkeys]
+            argv = keys_and_args[numkeys:]
+            if script == wb_sales_report._RENEW_READER:
+                return int(self.values.get(keys[0]) == argv[0])
+            if script == wb_sales_report._RELEASE_READER:
+                if self.values.get(keys[0]) == argv[0]:
+                    self.values.pop(keys[0], None)
+                    return 1
+                return 0
+            if script == wb_sales_report._PUBLISH_READER:
+                if self.values.get(keys[0]) == argv[0]:
+                    self.values[keys[1]] = argv[1]
+                    self.values.pop(keys[0], None)
+                    return 1
+                return 0
+            if script == wb_sales_report._FAIL_READER:
+                if self.values.get(keys[0]) == argv[0]:
+                    self.values[keys[1]] = argv[1]
+                    self.values.pop(keys[0], None)
+                    return 1
+                return 0
             return 0
 
         async def get(self, key):
-            return None
+            return self.values.get(key)
 
         async def set(self, key, value, **kwargs):
-            pass
+            if kwargs.get("nx") and key in self.values:
+                return None
+            self.values[key] = value
+            return True
 
         async def aclose(self):
             pass
