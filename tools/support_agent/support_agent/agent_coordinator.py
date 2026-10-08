@@ -100,11 +100,17 @@ class AgentCoordinator:
 
     def _snapshot(self, chat_id: int, owner: bool) -> dict[str, Any]:
         # Give a bounded current slice; deeper source history is fetched by read_context.
-        rows = self.store.rows("SELECT id,msg_id,author_id,author_name,role,kind,text,reply_to,ts "
-                               "FROM messages WHERE chat_id=? ORDER BY id DESC LIMIT 18", (chat_id,))
+        rows = self.store.rows("SELECT id,msg_id,author_id,author_name,role,kind,text,reply_to,ts,revision,caption "
+                               "FROM messages WHERE chat_id=? ORDER BY id DESC LIMIT 120", (chat_id,))
         memory = self.store.kv_get(f"agent_memory:{chat_id}", {})
         result: dict[str, Any] = {"chat_id": chat_id, "memory": memory,
-                                  "recent_messages": [dict(x) for x in reversed(rows)]}
+                                  "recent_messages": [{**dict(x), "media": self.store.kv_get(
+                                      f"media:{x['id']}:{x['revision']}", {})} for x in reversed(rows)],
+                                  "case_cards": [{k: v for k, v in json.loads(x["value"]).items()
+                                      if k in ("topic_id", "number", "title", "summary", "current_status")}
+                                      for x in self.store.rows(
+                                      "SELECT value FROM kv WHERE key LIKE 'case_card:%'")
+                                      if int(json.loads(x["value"]).get("chat_id", 0)) == chat_id]}
         if owner:
             result["open_tickets"] = self.pipe._owner_snapshot()[-50:]
             result["agent_tasks"] = [{"ticket_id": int(t["id"]), "chat_id": t["chat_id"],
@@ -200,7 +206,12 @@ class AgentCoordinator:
             "messages. Analyze available history, attachments and current process before "
             "asking the client anything; do not repeat known questions. Send a client reply "
             "only after this turn has completed its checks. At the end include a JSON object "
-            "with summary (the request in plain language), checked (what was actually checked), "
+            "First establish the user intent, process and non-obvious interpretations using the long "
+            "conversation, existing case card, actual attachment contents, code and current data. "
+            "Do not publish diagnostic uncertainty or provider errors to customers. Continue investigating "
+            "until a concrete useful answer or strictly necessary question is available. Return "
+            "case_update (one concise substantive change, empty when nothing changed), "
+            "with summary (the accumulated request in plain language), checked (what was actually checked), "
             "found (confirmed result), unknown (what remains unconfirmed), next_action, answer "
             "when a useful post-analysis client reply is ready, optional wake_at (Unix timestamp), "
             "task_ids and affected_areas when known. Use an empty answer if no client reply is "
@@ -358,6 +369,7 @@ class AgentCoordinator:
                 if isinstance(parsed, dict) else "",
                 "unknown": str(parsed.get("unknown") or "")[:2000]
                 if isinstance(parsed, dict) else "",
+                "case_update": str(parsed.get("case_update") or "")[:400],
                 "result": body[:4000],
                 "answer_queued": answer_queued or deferred_reply or client_answer_queued}
         return output

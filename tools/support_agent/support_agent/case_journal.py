@@ -1,6 +1,7 @@
 """Durable conversation archive and one editable owner card per semantic case."""
 from __future__ import annotations
 
+import ast
 import fcntl
 import hashlib
 import json
@@ -9,6 +10,7 @@ import threading
 import time
 from contextlib import contextmanager
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -172,7 +174,8 @@ class CaseJournal:
             return None
         for row in self.store.rows("SELECT key,value FROM kv WHERE key LIKE 'case_card:%'"):
             card = json.loads(row['value'])
-            if str(card.get('message_id', '')) == str(reply_to):
+            if (str(card.get('message_id', '')) == str(reply_to)
+                    or str(reply_to) in card.get('previous_message_ids', [])):
                 return str(card['topic_id'])
         return None
 
@@ -254,7 +257,13 @@ class CaseJournal:
                        'unknown': 'unknown', 'next_step': 'next_step'}
             for key, value in summary.items():
                 if key in aliases and value not in (None, ''):
-                    fields[aliases[key]] = str(value).strip()
+                    if isinstance(value, str) and value.strip().startswith('['):
+                        try:
+                            value = ast.literal_eval(value)
+                        except (ValueError, SyntaxError):
+                            pass
+                    fields[aliases[key]] = ('\n'.join(str(item).strip() for item in value)
+                                            if isinstance(value, list) else str(value).strip())
             fields['details'] = details
             return fields
         for line in str(summary or '').splitlines():
@@ -297,49 +306,49 @@ class CaseJournal:
         return next((key for key in priority if key in active), 'working')
 
     @staticmethod
+    def _visible_event(event: dict[str, Any]) -> str:
+        key, text = str(event.get('key') or ''), str(event.get('text') or '').strip()
+        if key.startswith(('in:', 'transcript:', 'analysis-start:')):
+            return ''
+        if text.startswith(('Получено', 'Начат разбор', 'Проверка:', 'Контекст созвона',
+                            'Разбор завершён', 'Разбор завершен', 'Голосовое сообщение расшифровано')):
+            return ''
+        for prefix, label in (('Ответ отправлен клиенту:', 'Ответ клиенту отправлен.'),
+                              ('Уточнение отправлено клиенту:', 'Задан уточняющий вопрос клиенту.'),
+                              ('Ответ владельцу отправлен:', 'Ответ владельцу отправлен.')):
+            if text.startswith(prefix):
+                return label
+        return text
+
+    @staticmethod
     def render(card: dict[str, Any]) -> str:
         def shorten(value: Any, units: int) -> str:
             return str(value).encode('utf-16-le')[:units * 2].decode('utf-16-le', errors='ignore')
 
-        header = f"Обращение №{card['number']} · {shorten(card.get('chat_title') or card['chat_id'], 180)}\n"
-        facts = CaseJournal._summary(card)
-        header += shorten(card.get('title') or 'Разбор обращения', 220) + '\n'
-        header += '\n'.join(f"{label}: {shorten(facts[key] or _SUMMARY_EMPTY[key], 360)}"
-                             for key, label in _SUMMARY_FIELDS) + '\n'
         status = CaseJournal._current_status(card)
         indicator = '🟡' if status in {'queued', 'working', 'question_sent', 'owner_needed'} else '🟢'
-        header += f"\nСтатус: {indicator} {_LABELS[status]}\n"
+        lines = [f"Статус: {indicator} {_LABELS[status]}",
+                 f"Обращение №{card['number']} · {shorten(card.get('chat_title') or card['chat_id'], 180)}"]
+        facts = CaseJournal._summary(card)
+        lines.append('\nСуть: ' + shorten(facts['essence'], 1200))
+        if facts.get('found') and facts['found'] not in _SUMMARY_EMPTY.values():
+            lines.append('Результат: ' + shorten(facts['found'], 600))
+        if facts.get('next_step') and facts['next_step'] not in _SUMMARY_EMPTY.values():
+            lines.append('Дальше: ' + shorten(facts['next_step'], 400))
         if card.get('task_url'):
-            header += shorten(card['task_url'], 300) + '\n'
-        raw_details = list(facts.get('details', []))
-        detail_limit = 280
-        detail_lines = [shorten(detail, detail_limit) for detail in raw_details]
-        details = ('Данные по обращению:\n' + '\n'.join(detail_lines) + '\n') if detail_lines else ''
-        entries = [f"{datetime.fromtimestamp(e['ts']).strftime('%d.%m %H:%M')} — {shorten(e['text'], 1400)}"
-                   for e in card.get('events', [])]
-        # Telegram counts UTF-16 units, not Python Unicode code points.
-        def fits(text: str) -> bool:
-            return len(text.encode('utf-16-le')) // 2 <= 4096
-        def body(timeline: list[str] | None = None) -> str:
-            text = header + details
-            visible_entries = entries if timeline is None else timeline
-            return text + ('\nХод обращения\n' + '\n'.join(visible_entries)
-                           if visible_entries else '')
-
-        # Compact long fact lines first, preserving the latest timeline event whenever
-        # it fits under Telegram's limit with the card heading and current status.
-        while detail_lines and not fits(body()) and detail_limit > 24:
-            detail_limit = max(24, int(detail_limit * 0.6))
-            detail_lines = [shorten(detail, detail_limit) for detail in raw_details]
-            details = ('Данные по обращению:\n' + '\n'.join(detail_lines) + '\n') if detail_lines else ''
-        while entries and detail_lines and not fits(body(entries[-1:])):
-            detail_lines.pop(0)
-            details = ('Данные по обращению:\n' + '\n'.join(detail_lines) + '\n') if detail_lines else ''
-        while entries and not fits(body()):
+            lines.append(shorten(card['task_url'], 250))
+        lines.extend(shorten(detail, 180) for detail in facts.get('details', [])[:3])
+        header = '\n'.join(lines)
+        entries = []
+        for event in card.get('events', []):
+            text = CaseJournal._visible_event(event)
+            if text:
+                stamp = datetime.fromtimestamp(float(event['ts']), ZoneInfo('Asia/Tbilisi'))
+                entries.append(f"{stamp.strftime('%d.%m %H:%M')} — {shorten(' '.join(text.split()), 350)}")
+        def body() -> str:
+            return header + ('\n\nХод обращения\n' + '\n'.join(entries) if entries else '')
+        while entries and len(body().encode('utf-16-le')) // 2 > 4096:
             entries.pop(0)
-        while detail_lines and not fits(body()):
-            detail_lines.pop(0)
-            details = ('Данные по обращению:\n' + '\n'.join(detail_lines) + '\n') if detail_lines else ''
         return body()
 
     def _write_overview(self) -> None:
@@ -373,6 +382,7 @@ class CaseJournal:
                 card = {'number': number, 'topic_id': topic_id, 'chat_id': chat_id,
                         'statuses': {'working': True}, 'current_status': 'working',
                         'events': [], 'delivery': 'new', 'realtime_card_version': 1}
+            previous_summary = self._summary(card)
             if title:
                 card['title'] = title
             if chat_title:
@@ -417,23 +427,59 @@ class CaseJournal:
                 pass
             body = self.render(card)
             if card.get('last_text') == body and card.get('message_id'):
+                if owner_chat_id:
+                    for obsolete_id in list(card.get('obsolete_message_ids', [])):
+                        try:
+                            tg.delete_message(owner_chat_id, obsolete_id)
+                        except TelegramError:
+                            continue
+                        card['obsolete_message_ids'].remove(obsolete_id)
+                    self.store.kv_set(key, card)
                 return card
             if not owner_chat_id:
                 return card
             # Sending persisted before network; a crash or unknown outcome must not create a second card.
             if not card.get('message_id') and card['delivery'] in {'sending', 'unknown', 'rejected'}:
                 return card
+            current_summary = self._summary(card)
+            changed = any(previous_summary.get(field) != current_summary.get(field)
+                          for field in ('essence', 'found', 'next_step'))
+            moving = bool(card.get('message_id') and (changed or (event_ts is not None
+                          and self._visible_event({'key': event_key, 'text': event}))))
+            if card.get('replacement_delivery') in {'sending', 'unknown'}:
+                return card
             creating = not card.get('message_id')
             if creating:
                 card['delivery'] = 'sending'
                 self.store.kv_set(key, card)
+            old_message_id = str(card.get('message_id') or '')
+            if moving:
+                card['replacement_delivery'] = 'sending'
+                card['replacement_previous_message_id'] = old_message_id
+                self.store.kv_set(key, card)
             try:
-                if creating:
+                if creating or moving:
                     card['message_id'] = tg.send_message(owner_chat_id, body)
                 else:
                     tg.edit_message(owner_chat_id, card['message_id'], body)
                 card.update(delivery='sent', last_text=body)
+                if moving:
+                    card['replacement_delivery'] = 'sent'
+                    previous = list(card.get('previous_message_ids', []))
+                    card['previous_message_ids'] = list(dict.fromkeys(previous + [old_message_id]))
+                    obsolete = list(card.get('obsolete_message_ids', []))
+                    card['obsolete_message_ids'] = list(dict.fromkeys(obsolete + [old_message_id]))
+                self.store.kv_set(key, card)
+                # New card is durable before deleting only its known previous versions.
+                for obsolete_id in list(card.get('obsolete_message_ids', [])):
+                    try:
+                        tg.delete_message(owner_chat_id, obsolete_id)
+                    except TelegramError:
+                        continue
+                    card['obsolete_message_ids'].remove(obsolete_id)
             except TelegramError as exc:
+                if moving:
+                    card['replacement_delivery'] = exc.outcome
                 card['delivery'] = 'new' if creating and exc.outcome == 'not_sent' else exc.outcome
                 card['delivery_error'] = exc.code
             self.store.kv_set(key, card)

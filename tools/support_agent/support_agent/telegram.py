@@ -57,6 +57,8 @@ class TelegramClient:
         if response.status_code >= 500:
             raise TelegramError("unknown", f"http_{response.status_code}")
         if not body.get("ok"):
+            if "message to delete not found" in str(body.get("description", "")).lower():
+                raise TelegramError("rejected", "message_not_found")
             if "message is not modified" in str(body.get("description", "")).lower():
                 raise TelegramError("rejected", "message_not_modified")
             raise TelegramError("rejected", f"http_{response.status_code}")
@@ -94,6 +96,13 @@ class TelegramClient:
         except TelegramError as exc:
             # Telegram rejects an identical edit. Treat only that exact error as success.
             if exc.code != "message_not_modified":
+                raise
+
+    def delete_message(self, chat_id: int, message_id: str) -> None:
+        try:
+            self._call("deleteMessage", {"chat_id": chat_id, "message_id": int(message_id)})
+        except TelegramError as exc:
+            if exc.code != "message_not_found":
                 raise
 
     def send_document(

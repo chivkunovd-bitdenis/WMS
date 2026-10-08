@@ -25,8 +25,11 @@ class NativeBridge:
         self.cfg, self.store = cfg, Store(cfg.db_path)
         self.journal = CaseJournal(self.store, archive_root(cfg))
 
+    def _handling_rules(self) -> str:
+        return Path(__file__).with_name("agent_instructions.md").read_text(encoding="utf-8").split("## Макеты, работа и выпуск", 1)[0]
+
     def status(self) -> dict[str, Any]:
-        return {"paused": bool(self.store.kv_get("native_paused", True)),
+        return {"handling_rules": self._handling_rules(), "paused": bool(self.store.kv_get("native_paused", True)),
                 "ready": bool(self.store.kv_get("native_ready", False)),
                 "moderator_thread_id": self.cfg.agent.moderator_thread_id,
                 "client_replies_enabled": self.cfg.agent.client_replies_enabled,
@@ -49,7 +52,14 @@ class NativeBridge:
             "SELECT id,text,status,tg_message_id,reply_to,sent_at FROM outbox "
             "WHERE chat_id=? ORDER BY id DESC LIMIT ?", (chat_id, max(1, min(limit, 500))))
         self.journal.sync_chat(chat_id)
-        return {"chat_id": chat_id, "messages": self._messages(list(reversed(rows))),
+        return {"handling_rules": self._handling_rules(),
+                "paused": bool(self.store.kv_get("native_paused", True)),
+                "case_cards": [{k: v for k, v in json.loads(r["value"]).items()
+                    if k in ("topic_id", "number", "title", "summary", "current_status")}
+                    for r in self.store.rows(
+                    "SELECT value FROM kv WHERE key LIKE 'case_card:%'")
+                    if int(json.loads(r["value"]).get("chat_id", 0)) == chat_id],
+                "chat_id": chat_id, "messages": self._messages(list(reversed(rows))),
                 "outgoing": [dict(row) for row in reversed(outgoing)],
                 "full_history": str(self.journal.root / f"chat-{chat_id}" / "history.jsonl")}
 
@@ -80,7 +90,9 @@ class NativeBridge:
             versions[message_id] = digest
             if message_id in (known_materials or {}) and known_materials[message_id] != digest:
                 materials.append(message)
-        return {"messages": self._messages(rows), "edits": revised,
+        return {"handling_rules": self._handling_rules(),
+                "paused": bool(self.store.kv_get("native_paused", True)),
+                "messages": self._messages(rows), "edits": revised,
                 "materials": materials, "material_versions": versions,
                 "next_message_id": max([after_id, *[int(row["id"]) for row in rows]]),
                 "next_edit_id": max([after_edit_id, *[int(row["id"]) for row in edits]])}
