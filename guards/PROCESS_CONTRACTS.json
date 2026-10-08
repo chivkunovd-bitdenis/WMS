@@ -1542,7 +1542,9 @@
         "src/screens/v2/FbsPackingActionsToolbar.prodIntegration.dom.test.tsx::WMS-666 production integration: real shared packing actions clears and transfers only selected rows of the explicitly chosen supply",
         "src/screens/v2/FbsPackingActionsToolbar.prodIntegration.dom.test.tsx::WMS-666 production integration: real shared packing actions selects every visible supply and keeps print and packing counters separate",
         "src/components/MarkingPrintDialog.partialAck.wms666.dom.test.tsx::WMS-666 partial tape acknowledgement recovery keeps a partial tape warning after ack-only recovery without completing or closing the mixed batch",
-        "src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx::does not prepare missing stickers or start work when reopening a taskless delivered supply"
+        "src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx::does not prepare missing stickers or start work when reopening a taskless delivered supply",
+        "src/screens/v2/wms666ChangeScope.test.ts::WMS-666 C13: narrow UI-only change boundary rejects migrations, backend entities, stock logic and guard registry changes",
+        "src/screens/v2/wms666ChangeScope.test.ts::WMS-666 C13: narrow UI-only change boundary keeps the actual task diff inside the approved packing UI/test/document boundary"
       ]
     },
     "print-672": {
