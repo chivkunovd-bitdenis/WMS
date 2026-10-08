@@ -1,0 +1,56 @@
+{
+  "api_idle": {
+    "active": 0
+  },
+  "db": {
+    "markings": [],
+    "codes": [
+      {
+        "id": "dbe6296d-6513-4a89-9e47-4c0898f9eeb4",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "available"
+      },
+      {
+        "id": "84e3d0ac-cf90-4bfb-915f-5858dd1205b4",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "9b426db2-5250-40e0-bb9b-f1995da5b5ec",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "6b0bb420-9eea-4821-b0c2-dc86ca69c5da",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      }
+    ],
+    "orders": [
+      {
+        "id": "52e2c91d-7112-4ed1-8bbc-26a4ece48955",
+        "pack_status": "pending",
+        "sticker_code": "*AUDIT1",
+        "sticker_barcode": "*AUDIT1",
+        "supply_id": "95f56d75-fd83-4f87-bfb4-0bca88463ad9",
+        "seller_id": "d4a7d4ae-797d-4dbe-a47e-5f6c780166bf"
+      },
+      {
+        "id": "105199fa-9148-4dfb-9559-8bda21eda0fb",
+        "pack_status": "pending",
+        "sticker_code": "*AUDIT0",
+        "sticker_barcode": "*AUDIT0",
+        "supply_id": "95f56d75-fd83-4f87-bfb4-0bca88463ad9",
+        "seller_id": "d4a7d4ae-797d-4dbe-a47e-5f6c780166bf"
+      }
+    ],
+    "stock": "([(UUID('0eba7616-cc9d-4cd7-9487-b6891d249122'), 3, 3, 0)], [(UUID('c7d56d92-a928-4dfe-8fe3-8a55e19c87dc'), 1), (UUID('e97ffb53-4d90-40f9-a343-059ef4069df7'), 1)], 0)",
+    "synthetic_provider_readbacks": []
+  },
+  "native": {
+    "drop_next_response": false,
+    "accepted_png_count": 2,
+    "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+    "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc"
+  }
+}
