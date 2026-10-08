@@ -11,6 +11,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
@@ -24,7 +25,6 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderReservation,
 )
-from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
 from app.models.fbs_supply import FBS_SUPPLY_SOURCE_WB, FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
@@ -823,15 +823,15 @@ async def test_fbs_external_wb_supply_link_surfaces_unmapped_warehouse_and_self_
     """Поставка, собранная в кабинете WB, не подхватывается молча.
 
     Раньше единственным следом отказа была logger.warning("... reason=no_local_warehouse")
-    внутри _get_or_create_wb_origin_supply — оператор видел заказ с пометкой «склад WB не
+    внутри _get_or_create_wb_origin_supply — оператор видел заказ \u0441 пометкой «склад WB не
     привязан» и не понимал, почему поставки для него нет. Эта проверка требует, чтобы
-    сводка sync_seller_orders называла причину и номер поставки WB явно, а также что после
+    сводка sync_seller_orders называла причину и номер поставки WB явно, \u0430 также что после
     того, как склад привяжут (тот же путь, что и в проде — PUT .../warehouse-bindings/...),
     следующая обычная синхронизация подхватывает поставку сама, без ручных действий.
     """
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
-    # Намеренно НЕ вызываем _create_binding: склад WB_WAREHOUSE_A ещё не сопоставлен
+    # Намеренно НЕ вызываем _create_binding: склад WB_WAREHOUSE_A ещё не сопоставлен  # noqa: RUF003
     # складу WMS — именно эта ситуация и не даёт завести карточку поставки.
 
     product = await async_client.post(
@@ -1052,9 +1052,12 @@ async def test_fbs_sync_job_fails_on_wb_client_error(
     body = await _wait_for_job(async_client, headers, start.json()["id"])
     assert body["status"] == "failed"
     # КРИТ-2 (HANDOFF-POLISH.md, пул 1, п.3): job.error_message теперь человеческий текст
-    # (exc.message), а не голый код "wb_upstream_error_502" — иначе оператор на экране
+    # (exc.message), а не голый код "wb_upstream_error_502" — иначе  # noqa: RUF003
+    # оператор на экране
     # видит шифр вместо причины ошибки.
-    assert body["error_message"] == "Wildberries отклонил операцию; проверьте детали ошибки в журнале."
+    assert body["error_message"] == (
+        "Wildberries отклонил операцию; проверьте детали ошибки в журнале."
+    )
 
 
 @pytest.mark.asyncio
@@ -1980,11 +1983,11 @@ async def test_fbs_order_intake_debits_stock_pool_idempotently(
         order_id = order.id
     assert created is True
 
-    # Заказ пришёл -- пул уменьшился на его количество (один заказ = одна единица).
+    # Заказ пришёл -- пул уменьшился на его количество (один заказ = одна единица).  # noqa: RUF003
     assert await _pool_quantity() == 2
     assert await _debit_rows_for_order(order_id) == 1
 
-    # WB присылает тот же заказ повторно (автоопрос + ручная кнопка видят его
+    # WB присылает тот же заказ повторно (автоопрос + ручная кнопка видят его  # noqa: RUF003
     # снова и снова) -- пул не должен списаться второй раз.
     async with SessionLocal() as session:
         order2, created2 = await upsert_order_from_wb_row(

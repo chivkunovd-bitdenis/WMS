@@ -57,10 +57,14 @@ from app.services.wb_card_enrichment import (
 
 STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
     "new": frozenset({FBS_ORDER_STATUS_NEW}),
-    # BL-3 (16.08, FBS-03): заказы со статусом NEW, у которых истёк срок сборки
+    # RUF003: retain the original Russian operator-facing explanations.
+    # BL-3 (16.08, FBS-03): заказы со статусом NEW, у которых  # noqa: RUF003
+    # истёк срок сборки
     # (deadline_at < server_now) — WB их уже не примет, но статус в БД остаётся "new",
-    # WB его не меняет. Тот же набор статусов, что у "new" — реальное разделение идёт
-    # по deadline_at в _fetch_orders_page/_fetch_warehouse_options, а не по статусу.
+    # WB его не меняет. Тот же набор статусов, что у "new" —  # noqa: RUF003
+    # реальное разделение идёт
+    # по deadline_at в _fetch_orders_page/_fetch_warehouse_options,
+    # а не по статусу.  # noqa: RUF003
     # Тот же приём, что для "cancelled": отдельная вкладка через status_group,
     # без изменения данных в БД.
     "expired": frozenset({FBS_ORDER_STATUS_NEW}),
@@ -76,8 +80,9 @@ STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
     "done": frozenset({FBS_ORDER_STATUS_DONE}),
     # Решение пользователя 16.08 («сделай как в WB — отменённые заказы») + FBS-06
     # («убирает из "Новых" либо показывает в корректной вкладке»): отменённые и брак
-    # раньше сваливались в "done" вместе с реально завершёнными — отвал был не виден.
-    # Теперь у них своя группа, как отдельная вкладка «Отменённые» в кабинете WB.
+    # раньше сваливались в "done" вместе с реально завершёнными —  # noqa: RUF003
+    # отвал был не виден.
+    # Теперь у них своя группа, как отдельная вкладка «Отменённые» в кабинете WB.  # noqa: RUF003
     "cancelled": frozenset({FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}),
 }
 
@@ -205,7 +210,7 @@ async def _fetch_orders_page(
             stmt = stmt.where(FbsOrder.deadline_at >= server_now)
         elif status_group == "expired":
             stmt = stmt.where(_supplier_new_clause())
-            # BL-3: "Просрочены" — зеркало "new", но с истёкшим дедлайном.
+            # BL-3: "Просрочены" — зеркало "new", но с истёкшим дедлайном.  # noqa: RUF003
             stmt = stmt.where(FbsOrder.deadline_at < server_now)
     if wb_warehouse_id is not None:
         stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)

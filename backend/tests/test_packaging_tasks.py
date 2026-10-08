@@ -1057,7 +1057,7 @@ async def test_mark_prepacked_external_satisfies_marking_gate(async_client: Asyn
 async def test_pack_without_prepacked_leaves_marking_external_zero(
     async_client: AsyncClient,
 ) -> None:
-    """Контраст с mark-prepacked: обычный /pack не трогает qty_marking_external,
+    """Контраст \u0441 mark-prepacked: обычный /pack не трогает qty_marking_external,
     поэтому завершение задания по-прежнему требует печати ЧЗ."""
     h = await _register_admin(async_client)
     seller = await async_client.post(

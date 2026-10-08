@@ -44,7 +44,7 @@ class PickAllocationResult:
 
 @dataclass(frozen=True)
 class SetPickAllocationResult:
-    """Ответ set_pick_allocation. Не привязан к ORM-объекту аллокации, потому что
+    """Ответ set_pick_allocation. \u041d\u0435 привязан к ORM-объекту аллокации, потому что
     при обнулении строка удаляется — обращаться к ней после commit небезопасно."""
 
     id: uuid.UUID
@@ -58,7 +58,7 @@ class SetPickAllocationResult:
 async def picked_qty_by_product(
     session: AsyncSession, request_id: uuid.UUID
 ) -> dict[uuid.UUID, int]:
-    """Источник истины — аллокации подбора (MarketplaceUnloadPickAllocation), а не
+    """Источник истины — аллокации подбора (MarketplaceUnloadPickAllocation), \u0430 не
     содержимое коробов. Подбор больше не создаёт и не трогает короба (решение
     заказчика 2026-08-16: «автосоздавать короба не надо, и блокировать их тоже не
     надо без коробов») — короб теперь исключительно явное действие оператора на
@@ -97,8 +97,9 @@ async def get_or_create_open_box(
     warehouse_id: uuid.UUID,
 ) -> MarketplaceUnloadBox:
     """Подбор больше не требует, чтобы оператор открывал короб вручную (итерация
-    2026-08-14, MP/FBO пункт 3): состав короба определяется на упаковке. Короб как
-    внутренний контейнер для подобранного количества создаётся прозрачно, если его
+    2026-08-14, MP/FBO пункт 3): состав короба определяется на упаковке. \
+\u041a\u043e\u0440\u043e\u0431 как
+    внутренний контейнер для подобранного количества создаётся прозрачно, если \u0435\u0433\u043e
     ещё нет."""
     existing = await get_open_box(session, request_id)
     if existing is not None:
@@ -396,14 +397,15 @@ async def record_pick_allocation(
     quantity: int,
     allow_over_plan: bool = False,
 ) -> PickAllocationResult:
-    """Подбор двигает товар со склада в аллокацию подбора и НЕ трогает короба.
+    """Подбор двигает товар \u0441\u043e склада в аллокацию подбора и \u041d\u0415 трогает короба.
 
     Решение заказчика 2026-08-16: «автосоздавать короба не надо, и блокировать их
     тоже не надо без коробов». Раньше эта функция называлась collect_into_box и
     попутно создавала/находила открытый короб и строку в нём — так на подборе
-    незаметно для оператора плодились короба (get_or_create_open_box). Короб теперь
+    незаметно для оператора плодились короба (get_or_create_open_box). \
+\u041a\u043e\u0440\u043e\u0431 теперь
     заводится только явным действием на упаковке (кнопка «Создать короб» или
-    привязка готового короба сканом), а подбор — только storage → pick allocation.
+    привязка готового короба сканом), \u0430 подбор — только storage → pick allocation.
     """
     if quantity < 1:
         raise MarketplaceUnloadPickError("invalid_quantity")
@@ -532,11 +534,11 @@ async def set_pick_allocation(
     storage_location_id: uuid.UUID,
     quantity: int,
 ) -> SetPickAllocationResult:
-    """Задать итоговое количество подбора по паре товар+ячейка (не прибавку, а
+    """Задать итоговое количество подбора по паре товар+ячейка (не прибавку, \u0430
     итог) — PICK-01. Разница > 0 идёт через record_pick_allocation как есть,
     разница < 0 — тем же способом, каким remove_from_box возвращает товар в
     ячейку (reverse_marketplace_unload_pick + restore_reservation_for_remove),
-    но по конкретной строке подбора, а не через _rollback_pick_allocations,
+    но по конкретной строке подбора, \u0430 не через _rollback_pick_allocations,
     которая разносит количество по всем ячейкам товара подряд.
     """
     if quantity < 0:

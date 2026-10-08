@@ -723,19 +723,19 @@ async def update_product_fbs_stock_sync(
     if p is None:
         raise CatalogError("product_not_found")
     if enabled_given:
-        # Явно переданный флаг продолжаем уважать — его шлют старые вызовы и тесты.
+        # Явно переданный флаг продолжаем уважать — его шлют старые вызовы и тесты.  # noqa: RUF003
         p.fbs_stock_sync_enabled = bool(fbs_stock_sync_enabled)
     elif limit_given:
         # Отдельного тумблера больше нет: участие в FBS выводится из наличия
         # остатка. Задали число — включились; очистили — флаг всё равно
         # остаётся True (см. ниже), чтобы товар не выпал из выгрузки и WB
-        # получил честный ноль, а не застрял на последнем опубликованном остатке.
+        # получил честный ноль, а не застрял на последнем опубликованном остатке.  # noqa: RUF003
         p.fbs_stock_sync_enabled = True
     if limit_given:
         p.fbs_stock_limit = limit_value if isinstance(limit_value, int) else None
         if limit_value is None and not enabled_given:
             # Лимит очистили руками (не через explicit-флаг) — обнуляем
-            # распределение по складам, а не удаляем строки: их наличие с
+            # распределение по складам, а не удаляем строки: их наличие с  # noqa: RUF003
             # quantity=0 — это осознанный ноль, он проходит через zero-guard.
             zero_pool_stmt = (
                 update(FbsBindingStockPool)

@@ -43,7 +43,6 @@ from app.services.fbs_stock_sync_service import (
     ERROR_READBACK_MISMATCH,
     ERROR_SYNC_BUSY,
     ERROR_UNSAFE_STOCK_UNKNOWN,
-    ERROR_UNSAFE_ZERO_BLOCKED,
     NoopStockSyncRateLimiter,
     _build_publish_plan,
     _try_acquire_lease,
@@ -401,7 +400,7 @@ async def test_sync_skips_enabled_product_without_pool_allocation(
     assert item is None
 
     await db_session.refresh(ctx.binding)
-    # Пустой план публикации — это НЕ успех: в Wildberries не ушло ни одной позиции.
+    # Пустой план публикации — это НЕ успех: в Wildberries не ушло ни одной позиции.  # noqa: RUF003
     # Раньше здесь стоял confirmed, и экран показывал «Wildberries подтвердил остаток»
     # на выгрузке, которая ничего не отправила.
     assert ctx.binding.last_sync_status == "nothing_to_publish"

@@ -23,7 +23,7 @@ from app.models.fbs_order import (
     FbsOrderReservation,
 )
 from app.models.product import Product
-from app.services import inventory_service, stock_direction_service
+from app.services import inventory_service
 from app.services.fbs_cancellation_service import penalty_band_for_order
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (

@@ -1391,7 +1391,7 @@ async def test_marketplace_unload_pick_set_allocation_increase_decrease_zero(
     assert loc_row_partial["quantity"] == 2
     assert loc_row_partial["available"] == 2
 
-    # Обнуление: вернуть остаток целиком, подбор с ячейки обнуляется, а остаток в
+    # Обнуление: вернуть остаток целиком, подбор с ячейки обнуляется, а остаток в  # noqa: RUF003
     # ячейке возвращается к исходным 5 (не выдумывается новое движение по складу).
     set0 = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/pick/set",
@@ -1421,7 +1421,7 @@ async def test_marketplace_unload_pick_set_allocation_increase_decrease_zero(
     assert loc_row_zero["quantity"] == 5
     assert loc_row_zero["available"] == 5
 
-    # Не прибавка, а итог: повторная установка того же числа не даёт двойного счёта.
+    # Не прибавка, а итог: повторная установка того же числа не даёт двойного счёта.  # noqa: RUF003
     set_again_a = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/pick/set",
         headers=h,

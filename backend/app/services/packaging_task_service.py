@@ -790,8 +790,8 @@ async def mark_line_prepacked_external(
     acting_user_id: uuid.UUID | None = None,
 ) -> PackagingTask:
     """«Пришло готовым»: товар уже упакован и промаркирован поставщиком/селлером до
-    поступления на упаковку. Прибавляет к qty_packed_in_task, а при
-    requires_honest_sign — честно к qty_marking_external (НЕ к qty_marking_printed,
+    поступления на упаковку. Прибавляет к qty_packed_in_task, \u0430 при
+    requires_honest_sign — честно к qty_marking_external (\u041d\u0415 к qty_marking_printed,
     иначе исказится учёт расхода кодов ЧЗ). Именно qty_marking_external уже учитывает
     assert_packaging_line_marking_done при проверке готовности задания."""
     if qty < 1:
