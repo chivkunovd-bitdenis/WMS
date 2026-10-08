@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import recoveryHistory from '../../../tests/fixtures/wms666AcceptedRecoveryHistory.json'
 
 const WMS_666_CONTRACT = '0e078418bcb7ee45fa654b0d829e5de0ec80ebb0'
 const WMS_666_HISTORY_CHECKOUT_CHANGE = {
@@ -52,9 +53,30 @@ const WMS_666_PROOF_FILES = new Set([
   'docs/reviews/priority-five-source-map-20261006.json',
 ])
 
-export function wms666AcceptedHistoryChange(cwd: string | URL, commit: string, path: string): boolean {
+export function wms666AcceptedHistoryChange(
+  cwd: string | URL, commit: string, path: string, recoveryReads = new Map<string, boolean>(),
+): boolean {
   const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
   const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+  const recovery = recoveryHistory.entries.find((entry) => entry.commit === commit)
+  const recoveredFile = recovery?.files.find((entry) => entry.path === path)
+  if (recovery && recoveredFile) {
+    // Exact independently reviewed history only. No future change of these paths
+    // is permitted, even with identical content or the same task number.
+    if (!recoveryReads.has(commit)) {
+      const changed = git('diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', commit)
+        .split('\n').filter(Boolean).sort()
+      const paths = recovery.files.map((file) => file.path)
+      const entries = (ref: string) => git('ls-tree', '--full-tree', ref, '--', ...paths)
+        .split('\n').filter(Boolean).sort()
+      const expected = (side: 'beforeEntry' | 'afterEntry') => recovery.files
+        .map((file) => file[side]).filter(Boolean).sort()
+      recoveryReads.set(commit, JSON.stringify(changed) === JSON.stringify([...recovery.changedPaths].sort())
+        && JSON.stringify(entries(`${commit}^`)) === JSON.stringify(expected('beforeEntry'))
+        && JSON.stringify(entries(commit)) === JSON.stringify(expected('afterEntry')))
+    }
+    return recoveryReads.get(commit) === true
+  }
   const documents = WMS_666_DOCUMENT_HISTORY.find((entry) => entry.commit === commit)
   const file = documents?.files.find((entry) => entry.path === path)
   if (documents && file) {
@@ -81,9 +103,13 @@ export function wms666TaskChangedPaths(
   // Missing history must fail, rather than quietly produce an empty task diff.
   git('merge-base', '--is-ancestor', contract, 'HEAD')
   const head = git('rev-parse', 'HEAD').trim()
-  const history = git('log', '--ancestry-path', '--format=%H%x09%P%x09%s', `${contract}..${head}`)
-  const root = git('show', '-s', '--format=%H%x09%P%x09%s', contract)
+  const pinnedSource = wms666PinnedHistorySource(cwd, contract, head)
+  const historyStart = pinnedSource ?? contract
+  const history = git('log', '--ancestry-path', '--format=%H%x09%P%x09%s', `${historyStart}..${head}`)
+  const root = pinnedSource ? '' : git('show', '-s', '--format=%H%x09%P%x09%s', contract)
   const paths = new Set<string>()
+  // Reuse only immutable commit verification within this single history walk.
+  const recoveryReads = new Map<string, boolean>()
   for (const line of (root + history).trim().split('\n')) {
     const [commit, parents, subject] = line.split('\t')
     // Attribution is by task lineage and primary task number, never allowed paths.
@@ -93,7 +119,7 @@ export function wms666TaskChangedPaths(
       ...(merge ? ['--cc'] : ['--root']), commit)
     // A merge's combined diff catches its own resolutions, not imported task trees.
     for (const path of changed.split('\0')) {
-      if (path && !wms666AcceptedHistoryChange(cwd, commit, path)) paths.add(path)
+      if (path && !wms666AcceptedHistoryChange(cwd, commit, path, recoveryReads)) paths.add(path)
     }
   }
   // Include unstaged, staged and new files. Uncommitted changes cannot hide a defect.
@@ -106,6 +132,51 @@ export function wms666TaskChangedPaths(
   }
   expect(git('rev-parse', 'HEAD').trim()).toBe(head)
   return [...paths].sort()
+}
+
+function wms666PinnedHistorySource(cwd: string | URL, contract: string, head: string): string | null {
+  const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+  try {
+    git('rev-parse', '--verify', 'refs/remotes/origin/main^{commit}')
+  } catch {
+    // Isolated synthetic repositories have no external authority. They must
+    // keep the complete legacy walk; absence never means an empty accepted diff.
+    return null
+  }
+
+  const path = 'scripts/ci/process_bootstrap.json'
+  const entry = git('ls-tree', '--full-tree', 'origin/main', '--', path)
+  const match = /^100644 blob ([0-9a-f]{40})\tscripts\/ci\/process_bootstrap\.json$/.exec(entry)
+  if (!match) throw new Error('origin/main process bootstrap is missing or is not a regular Git blob')
+  const rawPin = git('show', `origin/main:${path}`)
+  let pin: unknown
+  try {
+    pin = JSON.parse(rawPin)
+  } catch {
+    throw new Error('origin/main process bootstrap is not valid JSON')
+  }
+  if (!pin || typeof pin !== 'object' || Array.isArray(pin)) {
+    throw new Error('origin/main process bootstrap must be an object')
+  }
+  const keys = Object.keys(pin).sort()
+  if (JSON.stringify(keys) !== JSON.stringify(['base_sha', 'source_sha'])) {
+    throw new Error('origin/main process bootstrap must contain exactly base_sha and source_sha')
+  }
+  const keyTokens = [...rawPin.matchAll(/"([^"\\]+)"\s*:/g)].map((match) => match[1])
+  if (keyTokens.length !== 2 || new Set(keyTokens).size !== 2) {
+    throw new Error('origin/main process bootstrap must not contain duplicate or nested keys')
+  }
+  const { base_sha: base, source_sha: source } = pin as { base_sha: unknown; source_sha: unknown }
+  if (typeof base !== 'string' || !/^[0-9a-f]{40}$/.test(base)
+    || typeof source !== 'string' || !/^[0-9a-f]{40}$/.test(source) || base === source) {
+    throw new Error('origin/main process bootstrap contains invalid or non-distinct full SHA values')
+  }
+  // The externally published boundary is usable only when its complete chain
+  // belongs to this task history and ends at or before the checked-out HEAD.
+  git('merge-base', '--is-ancestor', contract, base)
+  git('merge-base', '--is-ancestor', base, source)
+  git('merge-base', '--is-ancestor', source, head)
+  return source
 }
 
 export function wms666ScopeViolations(paths: string[]): string[] {
@@ -256,12 +327,121 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
     }
   })
 
+  it('uses only an externally pinned source ancestor and still checks later changes', () => {
+    const repo = fixtureRepository()
+    try {
+      repo.write('base.txt', 'reviewed base\n')
+      const base = repo.commit('WMS-652: reviewed base')
+      repo.write('backend/app/services/inventory_service.py', 'reviewed historical backend change\n')
+      repo.commit('WMS-666: source history before review')
+      repo.write('frontend/src/screens/v2/packing.ts', 'reviewed source\n')
+      const source = repo.commit('WMS-666: independently reviewed source')
+
+      repo.git('checkout', '-b', 'pin', source)
+      repo.write('scripts/ci/process_bootstrap.json', JSON.stringify({ base_sha: base, source_sha: source }))
+      const pinCommit = repo.commit('WMS-652: publish trusted history pin')
+      repo.git('update-ref', 'refs/remotes/origin/main', pinCommit)
+
+      repo.git('checkout', '-b', 'task', source)
+      repo.write('backend/app/services/inventory_service.py', 'unreviewed future backend change\n')
+      repo.commit('WMS-666: future task change')
+      expect(wms666TaskChangedPaths(repo.cwd, repo.contract)).toEqual([
+        'backend/app/services/inventory_service.py',
+      ])
+      const unstagedPath = 'backend/app/services/untracked_after_pin.py'
+      repo.write(unstagedPath, 'untracked forbidden change\n')
+      expect(wms666TaskChangedPaths(repo.cwd, repo.contract)).toEqual([
+        'backend/app/services/inventory_service.py', unstagedPath,
+      ])
+      repo.git('add', unstagedPath)
+      const stagedPath = 'backend/app/services/staged_after_pin.py'
+      repo.write(stagedPath, 'staged forbidden change\n')
+      repo.git('add', stagedPath)
+      expect(wms666TaskChangedPaths(repo.cwd, repo.contract)).toEqual([
+        'backend/app/services/inventory_service.py', stagedPath, unstagedPath,
+      ])
+    } finally {
+      repo.close()
+    }
+  })
+
+  it('fails closed when origin/main pins a source outside the checked-out lineage', () => {
+    const repo = fixtureRepository()
+    try {
+      repo.write('base.txt', 'reviewed base\n')
+      const base = repo.commit('WMS-652: reviewed base')
+      repo.git('checkout', '-b', 'external', base)
+      repo.write('external.txt', 'unrelated source\n')
+      const source = repo.commit('WMS-666: unrelated reviewed source')
+      repo.write('scripts/ci/process_bootstrap.json', JSON.stringify({ base_sha: base, source_sha: source }))
+      const pinCommit = repo.commit('WMS-652: publish unconnected pin')
+      repo.git('update-ref', 'refs/remotes/origin/main', pinCommit)
+
+      repo.git('checkout', '-b', 'task', base)
+      repo.write('frontend/src/screens/v2/packing.ts', 'task change\n')
+      repo.commit('WMS-666: checked-out task')
+      expect(() => wms666TaskChangedPaths(repo.cwd, repo.contract)).toThrow()
+    } finally {
+      repo.close()
+    }
+  })
+
+  it('fails closed when origin/main exists but its bootstrap pin is malformed', () => {
+    const repo = fixtureRepository()
+    try {
+      repo.write('base.txt', 'reviewed base\n')
+      const base = repo.commit('WMS-652: reviewed base')
+      repo.write('frontend/src/screens/v2/packing.ts', 'task change\n')
+      const source = repo.commit('WMS-666: checked-out task')
+      repo.write('scripts/ci/process_bootstrap.json', JSON.stringify({ base_sha: base }))
+      const pinCommit = repo.commit('WMS-652: publish malformed pin')
+      repo.git('update-ref', 'refs/remotes/origin/main', pinCommit)
+      expect(() => wms666TaskChangedPaths(repo.cwd, repo.contract)).toThrow(
+        'origin/main process bootstrap must contain exactly base_sha and source_sha',
+      )
+
+      repo.write('scripts/ci/process_bootstrap.json',
+        `{"base_sha":"${base}","source_sha":"${source}","source_sha":"${source}"}`)
+      const duplicatePinCommit = repo.commit('WMS-652: publish duplicate-key pin')
+      repo.git('update-ref', 'refs/remotes/origin/main', duplicatePinCommit)
+      expect(() => wms666TaskChangedPaths(repo.cwd, repo.contract)).toThrow(
+        'origin/main process bootstrap must not contain duplicate or nested keys',
+      )
+
+      const pinPath = 'scripts/ci/process_bootstrap.json'
+      rmSync(join(repo.cwd, pinPath))
+      repo.write('scripts/ci/pin-target.json', JSON.stringify({ base_sha: base, source_sha: source }))
+      symlinkSync('pin-target.json', join(repo.cwd, pinPath))
+      const symlinkPinCommit = repo.commit('WMS-652: publish symlink pin')
+      repo.git('update-ref', 'refs/remotes/origin/main', symlinkPinCommit)
+      expect(() => wms666TaskChangedPaths(repo.cwd, repo.contract)).toThrow(
+        'origin/main process bootstrap is missing or is not a regular Git blob',
+      )
+    } finally {
+      repo.close()
+    }
+  })
+
   it('accepts only the exact immutable history checkout delta', () => {
     const cwd = new URL('../../../..', import.meta.url)
     const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
     expect(wms666AcceptedHistoryChange(cwd, accepted.commit, accepted.path)).toBe(true)
     expect(wms666AcceptedHistoryChange(cwd, '5ddd09aac4df17e7ecdefaf1625462c05f8039ce', accepted.path)).toBe(false)
     expect(wms666AcceptedHistoryChange(cwd, accepted.commit, 'guards/MANIFEST.json')).toBe(false)
+  })
+
+  it('accepts only reviewed recovery commit/path/blob triples and rejects adjacent paths', () => {
+    const cwd = new URL('../../../..', import.meta.url)
+    expect(recoveryHistory.productCommit).toBe('d420f8db1e7d69212ad2ea4529a02044689363b0')
+    expect(recoveryHistory.reviewCommit).toBe('154cdb1ff3e84ed4e592d883688c7df560579015')
+    for (const entry of recoveryHistory.entries) {
+      for (const file of entry.files) {
+        expect(wms666AcceptedHistoryChange(cwd, entry.commit, file.path)).toBe(true)
+        expect(wms666AcceptedHistoryChange(cwd, WMS_666_CONTRACT, file.path)).toBe(false)
+      }
+      expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'guards/MANIFEST.json')).toBe(false)
+      expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'backend/app/services/inventory_service.py')).toBe(false)
+    }
   })
 
   it('fails an accepted history lookup if its immutable source is missing', () => {
