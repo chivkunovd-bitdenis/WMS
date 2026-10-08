@@ -19,7 +19,13 @@ from app.models.fbs_order import (
     FbsOrderMarking,
 )
 from app.models.fbs_supply import FbsSupply
-from app.models.marking_code import EVENT_PRINTED, STATUS_AVAILABLE, MarkingCode, MarkingCodeEvent
+from app.models.marking_code import (
+    EVENT_APPLIED,
+    EVENT_PRINTED,
+    STATUS_AVAILABLE,
+    MarkingCode,
+    MarkingCodeEvent,
+)
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.services import fbs_order_tape_print_service as tape
@@ -624,4 +630,108 @@ async def test_taskless_print_assignment_conflict_does_not_spend_unbound_pool_co
             "pool_statuses": [code.status for code in current_pool],
             "printed_event_types": [event.event_type for event in printed_events],
         }
+    assert await stock_snapshot() == before_stock
+
+
+@pytest.mark.asyncio
+async def test_taskless_printed_current_kiz_can_be_applied_without_creating_task(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix,
+    )
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"wms666-taskless-apply-{suffix[-8:]}",
+        barcode=f"2306{suffix[-9:]}",
+    )
+    supply_id, order_ids = await _bare_supply_with_pool(
+        async_client,
+        headers=headers,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        location_id=location_id,
+        product_id=product_id,
+        suffix=f"a{suffix}",
+        order_count=1,
+        pool_count=2,
+    )
+    sent_values = _patch_wb_acceptance(monkeypatch)
+    monkeypatch.setattr(
+        tape.marking_svc, "require_marketplace_token", AsyncMock(return_value="test"),
+    )
+    before_stock = await stock_snapshot()
+
+    printed_response = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[0])],
+            "layout_json": {"units": [{"block": "cz", "copies": 1}]},
+            "allow_partial": False,
+            "include_order_qr": False,
+            "reprint": False,
+        },
+    )
+
+    assert printed_response.status_code == 200, printed_response.text
+    printed_body = printed_response.json()
+    assert printed_body["order_errors"] == []
+    printed = printed_body["orders"][0]["printed_codes"]
+    assert len(printed) == 1
+    cis_code = printed[0]["cis_code"]
+    marking_id = uuid.UUID(printed[0]["marking_id"])
+    code_id = uuid.UUID(printed[0]["id"])
+    assert cis_code == printed_body["orders"][0]["codes"][0]
+    assert sent_values == {700001: cis_code}
+
+    validation_response = await async_client.post(
+        "/operations/fbs-orders/kiz/validate",
+        headers=headers,
+        json={"order_id": str(order_ids[0]), "value": cis_code},
+    )
+    assert validation_response.status_code == 200, validation_response.text
+    assert validation_response.json() == {"ok": True, "hints": []}
+
+    applied_response = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={
+            "idempotency_key": f"wms666-taskless-apply-{suffix}",
+            "pairs": [{
+                "order_id": str(order_ids[0]),
+                "value": cis_code,
+                "confirmed": False,
+            }],
+        },
+    )
+
+    assert applied_response.status_code == 200, applied_response.text
+    applied_row = applied_response.json()[0]
+    assert applied_row["status"] == "ok", applied_row
+    assert applied_row["bound_kiz"] == cis_code
+    assert applied_row["newly_bound"] is False
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        code = await session.get(MarkingCode, code_id)
+        marking = await session.get(FbsOrderMarking, marking_id)
+        events = list((await session.scalars(
+            select(MarkingCodeEvent).where(
+                MarkingCodeEvent.code_id == code_id,
+                MarkingCodeEvent.event_type == EVENT_APPLIED,
+            )
+        )).all())
+        assert supply is not None and supply.packaging_task_id is None
+        assert code is not None and code.status == "applied"
+        assert marking is not None
+        assert marking.order_id == order_ids[0]
+        assert marking.value == cis_code
+        assert marking.marking_code_id == code_id
+        assert len(events) == 1
+        assert events[0].packaging_task_id is None
+        assert events[0].packaging_task_line_id is None
+        assert events[0].document_number is None
+        assert events[0].meta_json == '{"source_process": "packing_fbs_print"}'
     assert await stock_snapshot() == before_stock
