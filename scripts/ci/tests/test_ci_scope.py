@@ -11,6 +11,21 @@ class CIScopeTests(unittest.TestCase):
             "docs/evidence/WMS-704/run.md",
         ], "pull_request"))
 
+    def test_recognized_receipts_skip_heavy_wave_but_inputs_and_runners_do_not(self):
+        self.assertFalse(full_wave([
+            "docs/evidence/WMS-666/release-1008/p2-prefix/critical-browser-full/result.json",
+            "docs/evidence/WMS-666/release-1008/p2-prefix/ordinary/chrome.log",
+            "docs/evidence/WMS-666/release-1008/p2-prefix/native/sink-receipts.jsonl",
+        ], "push"))
+        for path in [
+            "docs/evidence/WMS-666/release-1008/p2-prefix/critical-browser-full/browser.mjs.executed-43.mjs",
+            "docs/evidence/WMS-666/release-1008/p2-prefix/critical-browser-full/preview-schema-check/preview-valid-fixture.json",
+            "docs/evidence/WMS-667/release-1008/result.json",
+            "docs/requirements/WMS-704.json",
+        ]:
+            with self.subTest(path=path):
+                self.assertTrue(full_wave([path], "push"))
+
     def test_runtime_fixtures_and_ci_sources_run_full_wave(self):
         for path in (
             "docs/mockups/WMS-686/model.test.ts",

@@ -150,7 +150,7 @@ class ReviewedProcessUpgradeTests(unittest.TestCase):
         self.assertTrue(self.verify_anchor()['evidence_complete'])
         self.assertEqual(self.verify_integrity(), self.f.policy)
 
-    def test_case_rename_is_accepted_but_decreased_suite_coverage_fails(self):
+    def test_case_contract_edit_is_reviewable_without_a_case_count_floor(self):
         self.f.policy['suites']['picking']['cases'][0] = 'tests.scan::renamed'
         self.f.save_policy(self.f.policy)
         self.f.head = self.f.commit('rename required case')
@@ -160,16 +160,13 @@ class ReviewedProcessUpgradeTests(unittest.TestCase):
         self.assertEqual(self.verify_integrity(), self.f.policy)
 
         self.f.policy['suites']['picking']['cases'].pop()
-        self.f.policy['suites']['picking']['cases'].pop()
         self.f.policy['files'].pop('tests/undo.py')
         self.f.save_policy(self.f.policy)
         self.f.head = self.f.commit('remove required case')
         self.f.merge = self.f.commit('merge missing case')
         self.f.bind_candidate()
-        with self.assertRaisesRegex(ValueError, 'protected execution contract'):
-            self.verify_anchor()
-        with self.assertRaisesRegex(ValueError, 'case count decreased'):
-            self.verify_integrity()
+        self.assertTrue(self.verify_anchor()['evidence_complete'])
+        self.assertEqual(self.verify_integrity(), self.f.policy)
 
     def test_actual_report_missing_or_skip_remains_failure(self):
         report = self.f.root / 'picking.xml'

@@ -7,6 +7,8 @@ import subprocess
 import sys
 from urllib.parse import urlencode
 
+from scripts.ci.ci_scope import is_generated_evidence_output
+
 REQUIRED_JOBS = {"baseline", "backlog", "scope", "backend", "frontend-build", "охрана",
                  "print-regressions", "printer-windows", "wms686-mockup", "process-proof"}
 HEAVY_JOBS = REQUIRED_JOBS - {"baseline", "backlog", "scope", "охрана", "process-proof"}
@@ -135,13 +137,21 @@ def prose_only_commit(get, root, sha):
         data = get(f"{root}/git/trees/{tree_sha}?recursive=1")
         if data.get("truncated") is not False:
             raise GateError("Нельзя проверить полный список изменённых файлов")
-        rows = {row["path"]: (row["sha"], row["mode"], row["type"]) for row in data["tree"]}
-        if len(rows) != len(data["tree"]):
+        # Recursive tree responses include directory objects whose SHAs change
+        # whenever a child file changes. Scope only actual files, including
+        # added and deleted blobs, so prose-only edits remain classifiable.
+        entries = data["tree"]
+        names = [row["path"] for row in entries]
+        if len(names) != len(set(names)):
             raise GateError("Повтор пути в дереве Git")
+        rows = {row["path"]: (row["sha"], row["mode"]) for row in entries
+                if row.get("type") == "blob"}
         trees.append(rows)
     old, new = trees
     changed = [path for path in old.keys() | new.keys() if old.get(path) != new.get(path)]
-    return bool(changed) and all(prose_path(path) for path in changed)
+    return bool(changed) and all(
+        prose_path(path) or is_generated_evidence_output(path) for path in changed
+    )
 
 
 def main():

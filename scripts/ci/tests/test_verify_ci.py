@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 from urllib.parse import parse_qs, urlparse
 
-from scripts.ci.verify_ci import GateError, REQUIRED_JOBS, pages, verify
+from scripts.ci.verify_ci import GateError, REQUIRED_JOBS, pages, prose_only_commit, verify
 
 SHA = "a" * 40
 REPO = "owner/repo"
@@ -134,6 +134,24 @@ class GateTests(unittest.TestCase):
         next(job for job in self.f.jobs if job['name'] == 'backend')['conclusion'] = 'skipped'
         result = self.verify()
         self.assertTrue(result['docs_only'])
+
+    def test_prose_tree_diff_ignores_directory_objects_and_tracks_deleted_files(self):
+        def tree_get(path):
+            if '/git/commits/' in path:
+                ref = path.rsplit('/', 1)[-1]
+                return {'tree': {'sha': 'head' if ref == SHA else 'base'},
+                        'parents': [{'sha': 'b' * 40}] if ref == SHA else []}
+            if '/git/trees/' in path:
+                ref = path.split('/git/trees/', 1)[1].split('?', 1)[0]
+                docs = {'path': 'docs', 'sha': 'a' * 40 if ref == 'head' else 'c' * 40,
+                        'mode': '040000', 'type': 'tree'}
+                blob = {'path': 'docs/requirements/old.md' if ref == 'base'
+                        else 'docs/requirements/new.md', 'sha': '1' * 40 if ref == 'base'
+                        else '2' * 40, 'mode': '100644', 'type': 'blob'}
+                return {'truncated': False, 'tree': [docs, blob]}
+            raise AssertionError(path)
+
+        self.assertTrue(prose_only_commit(tree_get, 'owner/repo', SHA))
 
     def test_job_other_sha_or_run_fails(self):
         for field, value in [("head_sha", "b" * 40), ("run_id", 123), ("status", "queued")]:

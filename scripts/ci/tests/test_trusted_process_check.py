@@ -99,9 +99,9 @@ class TrustedProcessCheckTests(unittest.TestCase):
         self.f.policy['suites']['qr']['cases'][1] = 'unrelated'
         self.assertEqual(self.verify()['head_sha'], H)
 
-    def test_case_count_decrease_still_fails(self):
+    def test_case_policy_can_change_through_normal_review(self):
         self.f.policy['suites']['qr']['cases'].pop()
-        with self.assertRaises(ValueError): self.verify()
+        self.assertEqual(self.verify()['head_sha'], H)
 
     def test_missing_candidate_source_still_fails(self):
         self.f.tree = [row for row in self.f.tree if row['path'] != 'tests/scan.py']

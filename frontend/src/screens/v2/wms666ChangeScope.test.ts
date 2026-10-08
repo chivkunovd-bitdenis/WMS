@@ -52,6 +52,41 @@ const WMS_666_PROOF_FILES = new Set([
   // These two exact shared proofs were written by the WMS-666 integration merge.
   'docs/reviews/priority-five-progress-20261006.md',
   'docs/reviews/priority-five-source-map-20261006.json',
+  'docs/evidence/WMS-666/release-1008/prod-hotfix-a19d02d31ba57763ce93a29005a95cc3f473e005.diff',
+])
+const WMS_666_ALLOWED_CODE_FILES = new Set([
+  'frontend/src/screens/v2/FbsPackingScanBar.tsx',
+  'frontend/src/screens/v2/FbsScanPrintToggles.tsx',
+  'frontend/src/screens/v2/FbsScanPrintToggles.dom.test.tsx',
+  'frontend/src/screens/v2/FfFbsOrdersScreen.tsx',
+  'frontend/src/screens/v2/FfFbsSupplyAssembly.tsx',
+  'frontend/src/screens/v2/FfFbsSupplyAssembly.scanners.dom.test.tsx',
+  'frontend/src/screens/v2/FfFbsSupplyAssembly.dom.test.tsx',
+  'frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx',
+  'frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx',
+  'frontend/src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx',
+  'frontend/src/screens/v2/FfFbsSupplyWorkspace.size.test.ts',
+  'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms514.test.ts',
+  'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx',
+  'frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx',
+  'frontend/src/screens/v2/fbsSequentialPacking.ts',
+  'frontend/src/screens/v2/fbsSupplyAssembly.ts',
+  'frontend/src/screens/v2/fbsUx.ts',
+  'frontend/src/components/MarkingPrintDialog.availability.dom.test.tsx',
+  'frontend/src/components/MarkingPrintDialog.partialAck.wms666.dom.test.tsx',
+  'backend/tests/test_fbs_kiz.py',
+  'backend/tests/test_fbs_packing_box.py',
+  'backend/tests/test_fbs_supply_from_orders.py',
+  'backend/tests/test_ozon_box_assembly.py',
+  'backend/tests/test_wms666_ozon_quantity_print_bindings.py',
+  'backend/tests/test_wms666_workspace_marking_pool.py',
+  'backend/app/services/fbs_supply_service.py',
+  'backend/tests/test_fbs_create_http_connection.py',
+  'backend/tests/test_fbs_ozon_lane.py',
+  'frontend/src/screens/v2/fbsStickerPrefetch.ts',
+  'frontend/src/screens/v2/fbsStickerPrefetch.test.ts',
+  'frontend/src/screens/v2/FfFbsSupplyAssembly.dom.test.tsx',
+  'backend/tests/fbs_picking_browser_verify.py',
 ])
 
 export function wms666AcceptedHistoryChange(
@@ -105,7 +140,8 @@ export function wms666TaskChangedPaths(
   git('merge-base', '--is-ancestor', contract, 'HEAD')
   const head = git('rev-parse', 'HEAD').trim()
   const historyStart = wms666AcceptedTaskBase(git, contract, head)
-  const history = git('log', '--ancestry-path', '--format=%H%x09%P%x09%s', `${historyStart}..${head}`)
+  // Include side-branch commits later merged into this task range.
+  const history = git('log', '--format=%H%x09%P%x09%s', `${historyStart}..${head}`)
   const root = historyStart === contract
     ? git('show', '-s', '--format=%H%x09%P%x09%s', contract) : ''
   const paths = new Set<string>()
@@ -156,10 +192,7 @@ export function wms666ScopeViolations(paths: string[]): string[] {
     // Only this task's machine-readable correction record belongs to its scope.
     if (path === 'docs/reviews/contract-corrections/WMS-666.json') return false
     if (WMS_666_PROOF_FILES.has(path) || path.startsWith('docs/evidence/WMS-666/')) return false
-    if (path.startsWith('frontend/src/screens/v2/')) return false
-    if (path === 'frontend/src/components/LabelSizeSelect.tsx' || path === 'frontend/src/utils/labelSize.ts') return false
-    if (path.startsWith('frontend/src/') && /\.test\.[cm]?[jt]sx?$/.test(path)) return false
-    if (path.startsWith('backend/tests/') || path.startsWith('frontend/tests/')) return false
+    if (WMS_666_ALLOWED_CODE_FILES.has(path)) return false
     return true
   })
 }
@@ -209,12 +242,35 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
     expect(wms666ScopeViolations(adjacent)).toEqual(adjacent)
   })
 
+  it('allows only named WMS-666 package files, including sticker-source coverage', () => {
+    const allowed = [
+      'backend/app/services/fbs_supply_service.py',
+      'backend/tests/test_fbs_create_http_connection.py',
+      'backend/tests/test_fbs_ozon_lane.py',
+      'frontend/src/screens/v2/fbsStickerPrefetch.ts',
+      'frontend/src/screens/v2/fbsStickerPrefetch.test.ts',
+      'frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx',
+      'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms514.test.ts',
+      'frontend/src/screens/v2/FfFbsSupplyAssembly.tsx',
+      'frontend/src/screens/v2/FfFbsSupplyAssembly.dom.test.tsx',
+      'backend/tests/fbs_picking_browser_verify.py',
+    ]
+    expect(wms666ScopeViolations(allowed)).toEqual([])
+    const adjacent = [
+      'backend/app/services/other_service.py',
+      'backend/tests/test_unrelated.py',
+      'frontend/src/screens/v2/UnrelatedScreen.tsx',
+      'frontend/src/screens/v2/UnrelatedScreen.test.tsx',
+    ]
+    expect(wms666ScopeViolations(adjacent)).toEqual(adjacent)
+  })
+
   it('reads advancing task history: foreign backend passes, new task backend or guards fail', () => {
     const repo = fixtureRepository()
     try {
       repo.write('backend/app/services/ozon_documents.py', 'foreign task\n')
       repo.commit('WMS-663: independent document action')
-      repo.write('frontend/src/screens/v2/packing.ts', 'approved task UI\n')
+      repo.write('frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx', 'approved task UI\n')
       const accepted = repo.commit('WMS-666: approved packing UI')
       expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([])
       const forbidden = [
@@ -258,7 +314,7 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       repo.write('backend/app/services/foreign.py', 'independent backend\n')
       repo.commit('WMS-663: foreign backend')
       repo.git('checkout', '-b', 'task', repo.contract)
-      repo.write('frontend/src/screens/v2/packing.ts', 'own UI\n')
+      repo.write('frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx', 'own UI\n')
       repo.commit('WMS-666: own UI')
       repo.git('merge', '--no-ff', '--no-commit', 'foreign')
       repo.write('backend/app/services/inventory_service.py', 'forbidden merge resolution\n')
@@ -304,7 +360,7 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       const base = repo.commit('WMS-652: reviewed base')
       repo.write('backend/app/services/inventory_service.py', 'reviewed historical backend change\n')
       repo.commit('WMS-666: source history before review')
-      repo.write('frontend/src/screens/v2/packing.ts', 'reviewed source\n')
+      repo.write('frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx', 'reviewed source\n')
       const source = repo.commit('WMS-666: independently reviewed source')
 
       repo.git('checkout', '-b', 'task', source)
@@ -335,7 +391,7 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
     try {
       repo.write('base.txt', 'reviewed base\n')
       const base = repo.commit('WMS-652: reviewed base')
-      repo.write('frontend/src/screens/v2/packing.ts', 'reviewed source\n')
+      repo.write('frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx', 'reviewed source\n')
       const source = repo.commit('WMS-666: independently reviewed source')
 
       repo.git('checkout', '-b', 'side', base)
@@ -357,11 +413,11 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       repo.write('base.txt', 'reviewed base\n')
       const base = repo.commit('WMS-652: reviewed base')
       repo.git('checkout', '-b', 'task', base)
-      repo.write('frontend/src/screens/v2/packing.ts', 'task change\n')
+      repo.write('frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx', 'task change\n')
       repo.commit('WMS-666: checked-out task')
       repo.write('scripts/ci/process_bootstrap.json', 'malformed history metadata')
       expect(wms666TaskChangedPaths(repo.cwd, repo.contract)).toEqual([
-        'frontend/src/screens/v2/packing.ts', 'scripts/ci/process_bootstrap.json',
+        'frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx', 'scripts/ci/process_bootstrap.json',
       ])
     } finally {
       repo.close()
@@ -467,7 +523,7 @@ function fixtureRepository() {
   git('config', 'user.email', 'scope-test@example.invalid')
   git('config', 'user.name', 'WMS-666 isolated scope test')
   git('config', 'commit.gpgsign', 'false')
-  write('frontend/src/screens/v2/packing.ts', 'original task contract\n')
+  write('frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx', 'original task contract\n')
   const contract = commit('WMS-666: контракт тестов')
   return { cwd, git, write, commit, contract, close: () => rmSync(cwd, { recursive: true, force: true }) }
 }
