@@ -33,6 +33,7 @@ const WMS_666_ALLOWED_CODE_FILES = new Set([
   'frontend/src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx',
   'frontend/src/screens/v2/FfFbsSupplyWorkspace.size.test.ts',
   'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms514.test.ts',
+  'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms666.printFreshness.dom.test.tsx',
   'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx',
   'frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx',
   'frontend/src/screens/v2/fbsSequentialPacking.ts',
