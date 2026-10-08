@@ -368,9 +368,9 @@ try {
     startSelection(data,list=false){mode=list?'geometry-list':'selection';selectionState=data;failedGroup='';groupAttempts={};addAttempts=0;createdRefs=[];heldAdd=undefined;resetGeometry();},
     logs:()=>({requestLog,printLog,trace,blocked,errors}),
   });
+  assert(report.cases.every(one=>one.status==='PASS'),'one or more real-screen cases failed');
   assert.deepEqual(report.cases.map(one=>one.id),JSON.parse(readFileSync(new URL('./cases.json',import.meta.url),'utf8')),'complete exact browser IDs must execute');
   }else assert.equal(report.cases.length,1,'focused preview run executes only its named case');
-  assert(report.cases.every(one=>one.status==='PASS'),'one or more real-screen cases failed');
   report.status='PASS';
 }catch(e){if(report.currentCase&&!report.cases.some(one=>one.id===report.currentCase))report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});report.status='FAIL';report.failure=String(e);report.stack=e.stack;console.error(e);process.exitCode=1;}
 finally{

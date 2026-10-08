@@ -26,12 +26,11 @@ await mkdir(dir,{recursive:true});
 const qrCodes = ['*DUIkWJJF', '*DUIkNEXT'];
 const cises = ['010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A','010460000000000221SERIAL-B\u001d91EFGH\u001d92signed-B'];
 const qrImages = await Promise.all(qrCodes.map(text => bwip.toBuffer({bcid:'qrcode',text,scale:3})));
-let requestLog=[],printLog=[],trace=[],blocked=[],errors=[],state,heldLookup,holdFirst,assetResponses=[];
+let requestLog=[],printLog=[],trace=[],blocked=[],errors=[],state,heldLookup,holdFirst;
 let receiptMode='', heldPrint, acceptedPrints=new Map(), lostAck=false, boundOrders=new Map(), restored=false;
 const markingIds={'wb-a-order':'66600000-0000-4000-8000-000000000001','wb-next-order':'66600000-0000-4000-8000-000000000002'};
 let cdp, mode='qr', selectionState, failedGroup, groupAttempts, addAttempts, createdRefs, heldAdd;
 const report={sha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),cases:[],physicalPaper:'NOT_TESTED',externalApi:'SYNTHETIC'};
-const previewOnly=process.env.WMS652_PREVIEW_ONLY==='1';
 class CDP {
   constructor(url) {
     this.ws = new WebSocket(url); this.next = 0; this.pending = new Map(); this.listeners = new Map();
@@ -191,13 +190,7 @@ async function intercept({requestId,request}) {
         exemplars:[{exemplar_id:91+i,gtd_required:false,rnpt_required:false,is_gtd_absent:false,is_rnpt_absent:false}]}))});
   }
   if(path.endsWith('/pick-options')||path==='/products/linked-wb-catalog')return fulfill(requestId,[]);
-  if(path.endsWith('/print-assets')){
-    const preview=previewOnly?{id:'preview-order-sticker',kind:'order_sticker',status:'ready',content_type:'image/png',
-      width_mm:58,height_mm:40,preview_url:'/assets/qr-preview.png',download_url:null,checksum:null,applied_at:null,error:null}:null;
-    const response={requested:body?.order_ids?.length??0,ready:preview?1:0,missing:0,failed:0,assets:preview?[preview]:[],order_errors:[]};
-    assetResponses.push({request:{method:request.method,path,body},response});
-    return fulfill(requestId,response);
-  }
+  if(path.endsWith('/print-assets'))return fulfill(requestId,{items:[],ready:0,total:0,errors:[]});
   if(mode==='selection'&&path.startsWith('/operations/'))return selectionBoundary(requestId,request.method,path,u,body);
   if(path.endsWith('/worklist')||path==='/operations/fbs-assembly-tasks')return fulfill(requestId,{items:[],total:0,warehouse_options:[],server_now:'2026-10-06T08:00:00Z'});
   if(path==='/auth/me')return fulfill(requestId,{separate_marking_print_enabled:false});
@@ -285,29 +278,12 @@ try {
     ids.forEach(id=>sessionStorage.setItem('wms:fbs:'+id+':stage','packing'));
   `});
   await cdp.send('Emulation.setDeviceMetricsOverride',{width:1600,height:1000,deviceScaleFactor:1,mobile:false});
-  const browserCases=previewOnly?[['print-preview-valid-fixture','supply_id=wb-a',false]]:[['supply_id=A','supply_id=wb-a',false],['supply_ids=A','supply_ids=wb-a',false],['supply_ids=A,B','supply_ids=wb-a,wb-b',true]];
-  for(const [id,query,many] of browserCases){
+  for(const [id,query,many] of [['supply_id=A','supply_id=wb-a',false],['supply_ids=A','supply_ids=wb-a',false],['supply_ids=A,B','supply_ids=wb-a,wb-b',true]]){
     try {
-    prepareState(many);requestLog=[];printLog=[];trace=[];blocked=[];errors=[];assetResponses=[];heldLookup=undefined;holdFirst=true;
-    report.currentCase=previewOnly?'WMS652.printPreview[valid-fixture]':`WMS652.realQr[${id}]`;
+    prepareState(many);requestLog=[];printLog=[];trace=[];blocked=[];errors=[];heldLookup=undefined;holdFirst=true;
+    report.currentCase=`WMS652.realQr[${id}]`;
     await cdp.send('Page.navigate',{url:`${ORIGIN}/app/ff/fbs?${query}`});
     await until(`document.querySelector('[data-order-id="wb-a-order"]')&&document.querySelector('[data-testid="fbs-unified-scan"]')`);
-    if(previewOnly){
-      await clickElement(`document.querySelector('[data-order-id="wb-a-order"] button[data-task-id="FBS-09"]')`,'row QR preview');
-      await until(`[...document.querySelectorAll('[role="dialog"] h2')].some(node=>node.innerText==='Проверка перед печатью')`);
-      await until(`[...document.querySelectorAll('[role="dialog"] img')].some(img=>img.complete&&img.naturalWidth>0&&img.naturalHeight>0)`);
-      const preview=await evaluate(`(()=>{const dialog=[...document.querySelectorAll('[role="dialog"]')].find(node=>node.innerText.includes('Проверка перед печатью'));const img=dialog?.querySelector('img');return {dialog:Boolean(dialog),title:dialog?.querySelector('h2')?.innerText,image:img?{alt:img.alt,width:img.naturalWidth,height:img.naturalHeight,complete:img.complete,srcPrefix:img.src.slice(0,32)}:null,errorFallback:Boolean(document.querySelector('[data-testid="client-error-fallback"]')),alerts:[...(dialog?.querySelectorAll('[role="alert"]')??[])].map(node=>node.innerText)}})()`);
-      assert(preview.dialog&&preview.title==='Проверка перед печатью','real print preview dialog is rendered');
-      assert(preview.image?.complete&&preview.image.width>0&&preview.image.height>0,'fixture image is loaded in the preview');
-      assert.equal(preview.errorFallback,false,'preview did not fall through to the client error boundary');
-      assert.deepEqual(preview.alerts,[],'preview has no visible error or missing-image alert');
-      assert.equal(assetResponses.length,1);assert.deepEqual(assetResponses[0].response,{requested:1,ready:1,missing:0,failed:0,
-        assets:[{id:'preview-order-sticker',kind:'order_sticker',status:'ready',content_type:'image/png',width_mm:58,height_mm:40,
-          preview_url:'/assets/qr-preview.png',download_url:null,checksum:null,applied_at:null,error:null}],order_errors:[]});
-      await writeFile(`${dir}/preview-valid-fixture.json`,JSON.stringify({requestLog,assetResponses,preview,blocked,errors},null,2));
-      report.cases.push({id:report.currentCase,status:'PASS'});console.log(`${report.currentCase}: PASS`);
-      continue;
-    }
     await scan(qrCodes[0]);
     for(let i=0;i<50&&!heldLookup;i++)await sleep(100);
     assert(heldLookup,'input must reach product-miss then sticker lookup');
@@ -360,7 +336,6 @@ try {
       console.error(`${report.currentCase}: ${e}`);
     }
   }
-  if(!previewOnly){
   await selectionContracts();
   await flagContracts();
   await geometryContracts({cdp,evaluate,until,click,clickElement,report,dir,origin:ORIGIN,
@@ -368,9 +343,8 @@ try {
     startSelection(data,list=false){mode=list?'geometry-list':'selection';selectionState=data;failedGroup='';groupAttempts={};addAttempts=0;createdRefs=[];heldAdd=undefined;resetGeometry();},
     logs:()=>({requestLog,printLog,trace,blocked,errors}),
   });
-  assert.deepEqual(report.cases.map(one=>one.id),JSON.parse(readFileSync(new URL('./cases.json',import.meta.url),'utf8')),'complete exact browser IDs must execute');
-  }else assert.equal(report.cases.length,1,'focused preview run executes only its named case');
   assert(report.cases.every(one=>one.status==='PASS'),'one or more real-screen cases failed');
+  assert.deepEqual(report.cases.map(one=>one.id),JSON.parse(readFileSync(new URL('./cases.json',import.meta.url),'utf8')),'complete exact browser IDs must execute');
   report.status='PASS';
 }catch(e){if(report.currentCase&&!report.cases.some(one=>one.id===report.currentCase))report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});report.status='FAIL';report.failure=String(e);report.stack=e.stack;console.error(e);process.exitCode=1;}
 finally{
