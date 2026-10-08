@@ -14,6 +14,7 @@ from .llm import extract_json
 log = logging.getLogger(__name__)
 
 _ROUTE_RETRY_DELAYS = (5, 30, 300, 600)
+_REALTIME_VERSION = 1
 
 
 def _priority(value: Any) -> int:
@@ -65,24 +66,269 @@ class AgentDispatcher:
         self.routing = False
         self.active: set[str] = set()
 
-    def accept(self, m: Any) -> None:
+    def accept(self, m: Any, *, topic_id_override: str | None = None) -> None:
         """Persist event and its queue membership before releasing the source row."""
         if m["role"] == "owner" and not self.agent._owner(m):
             self.store.set_message(int(m["id"]), status="handled")
             return
-        event_id = f"in:{m['id']}:{m['revision'] if 'revision' in m.keys() else 1}"
+        if m["role"] not in ("owner", "client", "partner"):
+            self.store.set_message(int(m["id"]), status="handled")
+            return
+        revision = int(m["revision"] if "revision" in m.keys() else 1)
+        event_id = f"in:{m['id']}:{revision}"
+        visible = bool(self.agent.cfg.agent.visible_moderator)
+        existing_event = self.store.kv_get(f"agent_event:{event_id}", {}) if visible else {}
+        if existing_event and self.store.kv_get(f"agent_event_done:{event_id}"):
+            self.store.set_message(int(m["id"]), status="handled")
+            return
+        linked_topic = topic_id_override if visible else None
+        if visible and linked_topic is None and m["role"] == "owner" and self.agent._owner(m):
+            linked_topic = self.agent.case_journal.find_topic(m["reply_to"])
+            if linked_topic is None and m["reply_to"]:
+                linked_topic = self.store.kv_get(
+                    f"case_reply_topic:{m['chat_id']}:{m['reply_to']}")
+                if linked_topic is None:
+                    outbox = self.store.outbox_by_tg(int(m["chat_id"]), str(m["reply_to"]))
+                    if outbox is not None:
+                        metadata = self.store.kv_get(
+                            f"agent_realtime_outbox:{outbox['key']}", {})
+                        linked_topic = metadata.get("topic_id")
+                        if linked_topic is None:
+                            native = self.store.kv_get(f"reply_case:{outbox['key']}", {})
+                            linked_topic = native.get("topic_id")
+        elif visible and linked_topic is None:
+            linked_topic = self.agent.case_journal.find_message_topic(m["id"])
+            if linked_topic is None and m["reply_to"]:
+                replied_input = self.store.row(
+                    "SELECT id FROM messages WHERE chat_id=? AND msg_id=?",
+                    (int(m["chat_id"]), str(m["reply_to"])),
+                )
+                if replied_input is not None:
+                    linked_topic = self.agent.case_journal.find_message_topic(
+                        int(replied_input["id"]))
+            if linked_topic is None and m["reply_to"]:
+                linked_topic = self.store.kv_get(
+                    f"case_reply_topic:{m['chat_id']}:{m['reply_to']}")
+                if linked_topic is None:
+                    outbox = self.store.outbox_by_tg(int(m["chat_id"]), str(m["reply_to"]))
+                    if outbox is not None:
+                        metadata = self.store.kv_get(
+                            f"agent_realtime_outbox:{outbox['key']}", {})
+                        linked_topic = metadata.get("topic_id")
+                        if linked_topic is None:
+                            native = self.store.kv_get(f"reply_case:{outbox['key']}", {})
+                            linked_topic = native.get("topic_id")
+        if visible and linked_topic and m["role"] != "owner":
+            linked_card = self.store.kv_get(f"case_card:{linked_topic}", {})
+            try:
+                linked_chat_id = int(linked_card.get("chat_id", 0))
+            except (TypeError, ValueError):
+                linked_chat_id = 0
+            if linked_chat_id != int(m["chat_id"]):
+                linked_topic = None
+        card = self.store.kv_get(f"case_card:{linked_topic}", {}) if linked_topic else {}
+        case_chat_id = int(card.get("chat_id") or m["chat_id"])
+        topic_id = (linked_topic or str(existing_event.get("topic_id") or "")
+                    or f"topic-{int(m['id'])}")
+        event_chat_id = case_chat_id if linked_topic else int(m["chat_id"])
         with self.store.transaction():
             if not self.store.kv_get(f"agent_event:{event_id}"):
-                self.store.kv_set(f"agent_event:{event_id}", {
+                event = {
                     "id": event_id, "kind": "input", "source_id": int(m["id"]),
-                    "revision": int(m["revision"] if "revision" in m.keys() else 1),
-                    "chat_id": int(m["chat_id"]), "owner": self.agent._owner(m),
+                    "revision": revision, "chat_id": event_chat_id,
+                    "owner": self.agent._owner(m),
                     "text": str(m["text"]), "ts": float(m["ts"]),
-                })
+                }
+                if visible:
+                    event.update(source_chat_id=int(m["chat_id"]), topic_id=topic_id,
+                                 linked_topic_id=linked_topic,
+                                 realtime_version=_REALTIME_VERSION)
+                self.store.kv_set(f"agent_event:{event_id}", event)
                 queue = list(self.store.kv_get("agent_dispatch_queue", []))
                 queue.append(event_id)
                 self.store.kv_set("agent_dispatch_queue", queue)
+            if visible:
+                index = list(self.store.kv_get("agent_topic_index", []))
+                topic = self.store.kv_get(f"agent_topic:{topic_id}", {})
+                if not topic:
+                    topic = {"id": topic_id, "chat_id": case_chat_id,
+                             "summary": card.get("summary", ""),
+                             "next_action": "", "status": "queued", "priority": 5,
+                             "pending": [], "generation": 0, "task_ids": [],
+                             "affected_areas": [], "realtime_version": _REALTIME_VERSION}
+                else:
+                    # A card may predate the event dispatcher. Preserve its context but
+                    # do not resume any pending work from the legacy queue.
+                    if topic.get("realtime_version") != _REALTIME_VERSION:
+                        topic["pending"] = []
+                        topic["realtime_version"] = _REALTIME_VERSION
+                    topic["chat_id"] = case_chat_id
+                self.store.kv_set(f"agent_topic:{topic_id}", topic)
+                if topic_id not in index:
+                    index.append(topic_id)
+                    self.store.kv_set("agent_topic_index", index)
             self.store.set_message(int(m["id"]), status="routed")
+        if visible:
+            self._update_case_card(
+                m, event_id, topic_id, m["role"] == "owner" and linked_topic is not None,
+            )
+
+    def prepare_visible_realtime(self) -> int:
+        """Quarantine the legacy queue once and return the first eligible message ID."""
+        with self.store.transaction():
+            cutover = self.store.kv_get("agent_realtime_cutover_v1")
+            if isinstance(cutover, dict):
+                baseline = int(cutover.get("baseline_message_id", 0))
+            else:
+                row = self.store.row("SELECT COALESCE(MAX(id),0) AS id FROM messages")
+                baseline = int(row["id"] if row else 0)
+                self.store.kv_set("agent_realtime_cutover_v1", {
+                    "baseline_message_id": baseline, "at": float(self.agent.clock()),
+                })
+            queue = list(self.store.kv_get("agent_dispatch_queue", []))
+            active: list[str] = []
+            quarantined: list[str] = []
+            for event_id in queue:
+                event = self.store.kv_get(f"agent_event:{event_id}", {})
+                if event.get("realtime_version") == _REALTIME_VERSION:
+                    active.append(str(event_id))
+                else:
+                    quarantined.append(str(event_id))
+            if quarantined:
+                previous = list(self.store.kv_get("agent_dispatch_quarantined_v1", []))
+                self.store.kv_set("agent_dispatch_quarantined_v1",
+                                  list(dict.fromkeys(previous + quarantined))[-5000:])
+            self.store.kv_set("agent_dispatch_queue", active)
+        return baseline
+
+    def recover_visible_realtime(self) -> None:
+        """Resume only versioned events or an exact already-carded interrupted event."""
+        rows = self.store.rows("SELECT * FROM messages WHERE status IN ('new','transcribing') "
+                               "ORDER BY id")
+        for message in rows:
+            revision = int(message["revision"])
+            received = self.store.kv_get(f"agent_realtime_received_v1:{message['id']}:{revision}")
+            event_key = f"in:{message['id']}:{revision}"
+            event = self.store.kv_get(f"agent_event:{event_key}", {})
+            card_topic = self.agent.case_journal.find_realtime_event_topic(event_key)
+            if (not received and event.get("realtime_version") != _REALTIME_VERSION
+                    and not card_topic):
+                continue
+            if message["status"] == "transcribing":
+                self._update_case_card(message, event_key, card_topic or f"topic-{message['id']}",
+                                       False, waiting_for_transcript=True)
+                continue
+            self.accept(message, topic_id_override=card_topic)
+
+    def recover_visible_card_projections(self) -> None:
+        """Apply durable analysis results to their cards after interrupted Telegram edits."""
+        rows = self.store.rows(
+            "SELECT key,value FROM kv WHERE key LIKE 'agent_realtime_card_projection:%' "
+            "ORDER BY key"
+        )
+        for row in rows:
+            try:
+                projection = json.loads(row["value"])
+            except (TypeError, ValueError):
+                log.warning("invalid realtime card projection: %s", row["key"])
+                continue
+            if projection.get("realtime_version") != _REALTIME_VERSION or projection.get("reported"):
+                continue
+            event_id = str(projection.get("event_id") or "")
+            topic_id = str(projection.get("topic_id") or "")
+            if not event_id or not topic_id:
+                continue
+            source = self.store.row("SELECT * FROM messages WHERE id=?",
+                                    (projection.get("source_id"),))
+            if (source is None
+                    or int(source["revision"]) != int(projection.get("revision", 0))):
+                projection["reported"] = True
+                projection["superseded"] = True
+                self.store.kv_set(str(row["key"]), projection)
+                continue
+            card = self.store.kv_get(f"case_card:{topic_id}", {})
+            event = self.store.kv_get(f"agent_event:{event_id}", {})
+            if (event.get("realtime_version") != _REALTIME_VERSION
+                    or event.get("kind") != "input"):
+                continue
+            if not card and source["role"] != "owner":
+                self._update_case_card(source, event_id, topic_id, False)
+                card = self.store.kv_get(f"case_card:{topic_id}", {})
+            if not card:
+                continue
+            updated = self._update_case_card_after_turn(
+                topic_id, event, source, projection.get("result") or {})
+            current = self.store.kv_get(f"case_card:{topic_id}", updated)
+            body = self.agent.case_journal.render(current)
+            projection_delivered = bool(current.get("message_id")
+                                        and current.get("last_text") == body)
+            projection_terminal = (not current.get("message_id")
+                                   and current.get("delivery") in {"unknown", "rejected"})
+            if not (projection_delivered or projection_terminal):
+                continue
+            projection["reported"] = True
+            projection["reported_at"] = float(self.agent.clock())
+            self.store.kv_set(str(row["key"]), projection)
+
+    def _update_case_card(self, message: Any, event_id: str, topic_id: str,
+                          linked_owner_reply: bool, *, waiting_for_transcript: bool = False) -> None:
+        if not topic_id:
+            return
+        if message["role"] == "owner" and not linked_owner_reply:
+            return
+        chat_id = int(message["chat_id"])
+        card = self.store.kv_get(f"case_card:{topic_id}", {})
+        if linked_owner_reply:
+            chat_id = int(card.get("chat_id") or chat_id)
+            text = str(message["text"] or message["caption"] or "").strip()
+            event_key = f"owner:{event_id}"
+            self.agent.case_journal.update_card(
+                self.agent.pipe.bots.owner, self.agent.cfg.telegram.owner_chat_id,
+                topic_id, chat_id,
+                event=("Указание владельца: " + text)[:1400], event_key=event_key,
+                statuses={"queued": True}, event_timestamp=float(message["ts"]),
+            )
+            return
+        text = str(message["text"] or message["caption"] or "").strip()
+        if not text:
+            text = f"Получено вложение: {message['kind']}"
+        title = "Запрос: " + " ".join(text.split())[:110]
+        same_source_has_history = any(
+            str(event.get("key") or "").startswith(f"in:{message['id']}:")
+            for event in card.get("events", [])
+        )
+        waiting = waiting_for_transcript or message["status"] == "transcribing"
+        summary = {
+            "essence": text[:900],
+            "checked": "Ожидает проверки" if waiting else "Пока не проверено",
+            "found": "Сообщение принято; разбор не завершён",
+            "unknown": "Причина и решение пока не установлены",
+            "next_step": "Дождаться расшифровки и проверить историю и вложения"
+            if waiting else "Проверить историю и материалы, затем ответить по существу",
+        }
+        if card and not same_source_has_history:
+            title = str(card.get("title") or title)
+            existing_summary = card.get("summary")
+            if isinstance(existing_summary, dict) and existing_summary:
+                summary = existing_summary
+        binding = self.store.binding(chat_id)
+        chat_title = (str(binding["chat_title"]) if binding and binding["chat_title"]
+                      else str(self.store.kv_get(f"chat_title:{chat_id}", "") or chat_id))
+        self.agent.case_journal.update_card(
+            self.agent.pipe.bots.owner, self.agent.cfg.telegram.owner_chat_id,
+            topic_id, chat_id, title=title, summary=summary,
+            statuses={"queued": True},
+            event=("Получено новое обращение: " + text[:1000])[:1400],
+            event_key=event_id, chat_title=chat_title, event_timestamp=float(message["ts"]),
+        )
+        if message["kind"] == "voice" and message["text"] and not waiting:
+            self.agent.case_journal.update_card(
+                self.agent.pipe.bots.owner, self.agent.cfg.telegram.owner_chat_id,
+                topic_id, chat_id,
+                event=("Голосовое сообщение расшифровано: " + text[:1000])[:1400],
+                event_key=f"transcript:{message['id']}:{message['revision']}",
+                statuses={"queued": True}, event_timestamp=self.agent.clock(),
+            )
 
     def emit_internal(self, topic_id: str, kind: str, payload: dict[str, Any]) -> str:
         with self.store.transaction():
@@ -98,6 +344,8 @@ class AgentDispatcher:
                 "id": event_id, "kind": kind, "topic_id": topic_id,
                 "payload": payload, "chat_id": self.agent.cfg.telegram.owner_chat_id,
                 "owner": False, "ts": self.agent.clock(),
+                **({"realtime_version": _REALTIME_VERSION}
+                   if self.agent.cfg.agent.visible_moderator else {}),
             })
             queue = list(self.store.kv_get("agent_dispatch_queue", []))
             queue.append(event_id)
@@ -105,15 +353,21 @@ class AgentDispatcher:
         return event_id
 
     def tick(self) -> None:
-        for m in self.store.messages_with_status("new", 500):
-            if m["role"] in ("owner", "client", "partner"):
-                self.accept(m)
-        self._submit_route()
+        if self.agent.cfg.agent.visible_moderator:
+            self._route_visible_queue()
+        else:
+            for m in self.store.messages_with_status("new", 500):
+                if m["role"] in ("owner", "client", "partner"):
+                    self.accept(m)
+            self._submit_route()
         topic_ids = list(self.store.kv_get("agent_topic_index", []))
         topic_ids.sort(key=lambda tid: -int(self.store.kv_get(f"agent_topic:{tid}", {})
                                             .get("priority", 0)))
         for topic_id in topic_ids:
             topic = self.store.kv_get(f"agent_topic:{topic_id}", {})
+            if (self.agent.cfg.agent.visible_moderator
+                    and topic.get("realtime_version") != _REALTIME_VERSION):
+                continue
             if (topic.get("pending") and not topic.get("cancel_requested")
                     and topic_id not in self.active):
                 if len(self.active) < self.worker_limit:
@@ -130,6 +384,83 @@ class AgentDispatcher:
                         })
                         current["wake_at"] = None
                         self.store.kv_set(f"agent_topic:{topic_id}", current)
+
+    def _route_visible_queue(self) -> None:
+        """Attach only current-version events to their durable, preselected case topics."""
+        queue = list(self.store.kv_get("agent_dispatch_queue", []))
+        visible: list[tuple[str, dict[str, Any]]] = []
+        legacy: list[str] = []
+        for event_id in queue:
+            event = self.store.kv_get(f"agent_event:{event_id}", {})
+            if event.get("realtime_version") == _REALTIME_VERSION:
+                visible.append((str(event_id), event))
+            else:
+                legacy.append(str(event_id))
+        if legacy:
+            quarantined = list(self.store.kv_get("agent_dispatch_quarantined_v1", []))
+            self.store.kv_set("agent_dispatch_quarantined_v1",
+                              list(dict.fromkeys(quarantined + legacy))[-5000:])
+        if not visible:
+            with self.store.transaction():
+                current_queue = list(self.store.kv_get("agent_dispatch_queue", []))
+                active: list[str] = []
+                quarantined = list(self.store.kv_get("agent_dispatch_quarantined_v1", []))
+                for event_id in current_queue:
+                    event = self.store.kv_get(f"agent_event:{event_id}", {})
+                    if event.get("realtime_version") == _REALTIME_VERSION:
+                        active.append(str(event_id))
+                    else:
+                        quarantined.append(str(event_id))
+                self.store.kv_set("agent_dispatch_quarantined_v1",
+                                  list(dict.fromkeys(quarantined))[-5000:])
+                self.store.kv_set("agent_dispatch_queue", active)
+            return
+        # The event was durably accepted before the owner-card Telegram call. If the
+        # process stopped in that gap, recreate the same card before starting analysis.
+        for event_id, event in visible:
+            if event.get("kind") != "input" or self.store.kv_get(f"agent_event_done:{event_id}"):
+                continue
+            source = self.store.row("SELECT * FROM messages WHERE id=?", (event.get("source_id"),))
+            if source is None or int(source["revision"]) != int(event.get("revision", 0)):
+                continue
+            self._update_case_card(
+                source, event_id, str(event.get("topic_id") or ""),
+                source["role"] == "owner" and bool(event.get("linked_topic_id")),
+            )
+        done: set[str] = set()
+        with self.store.transaction():
+            index = list(self.store.kv_get("agent_topic_index", []))
+            for event_id, event in visible:
+                if self.store.kv_get(f"agent_event_done:{event_id}"):
+                    done.add(event_id)
+                    continue
+                topic_id = str(event.get("topic_id") or "")
+                topic = self.store.kv_get(f"agent_topic:{topic_id}", {}) if topic_id else {}
+                if not topic or topic.get("realtime_version") != _REALTIME_VERSION:
+                    # Keep a malformed event durable; never guess a new or unrelated case.
+                    continue
+                pending = list(topic.get("pending") or [])
+                if event_id not in pending:
+                    pending.append(event_id)
+                    topic["generation"] = int(topic.get("generation", 0)) + 1
+                topic["pending"] = pending
+                topic["status"] = "queued"
+                if event.get("kind") == "input":
+                    topic["last_source_id"] = int(event["source_id"])
+                self.store.kv_set(f"agent_topic:{topic_id}", topic)
+                if topic_id not in index:
+                    index.append(topic_id)
+                if event.get("kind") == "input":
+                    self.store.set_message(int(event["source_id"]), status="routed")
+                done.add(event_id)
+            self.store.kv_set("agent_topic_index", index)
+            current_queue = list(self.store.kv_get("agent_dispatch_queue", []))
+            self.store.kv_set("agent_dispatch_queue", [
+                event_id for event_id in current_queue
+                if str(event_id) not in done
+                and self.store.kv_get(f"agent_event:{event_id}", {}).get(
+                    "realtime_version") == _REALTIME_VERSION
+            ])
 
     def _submit_route(self) -> None:
         with self.lock:
@@ -409,6 +740,8 @@ class AgentDispatcher:
                 # An edit supersedes this revision; newer revision is separately routed.
                 self._finish_event(topic_id, event_id, {"summary": topic.get("summary", "")})
                 return
+            if self.agent.cfg.agent.visible_moderator:
+                self._mark_visible_analysis_started(topic_id, event_id, source)
         elif event["kind"] == "recheck" and topic.get("last_source_id"):
             source = self.store.row("SELECT * FROM messages WHERE id=?",
                                     (topic["last_source_id"],))
@@ -417,7 +750,20 @@ class AgentDispatcher:
         result = self.agent.run_topic_turn(topic, event, source)
         self._finish_event(topic_id, event_id, result)
 
+    def _mark_visible_analysis_started(self, topic_id: str, event_id: str,
+                                       source: Any) -> None:
+        card = self.store.kv_get(f"case_card:{topic_id}", {})
+        if not card:
+            return
+        self.agent.case_journal.update_card(
+            self.agent.pipe.bots.owner, self.agent.cfg.telegram.owner_chat_id,
+            topic_id, int(card.get("chat_id") or source["chat_id"]),
+            statuses={"working": True}, event="Начат разбор обращения.",
+            event_key=f"analysis-start:{event_id}", event_timestamp=float(self.agent.clock()),
+        )
+
     def _finish_event(self, topic_id: str, event_id: str, result: dict[str, Any]) -> None:
+        event: dict[str, Any] = {}
         with self.store.transaction():
             topic = self.store.kv_get(f"agent_topic:{topic_id}", {})
             if topic.get("cancel_requested"):
@@ -457,34 +803,77 @@ class AgentDispatcher:
                         text = str(item.get("text") or "").strip()
                         if text and text not in texts:
                             texts.append(text)
-                    self._emit_internal_locked(topic_id, "worker_done", {
-                        "event_key": f"split_done:{parent_event_id}",
-                        "source_event": parent_event_id,
-                        "summary": "\n".join(str(item.get("summary") or "")
-                                              for item in ordered)[:2500],
-                        "text": "\n\n".join(texts)[:6000],
-                        "answer_queued": False, "split_complete": True,
-                        "affected_areas": list(dict.fromkeys(
-                            area for item in ordered for area in item.get("affected_areas", [])
-                        ))[:50],
-                        "task_ids": list(dict.fromkeys(
-                            task_id for item in ordered for task_id in item.get("task_ids", [])
-                        ))[:50],
-                    })
+                    if not self.agent.cfg.agent.visible_moderator:
+                        self._emit_internal_locked(topic_id, "worker_done", {
+                            "event_key": f"split_done:{parent_event_id}",
+                            "source_event": parent_event_id,
+                            "summary": "\n".join(str(item.get("summary") or "")
+                                                  for item in ordered)[:2500],
+                            "text": "\n\n".join(texts)[:6000],
+                            "answer_queued": False, "split_complete": True,
+                            "affected_areas": list(dict.fromkeys(
+                                area for item in ordered for area in item.get("affected_areas", [])
+                            ))[:50],
+                            "task_ids": list(dict.fromkeys(
+                                task_id for item in ordered for task_id in item.get("task_ids", [])
+                            ))[:50],
+                        })
             else:
-                self._emit_internal_locked(topic_id, "worker_done", {
-                    "event_key": f"done:{event_id}",
-                    "source_event": event_id, "summary": topic.get("summary", ""),
-                    "text": result.get("result", "")[:2500],
-                    "answer_queued": bool(result.get("answer_queued")),
-                    "affected_areas": topic.get("affected_areas", []),
-                    "task_ids": topic.get("task_ids", []),
-                })
+                if not self.agent.cfg.agent.visible_moderator:
+                    self._emit_internal_locked(topic_id, "worker_done", {
+                        "event_key": f"done:{event_id}",
+                        "source_event": event_id, "summary": topic.get("summary", ""),
+                        "text": result.get("result", "")[:2500],
+                        "answer_queued": bool(result.get("answer_queued")),
+                        "affected_areas": topic.get("affected_areas", []),
+                        "task_ids": topic.get("task_ids", []),
+                    })
             if event.get("kind") == "input":
                 source = self.store.row("SELECT revision FROM messages WHERE id=?",
                                         (event["source_id"],))
                 if source and int(source["revision"]) == int(event["revision"]):
+                    if self.agent.cfg.agent.visible_moderator:
+                        card_result = {key: result[key] for key in
+                                       ("summary", "checked", "found", "unknown", "next_action",
+                                        "result") if key in result}
+                        self.store.kv_set(
+                            f"agent_realtime_card_projection:{event_id}",
+                            {"realtime_version": _REALTIME_VERSION, "event_id": event_id,
+                             "topic_id": topic_id, "source_id": int(event["source_id"]),
+                             "revision": int(event["revision"]), "result": card_result},
+                        )
                     self.store.set_message(event["source_id"], status="handled")
+        if self.agent.cfg.agent.visible_moderator and event.get("kind") == "input":
+            self.recover_visible_card_projections()
+
+    def _update_case_card_after_turn(self, topic_id: str, event: dict[str, Any],
+                                     source: Any, result: dict[str, Any]) -> dict[str, Any]:
+        card = self.store.kv_get(f"case_card:{topic_id}", {})
+        if not card:
+            return {}
+        source_text = str(source["text"] or source["caption"] or "").strip()
+        checked = str(result.get("checked") or "").strip()
+        found = str(result.get("found") or "").strip()
+        unknown = str(result.get("unknown") or "").strip()
+        next_action = str(result.get("next_action") or "").strip()
+        summary = {
+            "essence": str(result.get("summary") or source_text or card.get("title") or "Запрос")[:900],
+            "checked": (checked[:900] if checked else
+                        "Разбор завершён; проверенные действия модель не перечислила"),
+            "found": (found[:900] if found else
+                      str(result.get("result") or "Результат проверки не описан")[:900]),
+            "unknown": unknown[:900] if unknown else "Отдельно не указано",
+            "next_step": next_action[:900] if next_action else "Дополнительных действий не указано",
+        }
+        details = " · ".join(part for part in (summary["found"], summary["next_step"]) if part)
+        event_text = "Разбор завершён. " + details if details else "Разбор завершён."
+        return self.agent.case_journal.update_card(
+            self.agent.pipe.bots.owner, self.agent.cfg.telegram.owner_chat_id,
+            topic_id, int(card.get("chat_id") or event.get("chat_id") or source["chat_id"]),
+            summary=summary, statuses={"analysis_done": True},
+            event=event_text[:1400], event_key=f"analysis:{event['id']}",
+            event_timestamp=float(self.agent.clock()),
+        )
 
     def recover_after_restart(self) -> None:
         # Queue and topic pending lists already live in SQLite; old in-progress

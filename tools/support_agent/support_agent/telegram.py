@@ -406,7 +406,8 @@ def reconcile_unconfirmed_native_delivery(journal: CaseJournal, store: Store, ow
 
 
 def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | None = None,
-                 explicit_native_action: bool = False) -> int:
+                 explicit_native_action: bool = False,
+                 allow_scoped_client_replies: bool = False) -> int:
     """Отправляет намерения. Клиенту при неизвестном исходе НЕ повторяем (R35).
 
     Маршрут по чату: владельцу только ботом владельца, всем остальным только ботом приёма.
@@ -419,7 +420,8 @@ def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | Non
             continue
         explicit_send = (explicit_native_action and only_ids is not None
                          and item['key'].startswith('native-send:'))
-        if (item['chat_id'] != cfg.telegram.owner_chat_id and not explicit_send
+        scoped_send = allow_scoped_client_replies and only_ids is not None
+        if (item['chat_id'] != cfg.telegram.owner_chat_id and not explicit_send and not scoped_send
                 and not getattr(cfg.agent, 'client_replies_enabled', False)):
             continue
         if not store.claim_outbox(item["id"]):

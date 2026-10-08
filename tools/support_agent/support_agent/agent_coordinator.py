@@ -75,6 +75,12 @@ class AgentCoordinator:
         self.active_jobs: set[str] = set()
         self.semantic_verifier = SemanticAuthorization(self)
         self.tools.semantic_verifier = self.semantic_verifier
+        self.case_journal = None
+        if self.cfg.agent.visible_moderator:
+            from .case_journal import CaseJournal
+            from .media import archive_root
+
+            self.case_journal = CaseJournal(self.store, archive_root(self.cfg))
         self.dispatcher = AgentDispatcher(self)
 
     def _owner(self, m: Any) -> bool:
@@ -169,6 +175,8 @@ class AgentCoordinator:
             "source": "internal", "message_id": "", "topic_id": topic["id"],
         }
         context["topic_id"] = topic["id"]
+        if self.cfg.agent.visible_moderator and source is not None:
+            context["defer_reply_until_analysis"] = True
         starting_generation = int(topic.get("generation", 0))
         model, provider = WMS_MODEL, WMS_PROVIDER
         prompt = json.dumps({
@@ -182,10 +190,16 @@ class AgentCoordinator:
             "person. A recheck timer can continue reading or ask a process question; it "
             "never grants a new approval, send, development job or release. If a deeper "
             "history is needed, read it through tools. For internal "
-            "completion events, do not call owner-privileged tools. Send substantive owner "
-            "progress while working, and return a short owner answer only when appropriate. "
-            "At the end include a JSON object with summary, next_action, optional wake_at "
-            "(Unix timestamp), task_ids and affected_areas when known. Do not invent "
+            "completion events, do not call owner-privileged tools. In visible moderator "
+            "mode put substantive progress into this topic's case card, not separate owner "
+            "messages. Analyze available history, attachments and current process before "
+            "asking the client anything; do not repeat known questions. Send a client reply "
+            "only after this turn has completed its checks. At the end include a JSON object "
+            "with summary (the request in plain language), checked (what was actually checked), "
+            "found (confirmed result), unknown (what remains unconfirmed), next_action, answer "
+            "when a useful post-analysis client reply is ready, optional wake_at (Unix timestamp), "
+            "task_ids and affected_areas when known. Use an empty answer if no client reply is "
+            "appropriate. Do not invent checks, dependencies or approvals. Do not invent "
             "dependencies or approvals.",
         }, ensure_ascii=False, default=str)
         specs = [{**spec, "type": "function"} for spec in self.tools.specs(scope=scope)]
@@ -217,6 +231,21 @@ class AgentCoordinator:
                 return {"error": "internal_event_has_no_source"}
             if name == "read_history":
                 return self._read_history(args, context)
+            if name == "owner_digest" and self.cfg.agent.visible_moderator:
+                card = self.store.kv_get(f"case_card:{topic['id']}", {})
+                if not card:
+                    return {"status": "no_case_card_for_digest"}
+                digest = str(args.get("text") or "").strip()
+                if not digest:
+                    return {"error": "empty_digest"}
+                self.case_journal.update_card(
+                    self.pipe.bots.owner, self.cfg.telegram.owner_chat_id,
+                    topic["id"], int(card.get("chat_id") or topic["chat_id"]),
+                    event=("Вывод проверки: " + digest)[:1400],
+                    event_key=f"digest:{event['id']}:{hashlib.sha256(digest.encode()).hexdigest()[:12]}",
+                    statuses={"working": True}, event_timestamp=self.clock(),
+                )
+                return {"status": "added_to_case_card", "topic_id": topic["id"]}
             return self.tools.dispatch(name, args, context)
 
         specs.append(_tool("read_history", "Search or page stored inbound and outbound chat history, "
@@ -231,6 +260,18 @@ class AgentCoordinator:
             if event.get("parent_event_id"):
                 # Split parts produce one consolidated completion; their
                 # individual progress must not become parallel owner messages.
+                return
+            if self.cfg.agent.visible_moderator:
+                digest = hashlib.sha256(message.encode()).hexdigest()[:16]
+                card = self.store.kv_get(f"case_card:{topic['id']}", {})
+                if card:
+                    self.case_journal.update_card(
+                        self.pipe.bots.owner, self.cfg.telegram.owner_chat_id,
+                        topic["id"], int(card.get("chat_id") or topic["chat_id"]),
+                        event=("Проверка: " + message.strip())[:1500],
+                        event_key=f"progress:{event['id']}:{digest}",
+                        statuses={"working": True}, event_timestamp=self.clock(),
+                    )
                 return
             gate_key = f"agent_progress_gate:{event['id']}"
             last_sent = float(self.store.kv_get(gate_key, 0) or 0)
@@ -264,17 +305,41 @@ class AgentCoordinator:
         fresh = self.store.kv_get(f"agent_topic:{topic['id']}", {})
         current_source = (self.store.row("SELECT revision FROM messages WHERE id=?", (source["id"],))
                           if source is not None else None)
-        answer_queued = bool(owner and source is not None and answer
-                             and not event.get("parent_event_id")
-                             and not fresh.get("cancel_requested")
+        current_valid = bool(not fresh.get("cancel_requested")
                              and int(fresh.get("generation", 0)) == starting_generation
                              and current_source is not None
-                             and int(current_source["revision"]) == int(source["revision"]))
+                             and int(current_source["revision"]) == int(source["revision"])) \
+            if source is not None else False
+        analysis_complete = bool(body and isinstance(parsed, dict) and current_valid)
+        deferred_question = False
+        deferred_reply = False
+        if analysis_complete and self.cfg.agent.visible_moderator and source is not None:
+            deferred_reply = self._promote_deferred_reply(source, event, topic)
+            deferred_question = deferred_reply and not owner
+        answer_queued = bool(owner and source is not None and answer
+                             and not event.get("parent_event_id")
+                             and current_valid)
         if answer_queued and source is not None:
-            self.store.queue_message(key=f"agent_answer:{event['id']}",
+            key = (f"agent_owner_answer_v1:{event['id']}" if self.cfg.agent.visible_moderator
+                   else f"agent_answer:{event['id']}")
+            self.store.queue_message(key=key,
                                      chat_id=int(source["chat_id"]), text=answer[:4000],
                                      reply_to=str(source["msg_id"]), purpose="agent_owner_answer",
                                      repeat_ok=False)
+            if self.cfg.agent.visible_moderator:
+                self._mark_realtime_outbox(key, topic, event, "owner_response")
+        client_answer_queued = False
+        if (analysis_complete and not owner and self.cfg.agent.visible_moderator and answer
+                and source is not None and not deferred_question and current_valid
+                and not event.get("parent_event_id")):
+            key = f"agent_client_answer_v1:{event['id']}"
+            self.store.queue_message(
+                key=key, chat_id=int(source["chat_id"]), text=answer[:4000],
+                reply_to=str(source["msg_id"]), ticket_id=None,
+                purpose="verified_answer", repeat_ok=False,
+            )
+            self._mark_realtime_outbox(key, topic, event, "answer")
+            client_answer_queued = True
         output = {"summary": str(parsed.get("summary") or topic.get("summary") or "")[:3000],
                 "next_action": str(parsed.get("next_action") or "")[:1000],
                 "wake_at": parsed.get("wake_at") if isinstance(parsed.get("wake_at"), (int, float)) else None,
@@ -282,8 +347,45 @@ class AgentCoordinator:
                 else topic.get("task_ids", []),
                 "affected_areas": parsed.get("affected_areas")
                 if isinstance(parsed.get("affected_areas"), list) else topic.get("affected_areas", []),
-                "result": body[:4000], "answer_queued": answer_queued}
+                "checked": str(parsed.get("checked") or "")[:2000]
+                if isinstance(parsed, dict) else "",
+                "found": str(parsed.get("found") or "")[:2000]
+                if isinstance(parsed, dict) else "",
+                "unknown": str(parsed.get("unknown") or "")[:2000]
+                if isinstance(parsed, dict) else "",
+                "result": body[:4000],
+                "answer_queued": answer_queued or deferred_reply or client_answer_queued}
         return output
+
+    def _promote_deferred_reply(self, source: Any, event: dict[str, Any],
+                                topic: dict[str, Any]) -> bool:
+        prefix = f"agent_reply_stage:{source['id']}:"
+        staged = self.store.rows("SELECT key,value FROM kv WHERE key LIKE ?", (prefix + "%",))
+        promoted = False
+        for row in staged:
+            item = json.loads(row["value"])
+            created = self.store.queue_message(
+                key=str(item["key"]), chat_id=int(item["chat_id"]),
+                text=str(item["text"]), reply_to=item.get("reply_to"),
+                ticket_id=int(item["ticket_id"]) if item.get("ticket_id") else None,
+                purpose=str(item["purpose"]),
+                repeat_ok=False,
+            )
+            metadata_key = f"agent_realtime_outbox:{item['key']}"
+            if created or not self.store.kv_get(metadata_key):
+                kind = ("owner_response"
+                        if int(item["chat_id"]) == self.cfg.telegram.owner_chat_id
+                        else "answer") if item.get("purpose") == "owner_authorized" else "question"
+                self._mark_realtime_outbox(str(item["key"]), topic, event, kind)
+            self.store.execute("DELETE FROM kv WHERE key=?", (row["key"],))
+            promoted = True
+        return promoted
+
+    def _mark_realtime_outbox(self, key: str, topic: dict[str, Any],
+                              event: dict[str, Any], kind: str) -> None:
+        self.store.kv_set(f"agent_realtime_outbox:{key}", {
+            "topic_id": str(topic["id"]), "event_id": str(event["id"]), "kind": kind,
+        })
 
     def _read_history(self, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         chat_id = int(args.get("chat_id") or context["chat_id"])

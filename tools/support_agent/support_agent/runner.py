@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import signal
@@ -95,6 +96,14 @@ class Agent:
     def startup(self) -> None:
         if self.cfg.agent.intake_only or self.cfg.agent.visible_moderator:
             if self.cfg.agent.visible_moderator:
+                if self.cfg.agent.enabled and self.pipe.agent is not None:
+                    dispatcher = self.pipe.agent.dispatcher
+                    dispatcher.prepare_visible_realtime()
+                    dispatcher.recover_visible_realtime()
+                    dispatcher.recover_visible_card_projections()
+                    dispatcher.tick()
+                    self._settle_visible_realtime_outbox()
+                    self._settle_visible_case_cards()
                 self._recover_visible_native_sends()
             self.store.kv_set("heartbeat", self.clock())
             return
@@ -157,6 +166,10 @@ class Agent:
 
     def poll_bot(self, bot: str, timeout: int = 10) -> int:
         """Один независимый long polling одного бота; у каждого бота свой offset в хранилище."""
+        if (self.cfg.agent.visible_moderator and self.cfg.agent.enabled
+                and self.pipe.agent is not None
+                and not isinstance(self.store.kv_get("agent_realtime_cutover_v1"), dict)):
+            self.pipe.agent.dispatcher.prepare_visible_realtime()
         client = self.bots.named()[bot]
         key = self._offset_key(bot)
         offset = int(self.store.kv_get(key, self.store.kv_get("tg_offset", 0) if bot == "intake" else 0))
@@ -164,8 +177,67 @@ class Agent:
         count = 0
         for update in updates:
             inb = normalize_update(update, self.cfg, bot)
-            if inb is not None and self.pipe.ingest(inb) is not None:
+            realtime = bool(self.cfg.agent.visible_moderator and self.cfg.agent.enabled
+                            and self.pipe.agent is not None)
+            poll_marker_key = f"agent_realtime_poll_v1:{bot}:{int(update['update_id'])}"
+            poll_marker: dict[str, Any] | None = None
+            if inb is not None and realtime:
+                cutover = self.store.kv_get("agent_realtime_cutover_v1", {})
+                cutover_at = float(cutover.get("at", 0)) if isinstance(cutover, dict) else 0
+                event_ts = max(float(inb.ts or 0), float(inb.edit_ts or 0))
+                if event_ts and event_ts >= cutover_at:
+                    poll_marker = self.store.kv_get(poll_marker_key)
+                    if not poll_marker:
+                        poll_marker = {
+                            "realtime_version": 1, "update_id": int(update["update_id"]),
+                            "source": inb.source, "chat_id": int(inb.chat_id),
+                            "message_id": str(inb.msg_id), "received_at": self.clock(),
+                            "state": "receiving",
+                        }
+                        # This proof precedes Store.add_message: redelivery can recover
+                        # a crash in the add-row / source-marker / offset window.
+                        self.store.kv_set(poll_marker_key, poll_marker)
+            message_id = self.pipe.ingest(inb) if inb is not None else None
+            if inb is not None and message_id is not None:
                 count += 1
+            if inb is not None and realtime:
+                if message_id is None:
+                    existing = self.store.row(
+                        "SELECT * FROM messages WHERE source=? AND chat_id=? AND msg_id=?",
+                        (inb.source, inb.chat_id, inb.msg_id),
+                    )
+                    if existing is not None:
+                        revision = int(existing["revision"])
+                        marker_key = f"agent_realtime_received_v1:{existing['id']}:{revision}"
+                        event = self.store.kv_get(f"agent_event:in:{existing['id']}:{revision}", {})
+                        if (poll_marker or self.store.kv_get(marker_key)
+                                or event.get("realtime_version") == 1):
+                            message_id = int(existing["id"])
+                if message_id is not None:
+                    message = self.store.row("SELECT * FROM messages WHERE id=?", (message_id,))
+                    if message is not None:
+                        revision = int(message["revision"])
+                        receipt_key = f"agent_realtime_received_v1:{message_id}:{revision}"
+                        event = self.store.kv_get(f"agent_event:in:{message_id}:{revision}", {})
+                        if (poll_marker or self.store.kv_get(receipt_key)
+                                or event.get("realtime_version") == 1):
+                            self.store.kv_set(receipt_key, {
+                                "update_id": int(update["update_id"]), "received_at": self.clock(),
+                                "realtime_version": 1,
+                            })
+                            if poll_marker is not None:
+                                poll_marker.update(state="accepted", source_id=int(message_id),
+                                                   revision=revision)
+                                self.store.kv_set(poll_marker_key, poll_marker)
+                            if message["status"] == "transcribing":
+                                self.pipe.agent.dispatcher._update_case_card(
+                                    message, f"in:{message_id}:{revision}",
+                                    f"topic-{message_id}", False, waiting_for_transcript=True,
+                                )
+                            elif (message["status"] == "new"
+                                  or event.get("realtime_version") == 1):
+                                self.pipe.agent.dispatcher.accept(message)
+                                self.pipe.agent.dispatcher.tick()
             offset = max(offset, int(update["update_id"]) + 1)
         if updates:
             self.store.kv_set(key, offset)  # после сохранения сообщений (R35)
@@ -210,6 +282,27 @@ class Agent:
             if self.cfg.agent.visible_moderator:
                 from .case_journal import CaseJournal
                 from .media import archive_pending, archive_root
+
+                if self.cfg.agent.enabled and self.pipe.agent is not None:
+                    dispatcher = self.pipe.agent.dispatcher
+                    for message in self.store.rows(
+                            "SELECT * FROM messages WHERE status IN ('new','transcribing') "
+                            "ORDER BY id"):
+                        revision = int(message["revision"])
+                        marker = self.store.kv_get(
+                            f"agent_realtime_received_v1:{message['id']}:{revision}")
+                        if not marker:
+                            continue
+                        if message["status"] == "transcribing":
+                            dispatcher._update_case_card(
+                                message, f"in:{message['id']}:{revision}",
+                                f"topic-{message['id']}", False, waiting_for_transcript=True,
+                            )
+                        else:
+                            dispatcher.accept(message)
+                    dispatcher.tick()
+                    dispatcher.recover_visible_card_projections()
+                    self._flush_visible_realtime_outbox()
                 self.pipe.transcribe_pending()
                 self.pipe.pool.submit("media-archive", lambda: archive_pending(self.pipe))
                 if now - float(self.store.kv_get("native_archive_at", 0)) >= 15:
@@ -232,6 +325,94 @@ class Agent:
         flush_outbox(self.store, self.bots, self.cfg)
         self.store.kv_set("heartbeat", self.clock())
 
+    def _flush_visible_realtime_outbox(self) -> None:
+        """Flush only sends authorized by a completed current-version analysis."""
+        from .case_journal import CaseJournal
+        from .media import archive_root
+
+        marker_rows = self.store.rows(
+            "SELECT key,value FROM kv WHERE key LIKE 'agent_realtime_outbox:%' ORDER BY key"
+        )
+        marked: dict[str, dict[str, Any]] = {}
+        for row in marker_rows:
+            try:
+                value = json.loads(row["value"])
+            except (TypeError, ValueError):
+                continue
+            if isinstance(value, dict):
+                marked[str(row["key"])[len("agent_realtime_outbox:"):]] = value
+        pending = self.store.outbox_pending()
+        allowed = {int(item["id"]) for item in pending if str(item["key"]) in marked}
+        if allowed:
+            flush_outbox(self.store, self.bots, self.cfg, only_ids=allowed,
+                         allow_scoped_client_replies=True)
+        journal = CaseJournal(self.store, archive_root(self.cfg))
+        for outbox_key, metadata in marked.items():
+            item = self.store.outbox_by_key(outbox_key)
+            if item is None or item["status"] not in {"sent", "unknown", "failed"}:
+                continue
+            if metadata.get("reported"):
+                continue
+            topic_id = str(metadata.get("topic_id") or "")
+            card = self.store.kv_get(f"case_card:{topic_id}", {})
+            if not card:
+                continue
+            kind = str(metadata.get("kind") or "answer")
+            if item["status"] == "sent":
+                if kind == "owner_response":
+                    event_text = f"Ответ владельцу отправлен: {item['text']}"
+                    statuses = {"working": True}
+                elif kind == "question":
+                    event_text = f"Уточнение отправлено клиенту: {item['text']}"
+                    statuses = {"question_sent": True}
+                else:
+                    event_text = f"Ответ отправлен клиенту: {item['text']}"
+                    statuses = {"answer_sent": True}
+                if item["tg_message_id"]:
+                    self.store.kv_set(
+                        f"case_reply_topic:{item['chat_id']}:{item['tg_message_id']}",
+                        topic_id,
+                    )
+            elif item["status"] == "unknown":
+                event_text = ("Доставка ответа клиенту не подтверждена; повторную отправку "
+                              "не выполняю до проверки чата.")
+                statuses = {"owner_needed": True}
+            else:
+                event_text = "Telegram отклонил отправку клиентского сообщения; проверьте обращение."
+                statuses = {"owner_needed": True}
+            event_key = f"realtime-delivery:{item['id']}"
+            updated = journal.update_card(
+                self.bots.owner, self.cfg.telegram.owner_chat_id, topic_id,
+                int(card.get("chat_id") or item["chat_id"]), statuses=statuses,
+                event=event_text[:1400], event_key=event_key, event_timestamp=self.clock(),
+            )
+            current = self.store.kv_get(f"case_card:{topic_id}", updated)
+            body = journal.render(current)
+            delivered = bool(current.get("message_id") and current.get("last_text") == body)
+            terminal = (not current.get("message_id")
+                        and current.get("delivery") in {"unknown", "rejected"})
+            metadata["reported"] = delivered or terminal
+            self.store.kv_set(f"agent_realtime_outbox:{outbox_key}", metadata)
+
+    def _settle_visible_realtime_outbox(self) -> None:
+        """Mark interrupted current-version sends unknown without touching legacy rows."""
+        for row in self.store.rows(
+                "SELECT key,value FROM kv WHERE key LIKE 'agent_realtime_outbox:%'"):
+            key = str(row["key"])[len("agent_realtime_outbox:"):]
+            item = self.store.outbox_by_key(key)
+            if item is not None and item["status"] == "sending":
+                self.store.finish_outbox(int(item["id"]), "unknown")
+
+    def _settle_visible_case_cards(self) -> None:
+        """Do not retry a card creation whose Telegram response was lost on shutdown."""
+        for row in self.store.rows("SELECT key,value FROM kv WHERE key LIKE 'case_card:%'"):
+            card = json.loads(row["value"])
+            if card.get("delivery") != "sending" or card.get("message_id"):
+                continue
+            card["delivery"] = "unknown"
+            card["delivery_error"] = "process_interrupted_during_telegram_send"
+            self.store.kv_set(str(row["key"]), card)
+
     def run_forever(self) -> None:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
         signal.signal(signal.SIGINT, lambda *_: setattr(self, "stop", True))
@@ -239,6 +420,8 @@ class Agent:
         background_polling = not self.bots.single or visible
         if not visible:
             self.startup()
+        elif (self.cfg.agent.enabled and self.pipe.agent is not None):
+            self.pipe.agent.dispatcher.prepare_visible_realtime()
         threads = []
         if background_polling:
             for bot in self.bots.named():
@@ -289,7 +472,7 @@ def build_agent(cfg: Config) -> Agent:
     pipe.mockups = MockupRunner(pipe, hotfix)
     from .media import message_image_paths
     pipe.message_image_paths = lambda message: message_image_paths(pipe, message)
-    if cfg.agent.enabled and not (cfg.agent.intake_only or cfg.agent.visible_moderator):
+    if cfg.agent.enabled and not cfg.agent.intake_only:
         from .agent_tools import AgentTools
         pipe.agent = AgentCoordinator(pipe, AgentTools(pipe))
     return Agent(cfg, store, tg, pipe)

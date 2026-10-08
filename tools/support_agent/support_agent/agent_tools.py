@@ -189,6 +189,12 @@ class AgentTools:
             if not isinstance(verdict, dict) or verdict.get("authorized") is not True:
                 raise ToolDenied("needs_clarification_for_this_action")
         method = getattr(self, f"_tool_{name}")
+        if name == "queue_process_reply":
+            return method(args, event, owner,
+                          defer_until_analysis=bool(context.get("defer_reply_until_analysis")))
+        if name == "queue_reply":
+            return method(args, event, owner,
+                          defer_until_analysis=bool(context.get("defer_reply_until_analysis")))
         return method(args, event, owner)
 
     def _event(self, context: dict[str, Any]) -> Any:
@@ -483,7 +489,8 @@ class AgentTools:
                 "url": agent.get("mockup_approval", {}).get("url") if kind == "mockup" else None,
                 "source_message_id": event["id"]}
 
-    def _tool_queue_reply(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
+    def _tool_queue_reply(self, args: dict[str, Any], event: Any, owner: bool,
+                          *, defer_until_analysis: bool = False) -> dict[str, Any]:
         tid = int(args.get("ticket_id") or 0)
         chat_id = int(args["chat_id"])
         if (chat_id != self.p.cfg.telegram.owner_chat_id
@@ -503,6 +510,16 @@ class AgentTools:
         if not body:
             raise ToolDenied("empty_reply")
         slot = self._slot(args.get("slot"))
+        if defer_until_analysis:
+            key = f"agent_owner_reply_v1:{event['id']}:{chat_id}:{tid}:{slot}"
+            stage_key = f"agent_reply_stage:{event['id']}:owner:{slot}"
+            self.store.kv_set(stage_key, {
+                "key": key, "chat_id": chat_id, "text": body,
+                "reply_to": args.get("reply_to"), "ticket_id": tid or None,
+                "purpose": "owner_authorized",
+            })
+            return {"queued": True, "deferred": True, "key": key, "status": "deferred",
+                    "owner_message_id": event["id"], "version": version}
         key = f"agent_reply:{event['id']}:{chat_id}:{tid}:{slot}"
         created = self.store.queue_message(
             key=key,
@@ -522,7 +539,8 @@ class AgentTools:
             "version": version,
         }
 
-    def _tool_queue_process_reply(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
+    def _tool_queue_process_reply(self, args: dict[str, Any], event: Any, owner: bool,
+                                  *, defer_until_analysis: bool = False) -> dict[str, Any]:
         tid = int(args["ticket_id"])
         ticket = self._ticket(tid, event, owner)
         kind = str(args.get("kind") or "")
@@ -535,6 +553,15 @@ class AgentTools:
         if kind == "description_confirmation" and not agent.get("version"):
             raise ToolDenied("description_missing")
         version = agent.get("version", "discussion")
+        if defer_until_analysis:
+            key = f"agent_process_v1:{tid}:{kind}:{version}"
+            stage_key = f"agent_reply_stage:{event['id']}:{kind}:{version}"
+            self.store.kv_set(stage_key, {
+                "key": key, "chat_id": int(ticket["chat_id"]),
+                "text": body, "reply_to": args.get("reply_to"),
+                "ticket_id": tid, "purpose": kind,
+            })
+            return {"queued": True, "deferred": True, "key": key, "status": "deferred"}
         key = f"agent_process:{tid}:{kind}:{version}"
         created = self.store.queue_message(
             key=key,

@@ -17,8 +17,9 @@ _FILE_KEYS: dict[str, set[str]] = {}
 _FILE_VERSIONS: dict[str, tuple[int, int]] = {}
 _PROCESS_LOCKS = threading.local()
 _LABELS = {
-    'working': 'Взято в работу', 'analysis_done': 'Анализ завершён',
-    'answer_sent': 'Ответ клиенту отправлен', 'owner_needed': 'Нужно уточнение владельца',
+    'queued': 'Получено, ожидает разбора', 'working': 'Взято в работу',
+    'analysis_done': 'Анализ завершён', 'answer_sent': 'Ответ клиенту отправлен',
+    'question_sent': 'Ждём ответа клиента', 'owner_needed': 'Нужно уточнение владельца',
     'development_needed': 'Нужна разработка', 'process_change': 'Нужно исправление процесса',
     'task_needed': 'Задача нужна', 'task_created': 'Задача заведена',
 }
@@ -175,6 +176,28 @@ class CaseJournal:
                 return str(card['topic_id'])
         return None
 
+    def find_realtime_event_topic(self, event_key: str) -> str | None:
+        """Find a card created by this workflow version that acknowledged an event."""
+        if not event_key:
+            return None
+        for row in self.store.rows("SELECT value FROM kv WHERE key LIKE 'case_card:%'"):
+            card = json.loads(row['value'])
+            if card.get('realtime_card_version') != 1:
+                continue
+            if any(str(event.get('key') or '') == event_key for event in card.get('events', [])):
+                return str(card['topic_id'])
+        return None
+
+    def find_message_topic(self, message_id: int | str) -> str | None:
+        """Keep later edits of an already-carded Telegram message in that case."""
+        prefix = f"in:{message_id}:"
+        for row in self.store.rows("SELECT value FROM kv WHERE key LIKE 'case_card:%'"):
+            card = json.loads(row['value'])
+            if any(str(event.get('key') or '').startswith(prefix)
+                   for event in card.get('events', [])):
+                return str(card['topic_id'])
+        return None
+
     def sync_chat(self, chat_id: int) -> None:
         for row in self.store.rows('SELECT * FROM messages WHERE chat_id=? ORDER BY id', (chat_id,)):
             self.record(chat_id, 'inbound', row['text'], f"in:{row['id']}:{row['revision']}",
@@ -269,7 +292,8 @@ class CaseJournal:
         active = [key for key in _LABELS if statuses.get(key) is True]
         # Legacy cards may have several true badges; prefer the more specific/latest outcome.
         priority = ('task_created', 'task_needed', 'development_needed', 'process_change',
-                    'owner_needed', 'answer_sent', 'analysis_done', 'working')
+                    'owner_needed', 'question_sent', 'answer_sent', 'analysis_done',
+                    'queued', 'working')
         return next((key for key in priority if key in active), 'working')
 
     @staticmethod
@@ -283,7 +307,8 @@ class CaseJournal:
         header += '\n'.join(f"{label}: {shorten(facts[key] or _SUMMARY_EMPTY[key], 360)}"
                              for key, label in _SUMMARY_FIELDS) + '\n'
         status = CaseJournal._current_status(card)
-        header += f"\nСтатус: {'🟡' if status in {'working', 'owner_needed'} else '🟢'} {_LABELS[status]}\n"
+        indicator = '🟡' if status in {'queued', 'working', 'question_sent', 'owner_needed'} else '🟢'
+        header += f"\nСтатус: {indicator} {_LABELS[status]}\n"
         if card.get('task_url'):
             header += shorten(card['task_url'], 300) + '\n'
         raw_details = list(facts.get('details', []))
@@ -336,7 +361,8 @@ class CaseJournal:
     def update_card(self, tg: Any, owner_chat_id: int, topic_id: str | int, chat_id: int,
                     title: str = '', summary: str | None = None,
                     statuses: dict[str, Any] | None = None, event: str | None = None,
-                    event_key: str | None = None, chat_title: str = '', task_url: str = '') -> dict[str, Any]:
+                    event_key: str | None = None, chat_title: str = '', task_url: str = '',
+                    event_timestamp: float | None = None) -> dict[str, Any]:
         from .telegram import TelegramError
         with self._locked():
             key = f'case_card:{topic_id}'
@@ -346,7 +372,7 @@ class CaseJournal:
                 self.store.kv_set('case_card_sequence', number)
                 card = {'number': number, 'topic_id': topic_id, 'chat_id': chat_id,
                         'statuses': {'working': True}, 'current_status': 'working',
-                        'events': [], 'delivery': 'new'}
+                        'events': [], 'delivery': 'new', 'realtime_card_version': 1}
             if title:
                 card['title'] = title
             if chat_title:
@@ -365,9 +391,10 @@ class CaseJournal:
             if event:
                 event_key = event_key or hashlib.sha256(event.encode()).hexdigest()
                 if not any(e['key'] == event_key for e in card['events']):
-                    event_ts = time.time()
+                    event_ts = time.time() if event_timestamp is None else event_timestamp
                     card['events'].append({'key': event_key, 'ts': event_ts, 'text': event})
-                    terminal_statuses = {'analysis_done', 'answer_sent', 'task_created'}
+                    terminal_statuses = {'analysis_done', 'answer_sent', 'question_sent',
+                                         'task_created'}
                     if (not active_statuses
                             and self._current_status(card) in terminal_statuses):
                         card['statuses'] = {key: key == 'working' for key in _LABELS}
