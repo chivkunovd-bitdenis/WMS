@@ -812,10 +812,14 @@ async def test_api_gates_signatures_scopes_and_never_returns_tokens(
         )
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"
-        existing = await create_operation(
-            db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4(),
-            environment="production",
-        )
+        # This direct production service call needs the shared sales limiter;
+        # RedisBoundary supplies it without enabling a broker for the API gates.
+        with monkeypatch.context() as sales_settings:
+            sales_settings.setattr(settings, "celery_broker_url", "redis://legacy-fixture.invalid/0")
+            existing = await create_operation(
+                db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4(),
+                environment="production",
+            )
         await db_session.commit()
         response = await http.get(prefix + f"/operations/{existing.id}")
         assert response.status_code == 200

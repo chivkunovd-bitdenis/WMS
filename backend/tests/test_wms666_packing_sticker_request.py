@@ -13,6 +13,7 @@ from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import FbsOrder
 from app.models.seller import Seller
+from app.models.tenant import Tenant
 from app.services.fbs_print_asset_storage import PNG_MAGIC
 from tests.test_fbs_supply_assembly import (
     _create_order,
@@ -24,6 +25,92 @@ from tests.test_fbs_supply_assembly import (
 PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/k9sAAAAASUVORK5CYII="
 )
+
+
+@pytest.mark.asyncio
+async def test_creation_sticker_http_releases_writer_and_persists_original_response(
+    async_client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.fbs_stock_publish_service import drain_background_stock_publish_tasks
+    from tests.test_fbs_supply_from_orders import (
+        _create_product,
+        _create_ready_order,
+    )
+    from tests.test_fbs_supply_from_orders import (
+        _register_ff_admin as register,
+    )
+    from tests.test_fbs_supply_from_orders import (
+        _setup_seller_with_token as setup,
+    )
+
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+    headers, suffix = await register(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant = uuid.UUID(me.json()["tenant_id"])
+    seller, warehouse, location = await setup(async_client, headers, suffix)
+    product = await _create_product(async_client, headers, seller, sku=f"http-writer-{suffix}")
+    order_id = await _create_ready_order(
+        tenant,
+        uuid.UUID(seller),
+        uuid.UUID(warehouse),
+        uuid.UUID(location),
+        product,
+        order_id=666777003,
+    )
+    # Isolate the HTTP transaction boundary from stock publications started by
+    # fixture setup; no production work or concurrent sticker request is mocked.
+    await drain_background_stock_publish_tasks()
+    independent_id = uuid.uuid4()
+    calls: list[list[int]] = []
+
+    async def stickers(client, *, api_token, order_ids, **kwargs):
+        calls.append(order_ids)
+        # The original WB response is still pending. A separate DB connection
+        # must be able to commit unrelated work before that response is returned.
+        async with SessionLocal() as independent:
+            independent.add(Tenant(
+                id=independent_id,
+                name="Unrelated writer during sticker HTTP",
+                slug=f"sticker-http-writer-{independent_id.hex}",
+            ))
+            await independent.commit()
+        return [{
+            "orderId": 666777003,
+            "partA": "5877994",
+            "partB": "0283",
+            "barcode": "*fixture666",
+            "file": base64.b64encode(PNG).decode(),
+        }]
+
+    monkeypatch.setattr(
+        "app.services.fbs_print_asset_service.fetch_marketplace_order_stickers", stickers
+    )
+    body = {
+        "name": "Sticker HTTP without writer lock",
+        "order_ids": [str(order_id)],
+        "planned_delivery_type": "warehouse_sc",
+        "idempotency_key": str(uuid.uuid4()),
+    }
+    response = await async_client.post(
+        "/operations/fbs-supplies/from-orders", headers=headers, json=body
+    )
+    assert response.status_code == 201, response.text
+    assert calls == [[666777003]]
+    sticker = response.json()["orders"][0]["sticker"]
+    assert sticker["code"] == "5877994 0283"
+    content = await async_client.get(sticker["asset_url"], headers=headers)
+    assert content.status_code == 200 and content.content == PNG
+    async with SessionLocal() as independent:
+        assert await independent.get(Tenant, independent_id) is not None
+        saved = await independent.get(FbsOrder, order_id)
+        assert saved is not None and saved.sticker_code == "5877994 0283"
+    repeated = await async_client.post(
+        "/operations/fbs-supplies/from-orders", headers=headers, json=body
+    )
+    assert repeated.status_code == 201, repeated.text
+    assert repeated.json()["supply"]["id"] == response.json()["supply"]["id"]
+    assert calls == [[666777003]]
 
 
 @pytest.mark.asyncio
