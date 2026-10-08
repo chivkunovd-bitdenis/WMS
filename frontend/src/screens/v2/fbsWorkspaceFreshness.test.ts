@@ -17,13 +17,13 @@ describe('WMS-666 print request freshness', () => {
     const print = beginWrite()
     let finishPrefetch!: () => void
     const coalescedPrefetch = new Promise<void>((resolve) => { finishPrefetch = resolve })
-    const printContinues = coalescedPrefetch.then(() =>
-      isWorkspaceWriteScreenCurrent(print, 'same-supply', 'same-supply'),
-    )
     const entryRefresh = coalescedPrefetch.then(() => {
       const refreshWrite = beginWrite()
       return refreshWrite.isCurrent() && refreshWrite.isLatest()
     })
+    const printContinues = coalescedPrefetch.then(() =>
+      isWorkspaceWriteScreenCurrent(print, 'same-supply', 'same-supply'),
+    )
 
     finishPrefetch()
     await expect(entryRefresh).resolves.toBe(true)
