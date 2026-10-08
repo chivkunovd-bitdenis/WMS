@@ -106,7 +106,7 @@
         "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms514.test.ts"
       ],
       "review": {
-        "model": "Astra",
+        "model": "gpt-6-astra",
         "effort": "high",
         "verdict": "PASS",
         "source_commit": "28a7999fefd886de41f6ffda5b05b69cd49aa496",

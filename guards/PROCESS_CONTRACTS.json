@@ -1543,7 +1543,11 @@
         "src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx::WMS-666 permanent ordinary-row scan recovery guards shows the ordinary row validation rejection and makes no commit or print",
         "src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx::WMS-666 permanent ordinary-row scan recovery guards queues Escape behind an accepted row validation, finishes that intent, then routes the next scan to B",
         "src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx::C19: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged",
-        "src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx::does not prepare missing stickers or start work when reopening a taskless delivered supply"
+        "src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx::does not prepare missing stickers or start work when reopening a taskless delivered supply",
+        "src/screens/v2/wms666ChangeScope.test.ts::WMS-666 C13: narrow UI-only change boundary rejects migrations, backend entities, stock logic and guard registry changes",
+        "src/screens/v2/wms666ChangeScope.test.ts::WMS-666 C13: narrow UI-only change boundary keeps the actual task diff inside the approved packing UI/test/document boundary",
+        "src/screens/v2/wms666ChangeScope.test.ts::WMS-666 C13: narrow UI-only change boundary accepts exact task proofs and rejects adjacent proof and correction namespaces",
+        "src/screens/v2/wms666ChangeScope.test.ts::WMS-666 C13: narrow UI-only change boundary reads advancing task history: foreign backend passes, new task backend or guards fail"
       ]
     },
     "print-672": {
