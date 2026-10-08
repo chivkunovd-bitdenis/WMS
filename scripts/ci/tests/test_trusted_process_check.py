@@ -4,6 +4,8 @@ import copy
 import importlib
 import json
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 H, B, M = 'a'*40, 'b'*40, 'c'*40
@@ -92,6 +94,17 @@ class TrustedProcessCheckTests(unittest.TestCase):
         self.f = AnchorFixture()
 
     def verify(self): return self.m.verify_pr(self.f.get, REPO, 7)
+
+    def test_api_get_accepts_github_arrays_and_objects_but_rejects_scalars(self):
+        with patch.object(self.m.subprocess, 'run', return_value=SimpleNamespace(
+                stdout='[{"filename":"docs/report.md"}]')):
+            self.assertEqual(self.m.api_get('repos/owner/repo/pulls/7/files'),
+                             [{'filename': 'docs/report.md'}])
+        with patch.object(self.m.subprocess, 'run', return_value=SimpleNamespace(stdout='{"id":7}')):
+            self.assertEqual(self.m.api_get('repos/owner/repo/pulls/7'), {'id': 7})
+        with patch.object(self.m.subprocess, 'run', return_value=SimpleNamespace(stdout='7')):
+            with self.assertRaisesRegex(ValueError, 'object or array'):
+                self.m.api_get('repos/owner/repo/pulls/7/files')
 
     def test_docs_only_classification_accepts_bounded_generated_outputs(self):
         self.f.changed_files = [
