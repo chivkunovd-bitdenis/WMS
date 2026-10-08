@@ -11,9 +11,15 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models.fbs_order import FbsOrder, FbsOrderMarking
+from app.models.fbs_order import (
+    CHECK_STATUS_OK,
+    META_STATUS_ACCEPTED,
+    MARKING_KIND_SGTIN,
+    FbsOrder,
+    FbsOrderMarking,
+)
 from app.models.fbs_supply import FbsSupply
-from app.models.marking_code import STATUS_AVAILABLE, MarkingCode
+from app.models.marking_code import EVENT_PRINTED, STATUS_AVAILABLE, MarkingCode, MarkingCodeEvent
 from app.models.product import Product
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.services import fbs_order_tape_print_service as tape
@@ -460,21 +466,22 @@ async def test_current_order_kiz_can_be_allocated_when_task_line_has_no_remainin
         assert len(pool_after_response) == 1
         assert pool_after_response[0].id in {code.id for code in initial_pool}
     assert await stock_snapshot() == before_stock
-
-    # The order itself still needs a seller/product CIS. Accounting completion
-    # of its packaging line must not silently turn this exact print into a no-op.
     assert body["order_errors"] == []
     assert body["ready"] == 1
+    assert body["missing"] == 0
     printed = body["orders"][0]["printed_codes"]
     assert len(printed) == 1
+    assert printed[0]["cis_code"] == body["orders"][0]["codes"][0]
+    assert sent_values == {700001: printed[0]["cis_code"]}
     binding = {
         "order_id": str(order_ids[0]),
         "supply_id": str(supply_id),
         "marking_id": printed[0]["marking_id"],
         "cis_code": printed[0]["cis_code"],
     }
+    assert binding["marking_id"]
+    assert binding["supply_id"] == str(supply_id)
     assert binding["cis_code"] in {code.cis_code for code in initial_pool}
-    assert sent_values == {700001: binding["cis_code"]}
     validated = await async_client.post(
         "/operations/fbs-orders/print-bindings/validate",
         headers=headers,
@@ -488,20 +495,57 @@ async def test_current_order_kiz_can_be_allocated_when_task_line_has_no_remainin
         assert assigned is not None and assigned.order_id == order_ids[0]
         assert assigned.marking_code_id == printed_code.id
     assert await stock_snapshot() == before_stock
-    assert body["order_errors"] == []
-    assert body["ready"] == 1
-    assert body["missing"] == 0
-    printed = body["orders"][0]["printed_codes"]
-    assert len(printed) == 1
-    assert printed[0]["cis_code"] == body["orders"][0]["codes"][0]
-    assert sent_values == {700001: printed[0]["cis_code"]}
+
+
+@pytest.mark.asyncio
+async def test_taskless_print_assignment_conflict_does_not_spend_unbound_pool_code(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix,
+    )
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"wms666-bind-conflict-{suffix[-8:]}",
+        barcode=f"2305{suffix[-9:]}",
+    )
+    supply_id, order_ids = await _bare_supply_with_pool(
+        async_client,
+        headers=headers,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        location_id=location_id,
+        product_id=product_id,
+        suffix=f"c{suffix}",
+        order_count=1,
+        pool_count=2,
+    )
+    existing_value = f"010{suffix[-12:]}21ALREADY-BOUND"
     async with SessionLocal() as session:
-        supply = await session.get(FbsSupply, supply_id)
-        task = await session.get(PackagingTask, task_id)
-        task_lines = list((await session.scalars(
-            select(PackagingTaskLine).where(PackagingTaskLine.task_id == task_id)
-        )).all())
-        pool_after = list((await session.scalars(
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        existing = FbsOrderMarking(
+            order_id=order.id,
+            tenant_id=tenant_id,
+            kind=MARKING_KIND_SGTIN,
+            value=existing_value,
+            source="wb",
+            check_status=CHECK_STATUS_OK,
+            meta_status=META_STATUS_ACCEPTED,
+            marking_code_id=None,
+        )
+        session.add(existing)
+        await session.commit()
+        existing_marking_id = existing.id
+
+    monkeypatch.setattr(
+        tape.marking_svc, "require_marketplace_token", AsyncMock(return_value="test"),
+    )
+    before_stock = await stock_snapshot()
+    async with SessionLocal() as session:
+        initial_pool = list((await session.scalars(
             select(MarkingCode).where(
                 MarkingCode.tenant_id == tenant_id,
                 MarkingCode.seller_id == seller_id,
@@ -509,13 +553,43 @@ async def test_current_order_kiz_can_be_allocated_when_task_line_has_no_remainin
                 MarkingCode.status == STATUS_AVAILABLE,
             )
         )).all())
-        assert supply is not None and task is not None
-        assert supply.packaging_task_id == task_id
-        assert all(line.product_id != product_id for line in task_lines)
-        assert len(pool_after) == 1
-        binding = await session.scalar(
-            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_ids[0])
-        )
-        assert binding is not None
-        assert binding.marking_code_id == uuid.UUID(printed[0]["id"])
+        assert len(initial_pool) == 2
+
+    response = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[0])],
+            "layout_json": {"units": [{"block": "cz", "copies": 1}]},
+            "allow_partial": False,
+            "include_order_qr": False,
+            "reprint": False,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["order_errors"]
+    async with SessionLocal() as session:
+        current = await session.get(FbsOrderMarking, existing_marking_id)
+        current_pool = list((await session.scalars(
+            select(MarkingCode).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.seller_id == seller_id,
+                MarkingCode.product_id == product_id,
+            )
+        )).all())
+        printed_events = list((await session.scalars(
+            select(MarkingCodeEvent).where(
+                MarkingCodeEvent.code_id.in_([code.id for code in initial_pool]),
+                MarkingCodeEvent.event_type == EVENT_PRINTED,
+            )
+        )).all())
+        assert current is not None
+        assert current.value == existing_value
+        assert current.marking_code_id is None
+        assert current.meta_status == META_STATUS_ACCEPTED
+        assert len(current_pool) == 2
+        assert {code.id for code in current_pool} == {code.id for code in initial_pool}
+        assert all(code.status == STATUS_AVAILABLE for code in current_pool)
+        assert printed_events == []
     assert await stock_snapshot() == before_stock
