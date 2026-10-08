@@ -787,17 +787,17 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
 })
 
 describe('WMS-477 «Проверить в WB» button', () => {
-  it('is rendered when at least one WB supply remains editable', () => {
+  it('asks Wildberries only where such a request exists and packing is still editable', () => {
     // Кнопка живёт в общей панели; Ozon отсекается составом wbEntries.
     expect(renderCondition(button!)).toBe('wbEntries.some(entry => entry.editable)')
   })
 
-  it('is disabled when no editable WB supply has codes or a WB check is running', () => {
+  it('stays out of reach while another operation runs or nothing has a code yet', () => {
     expect(attributeOf(button!, 'disabled')).toBe('{!verifiable.length || wbEntries.some(entry => entry.busy)}')
     expect(toolbarSource).toContain("const verifiable = wbEntries.filter(entry => entry.editable && !entry.busy && entry.codes > 0)")
   })
 
-  it('checks every eligible WB supply and never dispatches an Ozon check', () => {
+  it('sends one request for the whole supply', () => {
     expect(attributeOf(button!, 'onClick')).toBe('{() => verifiable.forEach(entry => entry.verify())}')
     expect(toolbarSource).toContain("const wbEntries = entries.filter(entry => entry.marketplace === 'wb')")
     expect(source).toContain('syncFbsSupplyMarkings(token, authHeaders, workspace.supply.id)')
