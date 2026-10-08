@@ -90,6 +90,64 @@ const WMS_666_RC7_HISTORY = [
     ],
   },
 ]
+const WMS_517_FINANCIAL_FIXTURE_HISTORY = {
+  commit: '30de00e5f70c3fde354036702aa921ebaab7fd65',
+  changedPaths: [
+    'backend/tests/test_wb_catalog_schedule.py',
+    'backend/tests/test_wms666_packing_sticker_request.py',
+    'backend/tests/test_withdrawal_ledger.py',
+    'docs/requirements/WMS-666.md',
+    'docs/requirements/WMS-689.md',
+    'guards/PROCESS_CONTRACTS.json',
+  ],
+  files: [
+    {
+      path: 'backend/tests/test_wb_catalog_schedule.py',
+      beforeEntry: '100644 blob b22007910e910a102105982e3531d36a2930c344\tbackend/tests/test_wb_catalog_schedule.py',
+      afterEntry: '100644 blob cce26bacce70ae86c65c1febfd23f915df58958a\tbackend/tests/test_wb_catalog_schedule.py',
+    },
+    {
+      path: 'backend/tests/test_wms666_packing_sticker_request.py',
+      beforeEntry: '100644 blob fa797ead6126fa239cdfa39a306a08a02287b222\tbackend/tests/test_wms666_packing_sticker_request.py',
+      afterEntry: '100644 blob 7b7bd5bfc36050cc697dd84500255a7dc04a26b7\tbackend/tests/test_wms666_packing_sticker_request.py',
+    },
+    {
+      path: 'backend/tests/test_withdrawal_ledger.py',
+      beforeEntry: '100644 blob ac14733de2530eb4e0f4ae285cab806d5eec3755\tbackend/tests/test_withdrawal_ledger.py',
+      afterEntry: '100644 blob f20342fe34f3c7d05b96960028087dd2968d0960\tbackend/tests/test_withdrawal_ledger.py',
+    },
+    {
+      path: 'docs/requirements/WMS-666.md',
+      beforeEntry: '100644 blob 57577022c980e9efbee01d06cf9e14330eb2a871\tdocs/requirements/WMS-666.md',
+      afterEntry: '100644 blob 4a79c1858e870f0e497a17a2a100fc828e23cc63\tdocs/requirements/WMS-666.md',
+    },
+    {
+      path: 'docs/requirements/WMS-689.md',
+      beforeEntry: '100644 blob 6a4243254c80844602b57170f8ed716f4f22f2f2\tdocs/requirements/WMS-689.md',
+      afterEntry: '100644 blob 0a0a9a8744f1892e9cb330324f8f88674c691592\tdocs/requirements/WMS-689.md',
+    },
+    {
+      path: 'guards/PROCESS_CONTRACTS.json',
+      beforeEntry: '100644 blob 4f80f9ea11d7e51c1bd6a64e7e99a4d362472125\tguards/PROCESS_CONTRACTS.json',
+      afterEntry: '100644 blob 6daab1ccf12d79d2e462bcb651c55692fbd06151\tguards/PROCESS_CONTRACTS.json',
+    },
+  ],
+}
+const WMS_517_FIXTURE_CONTRACT = {
+  commit: '3c3c1b69c15cb611c7d256971f9c85ebb9d1ae60',
+  subject: 'WMS-517: align recovery tests with finance archive',
+  changedPaths: [
+    'backend/tests/test_withdrawal_ledger.py',
+    'backend/tests/test_wms517_raw_integer_price.py',
+    'backend/tests/test_wms517_raw_numeric_price.py',
+    'backend/tests/test_wms517_sales_contract.py',
+    'backend/tests/test_wms517_sales_partial_decimal_regressions.py',
+    'backend/tests/test_wms537_draft_supply_stickers.py',
+    'docs/requirements/WMS-517.md',
+    'docs/requirements/WMS-537.md',
+    'guards/PROCESS_CONTRACTS.json',
+  ],
+}
 const WMS_666_PROOF_FILES = new Set([
   '.github/workflows/wms666-browser-proof.yml',
   'scripts/ci/wms666-browser-proof.mjs',
@@ -462,6 +520,145 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
         new Map(),
         [corrupted],
       )).toBe(false)
+    }
+  })
+
+  it('accepts only the exact WMS-517 financial fixture correction history', () => {
+    const cwd = new URL('../../../..', import.meta.url)
+    const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+    const correction = WMS_517_FINANCIAL_FIXTURE_HISTORY
+    const actual = recoveryHistory.entries.find((entry) => entry.commit === correction.commit)
+
+    expect(git('rev-parse', `${correction.commit}^`)).toBe('f2f9b9b835e7e11cabcce1c693e283072417bac2')
+    expect(execFileSync('git', [
+      'merge-base', '--is-ancestor', WMS_517_FIXTURE_CONTRACT.commit, correction.commit,
+    ], { cwd, encoding: 'utf8' })).toBe('')
+    expect(git('show', '-s', '--format=%s', WMS_517_FIXTURE_CONTRACT.commit))
+      .toBe(WMS_517_FIXTURE_CONTRACT.subject)
+    expect(git('diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', WMS_517_FIXTURE_CONTRACT.commit)
+      .split('\n').filter(Boolean)).toEqual(WMS_517_FIXTURE_CONTRACT.changedPaths)
+
+    expect(actual && {
+      commit: actual.commit,
+      changedPaths: actual.changedPaths,
+      files: actual.files,
+    }).toEqual(correction)
+
+    for (const file of correction.files) {
+      expect(wms666AcceptedHistoryChange(cwd, correction.commit, file.path)).toBe(true)
+    }
+    expect(wms666AcceptedHistoryChange(
+      cwd,
+      correction.commit,
+      'backend/tests/test_wms517_sales_contract.py',
+    )).toBe(false)
+    expect(wms666AcceptedHistoryChange(
+      cwd,
+      WMS_517_FIXTURE_CONTRACT.commit,
+      'backend/tests/test_withdrawal_ledger.py',
+    )).toBe(false)
+  })
+
+  it('rejects adjacent WMS-517 correction commits and mutated exact-history entries', () => {
+    const cwd = new URL('../../../..', import.meta.url)
+    const expected = WMS_517_FINANCIAL_FIXTURE_HISTORY
+    const check = (
+      commit: string,
+      path: string,
+      entry: typeof expected,
+    ) => wms666AcceptedHistoryChange(cwd, commit, path, new Map(), [entry])
+    const clone = () => JSON.parse(JSON.stringify(expected)) as typeof expected
+
+    expect(check(
+      '28671d78ce431a6fc32c357a6eee34f769ce6192',
+      'backend/tests/test_withdrawal_ledger.py',
+      { ...expected, commit: '28671d78ce431a6fc32c357a6eee34f769ce6192' },
+    )).toBe(false)
+    expect(check(
+      '86df6d2a8122c7e43ad14e6aa40d8303f3eb4fa3',
+      'backend/tests/test_withdrawal_ledger.py',
+      { ...expected, commit: '86df6d2a8122c7e43ad14e6aa40d8303f3eb4fa3' },
+    )).toBe(false)
+    expect(wms666AcceptedHistoryChange(
+      cwd,
+      expected.commit,
+      'backend/tests/test_withdrawal_orchestration.py',
+      new Map(),
+      [expected],
+    )).toBe(false)
+
+    const wrongBlob = clone()
+    wrongBlob.files[2].afterEntry = wrongBlob.files[2].afterEntry.replace(
+      'f20342fe34f3c7d05b96960028087dd2968d0960',
+      '0000000000000000000000000000000000000000',
+    )
+    const wrongMode = clone()
+    wrongMode.files[2].beforeEntry = wrongMode.files[2].beforeEntry.replace('100644 blob', '100755 blob')
+    const wrongPath = clone()
+    wrongPath.files[2].path = 'backend/tests/test_withdrawal_orchestration.py'
+    const extraCommitPath = clone()
+    extraCommitPath.changedPaths = [...extraCommitPath.changedPaths, 'backend/tests/unlisted.py']
+    const missingFile = clone()
+    missingFile.files = missingFile.files.slice(1)
+
+    const corruptedEntries = [
+      ['after blob', wrongBlob],
+      ['mode', wrongMode],
+      ['path', wrongPath],
+      ['complete commit path list', extraCommitPath],
+      ['all changed files have exact records', missingFile],
+    ] as const
+    for (const [label, corrupted] of corruptedEntries) {
+      expect(check(expected.commit, 'backend/tests/test_withdrawal_ledger.py', corrupted), label).toBe(false)
+    }
+
+    const repo = fixtureRepository()
+    try {
+      repo.write('backend/tests/test_withdrawal_ledger.py', 'new nearby correction\n')
+      const future = repo.commit('WMS-666: future WMS-517 fixture edit')
+      expect(wms666AcceptedHistoryChange(
+        repo.cwd,
+        future,
+        'backend/tests/test_withdrawal_ledger.py',
+      )).toBe(false)
+    } finally {
+      repo.close()
+    }
+  })
+
+  it('rejects future WMS-517 path commits and dirty, staged, or untracked changes', () => {
+    const repo = fixtureRepository()
+    const protectedPaths = [
+      'backend/app/services/fbs_print_asset_service.py',
+      'backend/app/services/fbs_supply_service.py',
+      'docs/requirements/WMS-689.md',
+      'guards/PROCESS_CONTRACTS.json',
+    ]
+    try {
+      for (const path of protectedPaths) {
+        repo.git('reset', '--hard', repo.contract)
+        repo.write(path, 'foreign baseline\n')
+        const baseline = repo.commit('WMS-663: independent baseline')
+        repo.write(path, 'future WMS-517 path change\n')
+        repo.commit('WMS-666: nearby fixture path change')
+        expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+
+        repo.git('reset', '--hard', baseline)
+        repo.write(path, 'unstaged correction path change\n')
+        expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+        repo.git('add', path)
+        repo.write(path, 'foreign baseline\n')
+        expect(repo.git('diff', '--name-only', 'HEAD', '--', path)).toBe('')
+        expect(repo.git('diff', '--cached', '--name-only', '--', path)).toBe(path)
+        expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+      }
+
+      repo.git('reset', '--hard', repo.contract)
+      const untracked = 'backend/app/services/fbs_print_asset_service_neighbor.py'
+      repo.write(untracked, 'untracked neighboring path\n')
+      expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([untracked])
+    } finally {
+      repo.close()
     }
   })
 
