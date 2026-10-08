@@ -621,13 +621,12 @@ async def create_supply_from_orders(
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is not None:
         try:
-            # A slow WB sticker endpoint must not keep creation waiting for its
-            # full HTTP timeout. Roll back only this optional read's local writes.
-            async with session.begin_nested():
-                async with asyncio.timeout(CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS):
-                    await _request_order_stickers_for_picking(
-                        session, tenant_id, supply, http_client
-                    )
+            # Creation is committed. The optional prefetch owns its transaction
+            # boundary and performs WB HTTP before opening any sticker writes.
+            async with asyncio.timeout(CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS):
+                await _request_order_stickers_for_picking(
+                    session, tenant_id, supply, http_client, after_creation=True
+                )
         except TimeoutError:
             # Cancellation can interrupt a DB read before the WB HTTP call and
             # invalidate the connection. Creation was committed above, so close
@@ -1329,6 +1328,7 @@ async def _request_order_stickers_for_picking(
     http_client: httpx.AsyncClient,
     *,
     orders: list[FbsOrder] | None = None,
+    after_creation: bool = False,
 ) -> None:
     target_orders = supply.orders if orders is None else orders
     missing = [
@@ -1341,9 +1341,15 @@ async def _request_order_stickers_for_picking(
     try:
         from app.services.fbs_print_asset_service import (
             FbsPrintAssetError,
+            prefetch_created_supply_stickers,
             request_supply_print_batch,
         )
 
+        if after_creation:
+            await prefetch_created_supply_stickers(
+                session, tenant_id, supply.id, order_ids=missing, http_client=http_client
+            )
+            return
         await request_supply_print_batch(
             session,
             tenant_id,
