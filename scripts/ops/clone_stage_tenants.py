@@ -244,7 +244,10 @@ def transform(snapshot: dict[str, Any], passwords: dict[str, str], hash_password
                 old = row["id"]
                 if not isinstance(old, str) or not UUID_TEXT.fullmatch(old):
                     raise CloneError(f"Non-UUID identity in {table}")
-                mapping[old] = str(uuid.uuid5(target, old))
+                # The tenant's own row uses the same identity as the tenant
+                # scope. Keep that direct remap instead of replacing it with
+                # the normal row-level UUID mapping.
+                mapping.setdefault(old, str(uuid.uuid5(target, old)))
         source_users = {row["id"]: row for row in data.get("users", [])}
         # Historical actions can refer to system operators from another tenant.
         # Copy no cross-tenant user: create an anonymous local actor for each id.
