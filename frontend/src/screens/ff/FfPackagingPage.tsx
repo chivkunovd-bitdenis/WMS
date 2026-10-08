@@ -1897,14 +1897,7 @@ export function FfPackagingPage({ token, addressStorageEnabled = true }: PagePro
     if (!res.ok) {
       setError(await readPackagingApiErrorMessage(res))
     } else {
-      const loaded = (await res.json()) as PackagingTask[]
-      // WMS-686: задания отгрузок FBO в списке «Открытые» не показываем — их упаковка
-      // идёт на вкладке «Упаковка» самой отгрузки.
-      setTasks(
-        statusFilter === 'open'
-          ? loaded.filter((task) => !task.marketplace_unload_request_id)
-          : loaded,
-      )
+      setTasks((await res.json()) as PackagingTask[])
     }
     try {
       const pending = await fetchPendingMarking(token)
