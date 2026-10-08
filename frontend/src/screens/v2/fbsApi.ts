@@ -232,6 +232,7 @@ export type FbsWorklistOrder = {
     }>
     packaging_instructions?: string | null
     has_packaging_instructions?: boolean
+    requires_honest_sign?: boolean
   }
   positions: Array<{
     id?: string | null
@@ -649,7 +650,7 @@ export type FbsWorkspace = {
     order_id: string | null
     retryable: boolean
   }>
-  orders: Array<FbsWorklistOrder & { tape_order_index: number }>
+  orders: Array<FbsWorklistOrder & { tape_order_index: number; marking_available_count?: number }>
   cargo_places: FbsCargoPlace[]
   boxes: FbsPackingBox[]
   marking_pool?: { required: number; available: number; shortage: number; orders_without_code: string[] }

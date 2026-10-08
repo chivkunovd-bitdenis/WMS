@@ -1162,6 +1162,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 and product.packaging_instructions
                 and product.packaging_instructions.strip()
             ),
+            "requires_honest_sign": bool(product and product.requires_honest_sign),
             "marketplace_bindings": product_bindings,
         },
         "positions": [

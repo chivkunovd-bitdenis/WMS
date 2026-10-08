@@ -392,8 +392,7 @@ async def print_fbs_order_tape(
             continue
         line = line_by_product.get(order.product_id)
         if (honest_sign_skipped and existing is not None) or (
-            line is None
-            and getattr(supply, "marketplace", "wb") == "wb"
+            getattr(supply, "marketplace", "wb") == "wb"
             and getattr(supply, "status", None)
             in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
         ):
@@ -408,6 +407,21 @@ async def print_fbs_order_tape(
                 selected_reprint_marking_ids
                 and (existing is None or existing.id not in selected_reprint_marking_ids)
             ):
+                errors.append(FbsOrderTapeError(
+                    order_id=order.id,
+                    wb_order_id=int(order.wb_order_id),
+                    code="nothing_to_reprint",
+                    message="nothing_to_reprint",
+                ))
+                continue
+            if (
+                getattr(supply, "marketplace", "wb") == "wb"
+                and getattr(supply, "status", None)
+                in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
+                and (existing is None or existing.marking_code is None)
+            ):
+                # A historical reprint may only reuse an already-bound KIZ.
+                # Never spend a new pool code to replace evidence that is absent.
                 errors.append(FbsOrderTapeError(
                     order_id=order.id,
                     wb_order_id=int(order.wb_order_id),
@@ -453,7 +467,7 @@ async def print_fbs_order_tape(
                     message="nothing_to_reprint",
                 ))
                 continue
-        if line is None:
+        if line is None and order.product_id is None:
             errors.append(
                 FbsOrderTapeError(
                     order_id=order.id,
@@ -474,6 +488,7 @@ async def print_fbs_order_tape(
                 reprint=reprint,
                 actor_user_id=actor_user_id,
                 reprint_marking_ids=selected_reprint_marking_ids,
+                document_number=supply.document_number,
             )
         except (mc_svc.MarkingCodeServiceError, marking_svc.FbsMarkingError) as exc:
             errors.append(
@@ -825,13 +840,14 @@ async def _print_or_reprint_order_code(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     order: FbsOrder,
-    line: PackagingTaskLine,
+    line: PackagingTaskLine | None,
     layout: PrintLayout,
     *,
     allow_partial: bool,
     reprint: bool,
     actor_user_id: uuid.UUID,
     reprint_marking_ids: set[uuid.UUID],
+    document_number: str | None,
 ) -> mc_svc.PrintMarkingCodesResult:
     existing = _selected_sgtin_marking(order, reprint_marking_ids) or _existing_sgtin_marking(order)
     if reprint_marking_ids and (
@@ -851,13 +867,19 @@ async def _print_or_reprint_order_code(
                 code=code,
                 event_type=EVENT_REPRINTED,
                 actor=actor_user_id,
-                document_number=line.task.document_number if line.task else None,
+                document_number=(
+                    line.task.document_number
+                    if line is not None and line.task
+                    else document_number
+                ),
                 packaging_task=line,
                 copies=mc_svc.cz_copies_from_layout(layout),
                 source_process=mc_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
             )
         return mc_svc.PrintMarkingCodesResult(
-            packaging_task_line_id=line.id,
+            packaging_task_line_id=(
+                line.id if line is not None else mc_svc.CATALOG_PRINT_LINE_SENTINEL
+            ),
             quantity=1,
             duplicate_copies=mc_svc.cz_copies_from_layout(layout),
             is_reprint=reprint,
@@ -879,23 +901,61 @@ async def _print_or_reprint_order_code(
     if reprint and not _order_requires_sgtin(order):
         raise mc_svc.MarkingCodeServiceError("nothing_to_reprint")
 
-    result = await mc_svc.print_codes_for_packaging_line(
-        session,
-        tenant_id,
-        line.id,
-        acting_user_id=actor_user_id,
-        layout=layout,
-        allow_partial=allow_partial,
-        units_to_print=1,
-        force_required=_order_requires_sgtin(order),
-        commit=False,
-    )
-    if result.quantity < 1 or not result.printed_codes:
-        return result
-    printed_code = await session.get(MarkingCode, result.printed_codes[0].id)
-    if printed_code is None or printed_code.status != STATUS_PRINTED:
-        raise mc_svc.MarkingCodeServiceError("code_not_found")
-    await _assign_printed_code_to_order(session, order, printed_code)
+    line_has_marking_capacity = False
+    if line is not None:
+        from app.services.packaging_task_service import qty_need_pack
+
+        line_has_marking_capacity = (
+            qty_need_pack(line)
+            - int(line.qty_marking_printed)
+            - int(line.qty_marking_external or 0)
+        ) > 0
+
+    # FBS KIZ ownership and the seller/product pool are order-scoped. A packing
+    # line supplies useful event context and accounting while it has capacity,
+    # but task creation or exhausted counters cannot suppress the order's KIZ.
+    # Keep pool allocation, printed event, and order binding in one savepoint so
+    # a rejected binding leaves no spent code behind.
+    async with session.begin_nested():
+        if line_has_marking_capacity and line is not None:
+            result = await mc_svc.print_codes_for_packaging_line(
+                session,
+                tenant_id,
+                line.id,
+                acting_user_id=actor_user_id,
+                layout=layout,
+                allow_partial=allow_partial,
+                units_to_print=1,
+                force_required=_order_requires_sgtin(order),
+                commit=False,
+            )
+        else:
+            product_id = order.product_id or (line.product_id if line is not None else None)
+            if product_id is None:
+                raise mc_svc.MarkingCodeServiceError("product_not_found")
+            result = await mc_svc.print_codes_for_product(
+                session,
+                tenant_id,
+                product_id,
+                acting_user_id=actor_user_id,
+                quantity=1,
+                layout=layout,
+                allow_partial=allow_partial,
+                force_required=_order_requires_sgtin(order),
+                commit=False,
+                source_process=mc_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
+                document_number=(
+                    line.task.document_number if line is not None and line.task
+                    else document_number
+                ),
+                packaging_task_line=line,
+            )
+        if result.quantity < 1 or not result.printed_codes:
+            return result
+        printed_code = await session.get(MarkingCode, result.printed_codes[0].id)
+        if printed_code is None or printed_code.status != STATUS_PRINTED:
+            raise mc_svc.MarkingCodeServiceError("code_not_found")
+        await _assign_printed_code_to_order(session, order, printed_code)
     return result
 
 
