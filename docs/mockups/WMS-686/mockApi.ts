@@ -244,7 +244,10 @@ export function createMockFetch(): typeof fetch {
     if (method === 'POST' && rest === '/pick/scan') {
       return replay(body.mutation_id, () => {
         const code = String(body.barcode ?? '').trim()
-        const cell = cells.find((one) => one.code === code)
+        // ASCII aliases are printed on the scannable demo labels; displayed cell
+        // names stay in the existing Cyrillic warehouse format.
+        const cellIdFromLabel: Record<string, string> = { 'LOC-A11': 'cell-a11', 'LOC-A12': 'cell-a12' }
+        const cell = cells.find((one) => one.code === code || one.id === cellIdFromLabel[code.toUpperCase()])
         if (cell) return json({ kind: 'location', storage_location_id: cell.id, location_code: cell.code })
         const source = sources.find((one) => one.code === code)
         // R1/K23 (предложение): ШК тары распознаётся и при уже выбранной таре.

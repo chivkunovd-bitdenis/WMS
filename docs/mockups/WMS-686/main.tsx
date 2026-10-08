@@ -4,7 +4,7 @@ import { ThemeProvider, CssBaseline } from '@mui/material'
 import { muiTheme } from '../../../frontend/src/mui/theme'
 import { FfSuppliesShipmentsPage } from '../../../frontend/src/screens/ff/FfSuppliesShipmentsPage'
 import { detailFor, installMockApi, products, shipments } from './mockApi'
-import { DemoPalette } from './Controls'
+import { DemoScanCodes } from './Controls'
 
 // WMS-686 · настоящий экран «Отгрузки на МП» с вымышленными данными и локальным API.
 installMockApi()
@@ -40,7 +40,7 @@ createRoot(document.getElementById('root')!).render(
         initialMarketplaceUnloadId={opened}
         addressStorageEnabled
       />
-      <DemoPalette />
+      <DemoScanCodes />
     </BrowserRouter>
   </ThemeProvider>,
 )

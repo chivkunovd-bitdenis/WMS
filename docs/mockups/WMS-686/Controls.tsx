@@ -20,7 +20,7 @@ import { buildProductThermalLabelDocument } from '../../../frontend/src/utils/pr
 import { renderBarcodeDataUrl } from '../../../frontend/src/utils/renderBarcodeDataUrl'
 import { buildCzLabelHtml, buildTapePageCss, renderDataMatrixDataUrl } from '../../../frontend/src/utils/printMarkingCodeLabel'
 import {
-  activeShipmentId, armServerFailure, getFbo, isBaseline, products, resetFbo, serverFailureArmed, shipments, subscribeFbo,
+  activeShipmentId, getFbo, isBaseline, products, resetFbo, subscribeFbo,
 } from './mockApi'
 import { boxedQty, cells, isKizScan, kizFor, pickSourcesOf, productByBarcode, productById, returnSourceFor, sourceById, sources, type FboBox } from './fboModel'
 
@@ -684,76 +684,108 @@ export function FboPassField({ shipmentId }: { shipmentId: string }) {
   )
 }
 
-// ─── Панель демонстрации (только макет): коды для «скана», сбои, сброс ───
+// ─── Справочник демонстрационных кодов: сами коды нужно сканировать сканером ───
 
-/** «Клавиатурный» сканер: символы подряд и Enter туда, где сейчас фокус. */
-export function simulateScan(code: string) {
-  const target = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : document.body
-  const press = (key: string) => {
-    const keyCode = /^\d$/.test(key) ? `Digit${key}` : /^[a-z]$/i.test(key) ? `Key${key.toUpperCase()}` : key === '-' ? 'Minus' : key
-    target.dispatchEvent(new KeyboardEvent('keydown', { key, code: keyCode, bubbles: true, cancelable: true, shiftKey: /[A-Z]/.test(key) }))
-  }
-  for (const key of code) press(key)
-  press('Enter')
+type DemoScanCode = { title: string; code: string; kind: 'barcode' | 'datamatrix'; detail?: string }
+
+const cellScanCodes: DemoScanCode[] = [
+  { title: 'Ячейка А-1-1', code: 'LOC-A11', kind: 'barcode', detail: 'Короба INB-DEMO-001 и INB-DEMO-002' },
+  { title: 'Ячейка А-1-2', code: 'LOC-A12', kind: 'barcode', detail: 'Палета PLT-DEMO-01' },
+]
+const sourceScanCodes: DemoScanCode[] = [
+  { title: 'Короб приёмки 1', code: 'INB-DEMO-001', kind: 'barcode', detail: 'Футболки, размеры 48 и 50' },
+  { title: 'Короб приёмки 2', code: 'INB-DEMO-002', kind: 'barcode', detail: 'Футболка 48 и носки' },
+  { title: 'Палета', code: 'PLT-DEMO-01', kind: 'barcode', detail: 'Ячейка А-1-2 · футболка 50' },
+]
+const productScanCodes: DemoScanCode[] = products.map((product) => ({
+  title: `${product.sku} · размер ${product.size}`,
+  code: product.barcode,
+  kind: 'barcode',
+  detail: product.honestSign ? 'КИЗ можно отсканировать отдельно' : 'Без обязательного ЧЗ',
+}))
+const markingScanCodes: DemoScanCode[] = [
+  { title: 'КИЗ футболки 48 · приёмка 000041', code: kizFor(products[0], 'P1A0001'), kind: 'datamatrix' },
+  { title: 'КИЗ футболки 48 · отдельный', code: kizFor(products[0], 'P1X0001'), kind: 'datamatrix' },
+  { title: 'КИЗ футболки 50 · приёмка 000041', code: kizFor(products[1], 'P2A0001'), kind: 'datamatrix' },
+]
+
+function DemoScanCodeCard({ item }: { item: DemoScanCode }) {
+  const [image, setImage] = useState<string | null>(null)
+  useEffect(() => {
+    let current = true
+    try {
+      if (item.kind === 'barcode') setImage(renderBarcodeDataUrl(item.code, { variant: 'storageCell' }))
+      else void renderDataMatrixDataUrl(item.code).then((url) => { if (current) setImage(url) })
+        .catch(() => { if (current) setImage(null) })
+    } catch {
+      setImage(null)
+    }
+    return () => { current = false }
+  }, [item.code, item.kind])
+  return (
+    <Box sx={{ minWidth: 0, border: 1, borderColor: 'divider', borderRadius: 1, p: 0.75, bgcolor: 'background.paper' }}>
+      <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, lineHeight: 1.25 }}>{item.title}</Typography>
+      {image ? (
+        <Box component="img" src={image} alt={`Штрихкод: ${item.title}`} sx={{ display: 'block', width: item.kind === 'datamatrix' ? 88 : '100%', height: item.kind === 'datamatrix' ? 88 : 40, objectFit: 'contain', mx: item.kind === 'datamatrix' ? 'auto' : 0, my: 0.25, imageRendering: 'pixelated' }} />
+      ) : <Box sx={{ height: 40 }} />}
+      <Typography variant="caption" component="div" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10.5, lineHeight: 1.25, overflowWrap: 'anywhere' }}>{item.code}</Typography>
+      {item.detail ? <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.25, lineHeight: 1.2 }}>{item.detail}</Typography> : null}
+    </Box>
+  )
 }
 
-const p1 = products[0]
-const p2 = products[1]
-const p3 = products[2]
-const PICK_CODES: Array<[string, string]> = [
-  ['Ячейка А-1-1', 'А-1-1'], ['Короб INB-DEMO-001', 'INB-DEMO-001'], ['Короб INB-DEMO-002', 'INB-DEMO-002'], ['Палета PLT-DEMO-01', 'PLT-DEMO-01'],
-  ['ШК футболки 48', p1.barcode], ['ШК футболки 50', p2.barcode], ['ШК носков', p3.barcode],
-]
-const KIZ_CODES: Array<[string, string]> = [
-  ['КИЗ 48 · приёмка №1', kizFor(p1, 'P1A0001')], ['КИЗ 48 · приёмка №2', kizFor(p1, 'P1A0002')], ['КИЗ 48 · приёмка №3', kizFor(p1, 'P1A0003')],
-  ['КИЗ 48 · внешний', kizFor(p1, 'P1X0001')], ['КИЗ 48 · внешний №2', kizFor(p1, 'P1X0002')],
-  ['КИЗ 50 · приёмка', kizFor(p2, 'P2A0001')], ['КИЗ 50 · внешний', kizFor(p2, 'P2X0001')], ['КИЗ 48 · уже в заказе FBS', kizFor(p1, 'P1FBS01')],
-]
+function DemoScanCodeGroup({ title, items }: { title: string; items: DemoScanCode[] }) {
+  if (!items.length) return null
+  return (
+    <Box sx={{ mt: 1 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 700 }}>{title}</Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 0.5 }}>
+        {items.map((item) => <DemoScanCodeCard key={item.code} item={item} />)}
+      </Box>
+    </Box>
+  )
+}
 
-export function DemoPalette() {
+export function DemoScanCodes() {
   const fbo = useFbo()
   const state = useUi()
   const [open, setOpen] = useState(true)
-  const [armed, setArmed] = useState(serverFailureArmed())
   const ownBoxes = useMemo(() => fbo.boxes.filter((box) => box.shipmentId === activeShipmentId() && !box.whole), [fbo.boxes])
-  useEffect(() => {
-    const timer = window.setInterval(() => setArmed(serverFailureArmed()), 500)
-    return () => window.clearInterval(timer)
-  }, [])
   if (isBaseline()) return null
-  const chip = ([label, code]: [string, string]) => (
-    <Chip key={code} size="small" label={label} onMouseDown={(event) => event.preventDefault()} onClick={() => simulateScan(code)}
-      data-testid={`demo-scan-${code}`} sx={{ m: 0.25 }} />
-  )
+  const boxCodes: DemoScanCode[] = ownBoxes.map((box) => ({ title: `Короб отгрузки ${box.closed ? '· закрыт' : ''}`, code: box.code, kind: 'barcode' }))
   return (
     <>
-      <Paper elevation={6} sx={{ position: 'fixed', right: 12, bottom: 76, zIndex: 2000, width: open ? 340 : 'auto', maxWidth: 'calc(100vw - 24px)', p: 1.25, opacity: 0.97 }} data-testid="demo-palette">
+      <Paper elevation={6} sx={{ position: 'fixed', right: 12, bottom: 76, zIndex: 2000, width: open ? 420 : 'auto', maxWidth: 'calc(100vw - 24px)', p: 1.25, opacity: 0.98 }} data-testid="demo-scan-codes">
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="subtitle2">Только макет · «сканер» и сбои</Typography>
-          <Button size="small" onClick={() => setOpen(!open)}>{open ? 'Свернуть' : 'Коды'}</Button>
+          <Typography variant="subtitle2">Коды для сканера</Typography>
+          <Button size="small" onClick={() => setOpen(!open)}>{open ? 'Свернуть' : 'Показать коды'}</Button>
         </Stack>
         {open ? (
-          <Box sx={{ maxHeight: '45vh', overflowY: 'auto' }}>
-            <Typography variant="caption" color="text.secondary" component="div">Клик = скан туда, где фокус. Источник, затем ШК, затем (необязательно) КИЗ.</Typography>
-            <Box>{PICK_CODES.map(chip)}</Box>
-            <Box>{KIZ_CODES.map(chip)}</Box>
-            {ownBoxes.length ? <Box>{ownBoxes.map((box) => chip([`Короб ${box.code}`, box.code]))}</Box> : null}
-            <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.75 }}>
-              <Button size="small" variant={armed ? 'contained' : 'outlined'} color="warning" onClick={() => { armServerFailure(); setArmed(true) }} data-testid="demo-fail-next">
-                {armed ? 'Сбой ждёт следующего действия' : 'Сбой сервера на след. действии'}
-              </Button>
-              <Button size="small" variant={state.printDown ? 'contained' : 'outlined'} color="warning" onClick={() => setUi({ printDown: !state.printDown })} data-testid="demo-print-down">
-                {state.printDown ? 'WMS Print недоступен' : 'Отключить WMS Print'}
-              </Button>
-              <Button size="small" onClick={() => { resetFbo(); setUi({ newKiz: null, packLastProduct: null, packExpanded: {}, currentBox: {}, printLog: [], printNotice: null, printError: null, packUndo: [] }); changed() }} data-testid="demo-reset">
-                Сбросить демо
-              </Button>
-              <Button size="small" component="a" href={`?open_mp=${shipments[1].id}&tab=pick`}>Отгрузка {shipments[1].number} (Казань)</Button>
-              <Button size="small" component="a" href={`?open_mp=${shipments[0].id}&tab=pick`}>Отгрузка {shipments[0].number}</Button>
-            </Stack>
-            <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>
-              Остаток (не меняется подбором и упаковкой): {products.map((product) => `${product.sku} ${fbo.stockTotal[product.id]}`).join(' · ')}
+          <Box sx={{ maxHeight: '68vh', overflowY: 'auto', pr: 0.25 }}>
+            <Alert severity="info" icon={false} sx={{ mt: 0.5, py: 0, '& .MuiAlert-message': { py: 0.5 } }}>
+              Учебные данные. Сканируйте изображения ниже: состояние хранится отдельно в каждом браузере.
+            </Alert>
+            <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.75 }}>
+              Подбор: ячейка → короб или палета → ШК товара → при желании КИЗ. Для целого короба используйте кнопку рядом с выбранным источником.
             </Typography>
+            <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.35 }}>
+              Упаковка: создайте короб на вкладке «Упаковка», затем сканируйте ШК товара и при желании его КИЗ; ШК короба отгрузки выбирает текущий короб.
+            </Typography>
+            <DemoScanCodeGroup title="Ячейки" items={cellScanCodes} />
+            <DemoScanCodeGroup title="Короба и палета в ячейках" items={sourceScanCodes} />
+            <DemoScanCodeGroup title="Товары · ШК" items={productScanCodes} />
+            <DemoScanCodeGroup title="Честный знак · КИЗ необязателен" items={markingScanCodes} />
+            <DemoScanCodeGroup title="Короба отгрузки · создайте на вкладке «Упаковка»" items={boxCodes} />
+            <Stack direction="row" spacing={0.5} sx={{ mt: 0.75, alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="caption" color="text.secondary">
+                {products.map((product) => `${product.sku}: ${fbo.stockTotal[product.id]}`).join(' · ')} шт.
+              </Typography>
+              <Button size="small" onClick={() => {
+                resetFbo()
+                setUi({ newKiz: null, packLastProduct: null, packExpanded: {}, currentBox: {}, printLog: [], printNotice: null, printError: null, packUndo: [] })
+                changed()
+              }} data-testid="demo-reset">Сбросить данные этого браузера</Button>
+            </Stack>
           </Box>
         ) : null}
       </Paper>
