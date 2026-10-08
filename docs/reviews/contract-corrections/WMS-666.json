@@ -99,7 +99,7 @@
     },
     {
       "contract_commit": "28a7999fefd886de41f6ffda5b05b69cd49aa496",
-      "correction_commit": "b2699f0d3",
+      "correction_commit": "b2699f0d3488b4f54ad73c7f069659bc6f68c04b",
       "upstream_correction_commit": "fa4087f73770d553dc9f178ec086b11deb93c50d",
       "files": [
         "frontend/src/components/MarkingPrintDialog.availability.dom.test.tsx",
