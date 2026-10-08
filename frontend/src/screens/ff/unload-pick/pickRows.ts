@@ -70,8 +70,8 @@ export type PickRow = {
 }
 
 export type CellPickRow =
-  | { kind: 'cell' | 'object'; key: string; depth: number; title: string; barcode: string | null; qty: number; objectKind?: ObjKind }
-  | { kind: 'goods'; key: string; depth: number; row: PickRow; place: PickPlace | null }
+  | { kind: 'cell' | 'object' | 'picked'; key: string; depth: number; title: string; barcode: string | null; qty: number; objectKind?: ObjKind }
+  | { kind: 'goods'; key: string; depth: number; row: PickRow; place: PickPlace | null; alreadyPicked?: boolean }
 
 type CellPickBranch = {
   kind: 'cell' | 'object'
@@ -92,16 +92,16 @@ const UNASSIGNED_LOCATION = 'Без ячеек'
 /** FBS walk list: one cell, then its loose goods and nested containers. */
 export function cellPickRowsOf(rows: PickRow[], objects: WarehouseObject[], cells: Cell[]): CellPickRow[] {
   const roots = new Map<string, CellPickBranch>()
+  // WMS-709: штуки, которые подбор уже принёс на сортировку, — отдельным разделом
+  // «Уже подобрано» в конце списка, чтобы не путались с тем, что ещё надо снять.
+  const alreadyPicked: Array<{ row: PickRow; place: PickPlace }> = []
   for (const row of rows) {
-    // WMS-709: у полностью подобранного товара остальные места не показываем —
-    // «Собрать» у них весь план, «Собрано 0», и строка выглядит долгом, а
-    // настоящий недобор теряется среди уже снятых штук на сортировке.
-    // Места, с которых снимали, остаются: правка и отмена работают как раньше.
-    const done = row.plan > 0 && row.left === 0
-    const places = done ? row.places.filter((place) => place.picked > 0) : row.places
-    if (done && places.length === 0) continue
-    for (const place of places.length ? places : [null]) {
+    for (const place of row.places.length ? row.places : [null]) {
       const { cell, chain } = place ? chainOf(place.holder, objects, cells) : { cell: null, chain: [] }
+      if (place && cell?.code === UNASSIGNED_LOCATION && place.picked === 0 && (row.left === 0 || place.left === 0)) {
+        alreadyPicked.push({ row, place })
+        continue
+      }
       const rootKey = cell ? cellRef(cell.id) : 'no-cell'
       const existingRoot = roots.get(rootKey)
       const root: CellPickBranch = existingRoot ?? {
@@ -155,6 +155,17 @@ export function cellPickRowsOf(rows: PickRow[], objects: WarehouseObject[], cell
   for (const branch of [...roots.values()].sort((a, b) => (
     Number(isUnassigned(a)) - Number(isUnassigned(b)) || cellOrder.compare(a.title, b.title)
   ))) append(branch)
+  if (alreadyPicked.length) {
+    flattened.push({
+      kind: 'picked', key: 'already-picked', depth: 0, title: 'Уже подобрано', barcode: null,
+      qty: alreadyPicked.reduce((sum, { place }) => sum + place.qty, 0),
+    })
+    for (const { row, place } of [...alreadyPicked].sort((a, b) => (
+      cellOrder.compare(a.row.product.sku, b.row.product.sku) || cellOrder.compare(a.row.key, b.row.key)
+    ))) {
+      flattened.push({ kind: 'goods', key: `${row.key}|${place.key}`, depth: 1, row, place, alreadyPicked: true })
+    }
+  }
   return flattened
 }
 

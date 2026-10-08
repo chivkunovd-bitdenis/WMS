@@ -83,7 +83,7 @@ describe('FBS picking grouped by cell', () => {
     ))).toEqual(['А 1', 'А 2', 'А 10', 'Без ячеек'])
   })
 
-  it('WMS-709: hides untouched places of a fully picked product and keeps the real shortage visible', () => {
+  it('WMS-709: shows plan and live remainder per line and moves picked sorting units under «Уже подобрано»', () => {
     const sortingCell: Cell = { id: 'sorting', code: 'Без ячеек', barcode: 'Без ячеек' }
     const allCells = [...cells, sortingCell]
     const pickedRows = rowsOf(
@@ -96,9 +96,24 @@ describe('FBS picking grouped by cell', () => {
       ],
       objects, allCells, { [pickKey('sku-a', cellRef('c-1'))]: 1 }, products,
     )
-    expect(cellPickRowsOf(pickedRows, objects, allCells).flatMap((item) => (
-      item.kind === 'goods' ? [`${item.row.product.id}@${item.place?.key ?? 'none'}`] : []
-    ))).toEqual([`sku-a@${cellRef('c-1')}`, `sku-b@${cellRef('sorting')}`])
+    const list = cellPickRowsOf(pickedRows, objects, allCells)
+    const label = (item: (typeof list)[number]) => item.kind === 'goods'
+      ? `${item.row.product.id}@${item.place?.key ?? 'none'}${item.alreadyPicked ? '+picked' : ''}`
+      : `[${item.title}]`
+    expect(list.map(label)).toEqual([
+      '[А 1]', `sku-a@${cellRef('c-1')}`, '[А 2]', `sku-a@${cellRef('c-2')}`,
+      '[Без ячеек]', `sku-b@${cellRef('sorting')}`,
+      '[Уже подобрано]', `sku-a@${cellRef('sorting')}+picked`,
+    ])
+    const html = renderToStaticMarkup(<FbsCellPickTable
+      rows={pickedRows} objects={objects} cells={allCells} source={null}
+      onQtyChange={() => undefined} canUndo={() => false} onUndo={() => undefined}
+    />)
+    expect(html).toContain('План')
+    expect(html).toContain('Осталось')
+    expect(html).not.toContain('>Собрать<')
+    expect(html).toContain('Уже подобрано')
+    expect(html).not.toContain(`pick-place-qty-sku-a-${cellRef('sorting')}`)
   })
 
   it('keeps the existing place-specific picking action in the cell view', async () => {
