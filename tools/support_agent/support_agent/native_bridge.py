@@ -158,11 +158,12 @@ class NativeBridge:
             result = self.store.outbox_by_key(stable_key)
             self.journal.sync_chat(chat_id)
             return {"key": key, "status": result["status"], "message_id": result["tg_message_id"]}
+        was_already_sent = row["status"] == "sent"
         flush_outbox(agent.store, agent.bots, self.cfg, only_ids={int(row["id"])},
                      explicit_native_action=True)
         result = self.store.outbox_by_key(stable_key)
         self.journal.sync_chat(chat_id)
-        if result["status"] == "sent":
+        if result["status"] == "sent" and was_already_sent:
             # Also repairs a crash after Telegram confirmed the send but before its
             # linked card event was committed. The stable delivered key deduplicates it.
             reconcile_case_delivery(self.journal, self.store, agent.bots.owner,

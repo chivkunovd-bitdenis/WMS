@@ -94,6 +94,8 @@ class Agent:
     # ---- запуск ----------------------------------------------------------------------
     def startup(self) -> None:
         if self.cfg.agent.intake_only or self.cfg.agent.visible_moderator:
+            if self.cfg.agent.visible_moderator:
+                self._recover_visible_native_sends()
             self.store.kv_set("heartbeat", self.clock())
             return
         recover_after_restart(self.store, self.cfg)
@@ -104,6 +106,33 @@ class Agent:
         if last is not None and now - float(last) > self.cfg.limits.downtime_notice_sec:
             self.catchup = {"from": float(last), "to": now, "chats": 0, "forms": 0}
         self.store.kv_set("heartbeat", now)
+
+    def _recover_visible_native_sends(self) -> None:
+        """Resolve only interrupted explicit native sends, never the legacy outbox."""
+        from .case_journal import CaseJournal
+        from .media import archive_root
+        from .telegram import native_delivery_case_link, reconcile_unconfirmed_native_delivery
+
+        journal = CaseJournal(self.store, archive_root(self.cfg))
+        interrupted = self.store.rows(
+            "SELECT * FROM outbox WHERE key LIKE 'native-send:%' "
+            "AND status IN ('sending', 'unknown') ORDER BY id"
+        )
+        for item in interrupted:
+            # Startup may settle only sends already linked to an addressable card.
+            # An unlinked row remains lazy-resolved by NativeBridge.send on a replay.
+            if native_delivery_case_link(self.store, self.cfg.telegram.owner_chat_id, item) is None:
+                continue
+            if item['status'] == 'sending':
+                self.store.execute(
+                    "UPDATE outbox SET status='unknown' WHERE id=? AND status='sending'",
+                    (item['id'],),
+                )
+            resolved = self.store.outbox_by_key(item['key'])
+            if resolved is not None and resolved['status'] == 'unknown':
+                reconcile_unconfirmed_native_delivery(
+                    journal, self.store, self.bots.owner, self.cfg.telegram.owner_chat_id, resolved,
+                )
 
     def _fmt(self, ts: float) -> str:
         return datetime.fromtimestamp(ts, tz=UTC).strftime("%d.%m %H:%M UTC")

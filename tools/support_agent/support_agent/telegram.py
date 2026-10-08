@@ -305,12 +305,16 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
 def reconcile_case_delivery(journal: CaseJournal, store: Store, owner_bot: Any,
                             owner_chat_id: int, item: Any) -> None:
     """Project a confirmed outbox result to its card; the delivery key makes retries safe."""
-    linked = store.kv_get(f"reply_case:{item['key']}", {})
+    linked = native_delivery_case_link(store, owner_chat_id, item)
     if not linked:
         return
     delivered_key = f"delivered:{item['id']}"
     card = store.kv_get(f"case_card:{linked['topic_id']}", {})
-    if any(event.get('key') == delivered_key for event in card.get('events', [])):
+    event_exists = any(event.get('key') == delivered_key for event in card.get('events', []))
+    if event_exists:
+        # The event and status are already durable, but the Telegram edit may have
+        # returned unknown. Re-render the same card without reapplying its old status.
+        journal.update_card(owner_bot, owner_chat_id, linked['topic_id'], linked['chat_id'])
         return
     kind = linked.get('kind', 'answer')
     if kind == 'owner_question':
@@ -325,6 +329,77 @@ def reconcile_case_delivery(journal: CaseJournal, store: Store, owner_bot: Any,
     journal.update_card(
         owner_bot, owner_chat_id, linked['topic_id'], linked['chat_id'],
         statuses=statuses, event=event, event_key=delivered_key,
+    )
+
+
+def native_delivery_case_link(store: Store, owner_chat_id: int, item: Any) -> dict[str, Any] | None:
+    """Return a validated association for an explicit send; reject stale/cross-chat links."""
+    key = str(item['key'])
+    if not key.startswith('native-send:'):
+        return None
+    linked = store.kv_get(f"reply_case:{key}", {})
+    if not isinstance(linked, dict) or not linked.get('topic_id'):
+        return None
+    try:
+        case_chat_id = int(linked['chat_id'])
+        destination_chat_id = int(item['chat_id'])
+        topic_id = str(linked['topic_id'])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if linked.get('kind') not in (None, 'answer', 'question', 'owner_question'):
+        return None
+    card_key = f"case_card:{topic_id}"
+    card = store.kv_get(card_key, {})
+    if not isinstance(card, dict):
+        return None
+    try:
+        if int(card.get('chat_id', 0)) != case_chat_id:
+            return None
+    except (TypeError, ValueError):
+        return None
+    destination = linked.get('destination_chat_id')
+    try:
+        if destination is not None and int(destination) != destination_chat_id:
+            return None
+    except (TypeError, ValueError):
+        return None
+    if destination_chat_id != owner_chat_id and destination_chat_id != int(card['chat_id']):
+        return None
+    return linked
+
+
+def reconcile_unconfirmed_native_delivery(journal: CaseJournal, store: Store, owner_bot: Any,
+                                          owner_chat_id: int, item: Any) -> None:
+    """Record an interrupted explicit send without guessing or retrying its outcome."""
+    linked = native_delivery_case_link(store, owner_chat_id, item)
+    if not linked:
+        return
+    card = store.kv_get(f"case_card:{linked['topic_id']}", {})
+
+    event_key = f"unconfirmed:{item['id']}"
+    if any(event.get('key') == event_key for event in card.get('events', [])):
+        journal.update_card(owner_bot, owner_chat_id, linked['topic_id'], linked['chat_id'])
+        return
+    kind = linked.get('kind', 'answer')
+    if kind == 'owner_question':
+        event = (
+            'Вопрос владельцу не подтверждён как доставленный. Повторно не отправляю, '
+            'чтобы не продублировать; проверьте основной личный Telegram-чат.'
+        )
+    elif kind == 'question':
+        event = (
+            'Уточнение клиенту не подтверждено как доставленное. Повторно не отправляю, '
+            'чтобы не продублировать; проверьте исходный Telegram-чат клиента.'
+        )
+    else:
+        event = (
+            'Ответ клиенту не подтверждён как доставленный. Повторно не отправляю, '
+            'чтобы не продублировать; проверьте исходный Telegram-чат клиента.'
+        )
+    status = CaseJournal._current_status(card)
+    journal.update_card(
+        owner_bot, owner_chat_id, linked['topic_id'], linked['chat_id'],
+        statuses={status: True}, event=event, event_key=event_key,
     )
 
 
