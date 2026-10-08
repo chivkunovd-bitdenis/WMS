@@ -1,10 +1,6 @@
-# PREPARED ONLY. Installing this file in main requires separate owner approval.
 name: Process integrity anchor
 
 on:
-  pull_request_target:
-    branches: [etalon]
-    types: [opened, synchronize, reopened, ready_for_review]
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -16,8 +12,7 @@ permissions:
   checks: write
 
 concurrency:
-  # One queue includes all PR-target and workflow-run publishers. Retain up to
-  # 100 pending runs; GitHub cancels new arrivals if the queue is full.
+  # Serialize final publishers so each completed CI run can update its exact PR.
   group: process-integrity-publishers
   queue: max
   cancel-in-progress: false

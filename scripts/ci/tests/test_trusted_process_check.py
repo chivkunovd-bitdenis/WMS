@@ -4,6 +4,7 @@ import copy
 import importlib
 import json
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -94,6 +95,16 @@ class TrustedProcessCheckTests(unittest.TestCase):
         self.f = AnchorFixture()
 
     def verify(self): return self.m.verify_pr(self.f.get, REPO, 7)
+
+    def test_anchor_publishes_only_after_ci_completion(self):
+        root = Path(__file__).resolve().parents[3]
+        workflow = (root / '.github/workflows/process-integrity.yml').read_text()
+        trigger = workflow.split('\npermissions:', 1)[0]
+        self.assertNotIn('pull_request_target:', trigger)
+        self.assertIn('workflow_run:', trigger)
+        self.assertIn('workflows: [CI]', trigger)
+        self.assertIn('types: [completed]', trigger)
+        self.assertIn('--publish', workflow)
 
     def test_api_get_accepts_github_arrays_and_objects_but_rejects_scalars(self):
         with patch.object(self.m.subprocess, 'run', return_value=SimpleNamespace(
