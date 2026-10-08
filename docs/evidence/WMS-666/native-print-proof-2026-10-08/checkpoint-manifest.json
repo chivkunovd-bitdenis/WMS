@@ -4,7 +4,11 @@
   "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
   "runtime_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
   "runtime_product_tree_equal": true,
-  "compared_product_paths": ["backend/app", "frontend/src", "tools/print-agent"],
+  "compared_product_paths": [
+    "backend/app",
+    "frontend/src",
+    "tools/print-agent"
+  ],
   "synthetic_database": "wms_test_666_native_print_final_0c44",
   "real_service_path": "React UI -> real test API/PostgreSQL -> actual WMS Print Direct Handler -> injected emulated Printer.submit -> saved PNG and receipt",
   "native_injection_boundary": "Only Printer.submit is replaced. Handler HTTP validation, origin checks, SQLite idempotency and receipt response remain the candidate implementation.",
@@ -12,19 +16,74 @@
   "outbound_marketplace_ack": "NOT_PROVEN; test provider adapter acknowledgements are synthetic",
   "accepted_residual": "The narrow site-side interval between final server validation and external printer acceptance is not atomic and is accepted by the owner.",
   "cases": [
-    {"id": "native-both-off", "result": "PASS", "evidence": "run-b6d23148/flags-rapid"},
-    {"id": "native-qr-and-chz-continuous", "result": "PASS", "evidence": "run-b6d23148/flags-rapid/decoded-output-contract.json"},
-    {"id": "native-qr-order-sticker-barcode", "result": "PASS", "evidence": "run-b6d23148/order-sticker-scan"},
-    {"id": "native-chz-only-two-copies", "result": "PASS", "evidence": "run-b6d23148/chz-only/native/decoded-output-contract.json"},
-    {"id": "native-qr-only-product-scan", "result": "PARTIAL_BOUNDARY", "evidence": "run-b6d23148/qr-only-accepted2/native", "note": "Decoded and accepted native QR; UI remains pending because no live WB acknowledgement was exercised."},
-    {"id": "native-exact-reprint-two-copies", "result": "PASS", "evidence": "run-b6d23148/reprint-only-final/native/decoded-reprint-contract.json"},
-    {"id": "native-qr-plus-reprint-and-second-order-kiz", "result": "PASS", "evidence": "run-b6d23148/reprint-qr-final3/native/decoded-reprint-contract.json", "note": "Two completed UI intents; six receipts; full pool snapshots bracket exact reprint, second CIS bind, and native dispatch."},
-    {"id": "native-preacceptance-503-reload-recovery", "result": "PASS", "evidence": "run-b6d23148/preaccept-reload"},
-    {"id": "native-after-acceptance-lost-reply-same-key", "result": "PASS", "evidence": "run-b6d23148/preaccept-reload/lost-ack/lost-ack-retry.json"},
-    {"id": "native-current-binding-unlinked-before-final-validation", "result": "PASS", "evidence": "run-b6d23148/unlink-before-native/native"},
-    {"id": "native-scan-undo-and-reload", "result": "PASS", "evidence": "run-b6d23148/clear-scan-final3/clear-reload-adjudication.json"},
-    {"id": "native-chz-and-reprint-controls-mutual-exclusion", "result": "PASS", "evidence": "run-b6d23148/reprint-qr-final3/flag-matrix/matrix.json"},
-    {"id": "grouped-manual-html-then-real-native-handler", "result": "PENDING", "evidence": null, "note": "Waiting for coordinated exact-P grouped fixture/API window; earlier synthetic /print interception is not native proof."}
+    {
+      "id": "native-both-off",
+      "result": "PASS",
+      "evidence": "run-b6d23148/flags-rapid"
+    },
+    {
+      "id": "native-qr-and-chz-continuous",
+      "result": "PASS",
+      "evidence": "run-b6d23148/flags-rapid/decoded-output-contract.json"
+    },
+    {
+      "id": "native-qr-order-sticker-barcode",
+      "result": "PASS",
+      "evidence": "run-b6d23148/order-sticker-scan"
+    },
+    {
+      "id": "native-chz-only-two-copies",
+      "result": "PASS",
+      "evidence": "run-b6d23148/chz-only/native/decoded-output-contract.json"
+    },
+    {
+      "id": "native-qr-only-product-scan",
+      "result": "PARTIAL_BOUNDARY",
+      "evidence": "run-b6d23148/qr-only-accepted2/native",
+      "note": "Actual order barcode selected the exact order and the Handler accepted/decoded its QR. Synthetic provider readback marked the KIZ accepted and PostgreSQL recorded packed state, but captured UI still warned to scan that same order barcode again; runner stopped later on a missing source-identity file. Not a clean whole-screen pass or outbound WB proof."
+    },
+    {
+      "id": "native-exact-reprint-two-copies",
+      "result": "PASS",
+      "evidence": "run-b6d23148/reprint-only-final/native/decoded-reprint-contract.json"
+    },
+    {
+      "id": "native-qr-plus-reprint-and-second-order-kiz",
+      "result": "PASS",
+      "evidence": "run-b6d23148/reprint-qr-final3/native/decoded-reprint-contract.json",
+      "note": "Two completed UI intents; six receipts; full pool snapshots bracket exact reprint, second CIS bind, and native dispatch."
+    },
+    {
+      "id": "native-preacceptance-503-reload-recovery",
+      "result": "PASS",
+      "evidence": "run-b6d23148/preaccept-reload"
+    },
+    {
+      "id": "native-after-acceptance-lost-reply-same-key",
+      "result": "PASS",
+      "evidence": "run-b6d23148/preaccept-reload/lost-ack/lost-ack-retry.json"
+    },
+    {
+      "id": "native-current-binding-unlinked-before-final-validation",
+      "result": "PASS",
+      "evidence": "run-b6d23148/unlink-before-native/native"
+    },
+    {
+      "id": "native-scan-undo-and-reload",
+      "result": "PASS",
+      "evidence": "run-b6d23148/clear-scan-final3/clear-reload-adjudication.json"
+    },
+    {
+      "id": "native-chz-and-reprint-controls-mutual-exclusion",
+      "result": "PASS",
+      "evidence": "run-b6d23148/reprint-qr-final3/flag-matrix/matrix.json"
+    },
+    {
+      "id": "grouped-manual-html-then-real-native-handler",
+      "result": "PENDING",
+      "evidence": null,
+      "note": "Waiting for coordinated exact-P grouped fixture/API window; earlier synthetic /print interception is not native proof."
+    }
   ],
   "evidence_directory": "run-b6d23148",
   "scope_note": "The QR-only native payload result is not a whole-UI completion or marketplace-transfer claim. Manual HTML print and native Handler print are separate paths."
