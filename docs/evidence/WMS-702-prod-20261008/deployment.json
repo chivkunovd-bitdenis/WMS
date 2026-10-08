@@ -1,0 +1,13 @@
+{
+  "production_source_sha": "cf5cf12d55a3c710d0a0b7c272a2b6add1e61866",
+  "previous_source_sha": "a19d02d31ba57763ce93a29005a95cc3f473e005",
+  "image": "sha256:916ca851ae61d2d3b47554426db981400b490a977f2f30c6954537ea7b389e80",
+  "web_started_at": "2026-10-08T16:53:36.246991174Z",
+  "public_print_asset": "https://wms.sellerfocus.pro/assets/useMarkingCodePrint-C_c_a36p.js",
+  "public_and_container_asset_sha256": "7b7206bcd084b822373b8f675285d7c8138cd7a94d5779e267a52b4bc5f30b86",
+  "public_html_sha256": "d491c03ff23c606742fb0a8a4cc896a30674071de23efe7fb4fd259ab5a3f2cb",
+  "container_html_sha256": "d491c03ff23c606742fb0a8a4cc896a30674071de23efe7fb4fd259ab5a3f2cb",
+  "api_health": "ok",
+  "tests_and_ci": "not run by explicit owner instruction",
+  "physical_print": "not performed"
+}
