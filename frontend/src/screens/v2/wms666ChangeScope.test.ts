@@ -82,6 +82,8 @@ const WMS_666_ALLOWED_CODE_FILES = new Set([
   'backend/tests/fbs_picking_browser_verify.py',
 ])
 const WMS_666_PROCESS_FILES = new Set([
+  'backend/tests/conftest.py',
+  'backend/tests/test_pytest_artifact_cleanup.py',
   'backend/tests/test_wms662_exact_fixture_pairs_contract.py',
   'docs/reviews/WMS-652-step9-draft/etalon.ruleset.disabled.json',
   'docs/reviews/wms666-prod-integration-1009-review.md',
