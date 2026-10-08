@@ -1,0 +1,25 @@
+# WMS-666: bounded independent review of release metadata S
+
+Reviewer: gpt-6-astra, effort high. Date: 2026-10-08.
+Reviewed S: `e6542576933184f7f6632b88703f54df02e82835`.
+Accepted product P remains `ffb524e2950cfb250993ad4db3b0f394ca55f735`; product R remains `a9fe9577ba25f5d18f6e96be59574fcf6b6fbbaa`.
+
+Verdict: PASS for the bounded test-contract/source-policy metadata transition. S may be published and used as the exact proposed source pin in a separate minimal trusted-main bootstrap PR. This is not authorization to merge that PR, not a full-CI PASS and not deployment approval. Product acceptance is not reopened.
+
+I compared the policy with the actual trusted source `39d1afdc8f37cdfda3c7768804ccccc3c9ad4e6e`, rather than treating the candidate as its own authority. All 282 previous protected paths, 29 suites, report/format/exact settings and 1,715 required cases are retained. The final policy has 286 paths and 1,723 cases. I recomputed each protected file's SHA-256 from the committed tree: no mismatch. No previous case is missing.
+
+The three previously absent protected files and the WMS-517 correction-history ledger were restored from the trusted source. `prod-update.sh` is byte-equivalent to that source, including preservation of assets used by already-open operator pages. The candidate CI workflow differs from the trusted version only by replacing the accepted-product pin with exact P. It retains `--maxWorkers=2`, unfiltered frontend execution, backend shard coverage verification and the explicit retained-web-assets test invocation that supplies all 14 required infrastructure cases. Checkers and their rejection rules were not loosened.
+
+The ordinary-row visible-error and queued-Escape regressions remain in the existing unified-packing DOM suite. Their exact identifiers, the mixed-task current-pool case, both acknowledgement recovery cases and the new standalone file are registered in `frontend-all.json`. The backend rejected-KIZ omitted-kind regression and its C5 missing-kind/other-value controls are registered in `backend-all.xml`; those files are protected by digest as well. Mandatory report registration is distinct from actual execution: the final full CI still has to produce and verify those outcomes.
+
+The WMS-477 repair changes only three test titles back to their registered identifiers; the reviewed shared-toolbar assertions are unchanged. For partial acknowledgement recovery, I mechanically confirmed that the complete test body, including `mockClear`, is identical after relocation, and inspected the identical setup/mocks/context/cleanup. The original availability file is restored exactly to frozen contract blob `2608fe9e300b4e1b088cff4e9bd684f758a34f50`. No test outcome is weakened by this relocation. It repairs the existing frozen-contract boundary without a custom exception.
+
+The separate renderer correction record uses original contract `28a7999fefd886de41f6ffda5b05b69cd49aa496` and correction `ec44815fe063611723c2794781ff8b1a9288bf52`, exactly the two reviewed renderer files. Its report is the independently published `renderer-contract-correction-ec44815.md`, copied into the candidate by commit `0c3d1666fe7c10652da98cb44b14d31041fd7ba3`. The review's original publication is `d6657070669b0d3245ba738d9221eaeb6e67a82d`.
+
+The source-binding fixture preserves the actual trusted accepted history, including 7db/d420 and the earlier b2 FAIL record, while adding exact P and its independent R as the current accepted product. It preserves the prohibition on HEAD/current-CI self-selection. S has no backend application changes or frontend runtime changes relative to P; the frontend changes in S are reviewed test-only additions, relocation and identifier maintenance.
+
+The release author recorded these actual local results on committed `2a9643159a935cf6d175b47355f2356be6623ef5`: source-binding contract tests 7/7; task-document check against origin/etalon PASS; product-scope check against P with no unapproved paths. The only subsequent e654 change is that check record. I inspected its commands, scope and source diff; I did not independently rerun those tests and do not present that record as a new full-suite execution.
+
+The outstanding trust condition is concrete: trusted main currently authorizes source 39d for base `a5df04f1560de0eaaf855199065936cb22a222b1`. Candidate metadata cannot override that anchor. A minimal separate PR may propose `source_sha=e6542576933184f7f6632b88703f54df02e82835` under the existing bootstrap mechanism, with the base preserved. Review its actual diff and applicable checks before asking for the user's separate main-merge authorization. Do not merge from this verdict alone.
+
+Release remains NO-GO until the legitimate anchor transition, complete exact-S mandatory CI (including frontend, Windows printing, PostgreSQL and full picking), and deployment/version readback. The earlier exact-P picking 39/40 failure remains a failed run; its isolated 1/1 recovery does not replace the required complete suite. No live WB, physical-paper or installed-native upgrade claim is added here.
