@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -60,6 +61,32 @@ def validate_identity(data):
         raise ValueError('Exact tested SHA/run/attempt required')
 
 
+class Progress:
+    """Controller-side diagnostics; never consumed by the shard receipt merger."""
+
+    def __init__(self, path, identity, index):
+        self.path = path
+        self.identity = identity
+        self.index = index
+
+    def _write(self, event):
+        record = {**self.identity, 'shard_index': self.index, **event}
+        with self.path.open('a', encoding='utf-8') as stream:
+            stream.write(json.dumps(record, ensure_ascii=False) + '\n')
+            stream.flush()
+
+    def pytest_runtest_logstart(self, nodeid, location):
+        self._write({'event': 'logstart', 'nodeid': nodeid, 'location': list(location),
+                     'time': time.time()})
+
+    def pytest_runtest_logreport(self, report):
+        record = {'event': 'logreport', 'nodeid': report.nodeid, 'phase': report.when,
+                  'outcome': report.outcome, 'duration_seconds': report.duration}
+        if report.failed:
+            record['longrepr'] = str(report.longrepr)
+        self._write(record)
+
+
 def run(index, output, arguments):
     # xdist freezes sys.path when its plugin is first imported. Establish the
     # repository import path before importing pytest/collecting, for all workers.
@@ -77,6 +104,7 @@ def run(index, output, arguments):
 
     identity = attempt_identity()
     output.mkdir(parents=True, exist_ok=False)
+    progress = Progress(output / 'progress.jsonl', identity, index)
     capture = Collection()
     code = pytest.main([*arguments, '--collect-only', '-n', '0'], plugins=[capture])
     if code != 0:
@@ -86,7 +114,7 @@ def run(index, output, arguments):
     os.environ['WMS_BACKEND_SHARD_INDEX'] = str(index)
     os.environ['WMS_BACKEND_COLLECTION_DIGEST'] = digest(full)
     code = int(pytest.main([*arguments, '-p', 'scripts.ci.backend_shards',
-                           '--junitxml=' + str(output / 'junit.xml')]))
+                           '--junitxml=' + str(output / 'junit.xml')], plugins=[progress]))
     receipt = {**identity, 'version': 1, 'count': 2, 'index': index,
                'collection': full, 'selected': selected, 'exit_code': code}
     (output / 'receipt.json').write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + '\n')
