@@ -284,7 +284,8 @@
     "scripts/ci/tests/test_retain_web_assets.py": "776f150a5c489291b7bb38120c2cab036a3f1892667db9b6043c8d581be9a6df",
     "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "615e82d1b6dd98ca4117ae6c0fd3f3f503bc3eceaab2fea0562b61bd1b3de969",
     "frontend/src/components/MarkingPrintDialog.availability.dom.test.tsx": "f969581a0f8fd33eb582943a835388cc2bbede6a6260c54298e18bef76e2b117",
-    "frontend/src/components/MarkingPrintDialog.partialAck.wms666.dom.test.tsx": "68740029acf66dff96190979c075e2c1a8caeccb37c212b72780d10e42621cc0"
+    "frontend/src/components/MarkingPrintDialog.partialAck.wms666.dom.test.tsx": "68740029acf66dff96190979c075e2c1a8caeccb37c212b72780d10e42621cc0",
+    "backend/tests/test_wms635_kiz_no_wb_wait.py": "08f38c25b29acef0a5ccbd5164dcd792d29204a47978ab99527a1c1e2f49c644"
   },
   "suites": {
     "backend-fbs": {
@@ -912,6 +913,7 @@
         "tests.test_wms588_fbs_assembly_tasks::test_list_contains_task_while_any_supply_is_active",
         "tests.test_wms588_fbs_assembly_tasks::test_supply_cannot_be_added_to_two_tasks",
         "tests.test_wms588_fbs_assembly_tasks::test_tenant_boundary_for_create_list_and_detail",
+        "tests.test_wms635_kiz_no_wb_wait::test_r_a5c_complete_wb_row_without_sgtin_keeps_the_refused_kiz_red",
         "tests.test_wms654_cells::test_c10_creation_keeps_existing_stock_placement_and_barcodes[False]",
         "tests.test_wms654_cells::test_c10_creation_keeps_existing_stock_placement_and_barcodes[True]",
         "tests.test_wms654_cells::test_c1_four_address_combinations_survive_reload[False-False-\\u0410 4]",
