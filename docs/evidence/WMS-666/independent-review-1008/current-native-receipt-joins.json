@@ -1,0 +1,88 @@
+{
+  "product": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "observed_at": "2026-10-08T01:02:17.052497+00:00",
+  "scope": "Independent read-only SQLite receipt-to-PNG join; not yet published final native acceptance",
+  "cases": {
+    "reprint-only-final": {
+      "count": 2,
+      "jobs": [
+        {
+          "key": "c2c61271-89b8-4c90-8f77-59c53594293f:copy",
+          "receipt": "emulator-0001-f2f4c4632159",
+          "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "c2c61271-89b8-4c90-8f77-59c53594293f:copy:c2",
+          "receipt": "emulator-0002-f2f4c4632159",
+          "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "ledger_sink_image_match": true
+        }
+      ]
+    },
+    "reprint-final": {
+      "count": 3,
+      "jobs": [
+        {
+          "key": "5f24fbd6-90ad-4678-adbc-bdd77022612d",
+          "receipt": "emulator-0001-976f95677ac0",
+          "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "5f24fbd6-90ad-4678-adbc-bdd77022612d:copy",
+          "receipt": "emulator-0002-f2f4c4632159",
+          "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "5f24fbd6-90ad-4678-adbc-bdd77022612d:copy:c2",
+          "receipt": "emulator-0003-f2f4c4632159",
+          "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "ledger_sink_image_match": true
+        }
+      ]
+    },
+    "flags-rapid": {
+      "count": 6,
+      "jobs": [
+        {
+          "key": "8a3b80ba-60f4-43f8-8213-0c20053b0285",
+          "receipt": "emulator-0001-976f95677ac0",
+          "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "8a3b80ba-60f4-43f8-8213-0c20053b0285:chz",
+          "receipt": "emulator-0002-f2f4c4632159",
+          "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "8a3b80ba-60f4-43f8-8213-0c20053b0285:chz:c2",
+          "receipt": "emulator-0003-f2f4c4632159",
+          "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "841b537e-ec30-4e60-b7d9-c7cd5da171a6",
+          "receipt": "emulator-0004-c2a439551dfe",
+          "sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "841b537e-ec30-4e60-b7d9-c7cd5da171a6:chz",
+          "receipt": "emulator-0005-cb9e8ba5ed4a",
+          "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "841b537e-ec30-4e60-b7d9-c7cd5da171a6:chz:c2",
+          "receipt": "emulator-0006-cb9e8ba5ed4a",
+          "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+          "ledger_sink_image_match": true
+        }
+      ]
+    }
+  }
+}
