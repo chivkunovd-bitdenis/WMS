@@ -461,7 +461,7 @@ async def link_marking_code(
     req = await _lock_request(session, tenant_id, request_id)
     plan = {ln.product_id: ln for ln in req.lines}
     if product_id is not None and product_id not in plan:
-        raise MarketplaceUnloadKizError("product_not_in_shipment")
+        raise MarketplaceUnloadKizError("marking_product_unknown")
     seller_id = req.seller_id
     assert seller_id is not None
 
