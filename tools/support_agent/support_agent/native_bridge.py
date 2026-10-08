@@ -116,16 +116,40 @@ class NativeBridge:
                                        event_key, chat_title=title_chat, task_url=task_url)
 
     def send(self, chat_id: int, text: str, key: str, reply_to: str | None = None,
-             file_path: str | None = None) -> dict[str, Any]:
+             file_path: str | None = None,
+             topic_id: str | int | None = None,
+             message_kind: str = "answer") -> dict[str, Any]:
         agent = self._delivery()
         from .telegram import flush_outbox
         if chat_id != self.cfg.telegram.owner_chat_id and self.store.binding(chat_id) is None:
             raise ValueError("unknown connected chat")
         stable_key = "native-send:" + key
+        link_key = f"reply_case:{stable_key}"
+        existing_link = self.store.kv_get(link_key, {})
+        if topic_id is not None:
+            linked_card = self.store.kv_get(f"case_card:{topic_id}")
+            if linked_card is None:
+                raise ValueError("unknown case card")
+            case_chat_id = int(linked_card["chat_id"])
+            if chat_id not in (self.cfg.telegram.owner_chat_id, case_chat_id):
+                raise ValueError("case card does not belong to destination chat")
+            if message_kind not in {"answer", "question"}:
+                raise ValueError("message_kind must be 'answer' or 'question'")
+            desired_kind = ("owner_question" if chat_id == self.cfg.telegram.owner_chat_id
+                            else message_kind)
+            link = {"topic_id": str(topic_id), "chat_id": case_chat_id,
+                    "destination_chat_id": chat_id, "kind": desired_kind}
+            if existing_link and existing_link != link:
+                raise ValueError("native send key is already linked to a different case")
+            # Persist the exact case association before the one allowed Telegram send.
+            self.store.kv_set(link_key, link)
         self.store.queue_message(key=stable_key, chat_id=chat_id, text=text, reply_to=reply_to,
                                  purpose="native_reply", repeat_ok=False, file_path=file_path)
         row = self.store.outbox_by_key(stable_key)
-        flush_outbox(agent.store, agent.bots, self.cfg, only_ids={int(row["id"])})
+        if row is None:
+            raise RuntimeError("native send intent was not persisted")
+        flush_outbox(agent.store, agent.bots, self.cfg, only_ids={int(row["id"])},
+                     explicit_native_action=True)
         result = self.store.outbox_by_key(stable_key)
         self.journal.sync_chat(chat_id)
         return {"key": key, "status": result["status"], "message_id": result["tg_message_id"]}

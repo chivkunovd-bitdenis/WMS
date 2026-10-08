@@ -302,7 +302,8 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
     )
 
 
-def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | None = None) -> int:
+def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | None = None,
+                 explicit_native_action: bool = False) -> int:
     """Отправляет намерения. Клиенту при неизвестном исходе НЕ повторяем (R35).
 
     Маршрут по чату: владельцу только ботом владельца, всем остальным только ботом приёма.
@@ -313,7 +314,9 @@ def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | Non
         # An explicit bridge action must never drain older queued messages.
         if only_ids is not None and int(item['id']) not in only_ids:
             continue
-        if (item['chat_id'] != cfg.telegram.owner_chat_id
+        explicit_send = (explicit_native_action and only_ids is not None
+                         and item['key'].startswith('native-send:'))
+        if (item['chat_id'] != cfg.telegram.owner_chat_id and not explicit_send
                 and not getattr(cfg.agent, 'client_replies_enabled', False)):
             continue
         if not store.claim_outbox(item["id"]):
@@ -352,18 +355,25 @@ def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | Non
                 store.finish_outbox(item["id"], "failed")
             continue
         store.finish_outbox(item["id"], "sent", message_id)
-        if getattr(cfg.agent, 'visible_moderator', False):
+        if getattr(cfg.agent, 'visible_moderator', False) or explicit_send:
             journal = CaseJournal(store, getattr(cfg.agent, 'history_dir', '')
                                   or Path(cfg.repo) / 'var/support-conversations')
             journal.sync_chat(int(item['chat_id']))
             linked = store.kv_get(f"reply_case:{item['key']}", {})
             if linked:
-                is_answer = linked.get('kind') == 'answer'
+                kind = linked.get('kind', 'answer')
+                if kind == 'owner_question':
+                    event = 'Вопрос владельцу отправлен: ' + item['text']
+                    statuses = {'owner_needed': True}
+                elif kind == 'question':
+                    event = 'Уточнение отправлено клиенту: ' + item['text']
+                    statuses = {}
+                else:
+                    event = 'Ответ отправлен клиенту: ' + item['text']
+                    statuses = {'answer_sent': True}
                 journal.update_card(
                     bots.owner, cfg.telegram.owner_chat_id, linked['topic_id'], linked['chat_id'],
-                    statuses={'answer_sent': True} if is_answer else {},
-                    event=('Ответ отправлен клиенту: ' if is_answer else 'Уточнение отправлено клиенту: ')
-                          + item['text'], event_key=f"delivered:{item['id']}",
+                    statuses=statuses, event=event, event_key=f"delivered:{item['id']}",
                 )
         sent += 1
     return sent
