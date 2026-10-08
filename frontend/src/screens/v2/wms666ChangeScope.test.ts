@@ -52,6 +52,8 @@ const WMS_666_ALLOWED_CODE_FILES = new Set([
   'backend/tests/test_fbs_ozon_lane.py',
   'frontend/src/screens/v2/fbsStickerPrefetch.ts',
   'frontend/src/screens/v2/fbsStickerPrefetch.test.ts',
+  'frontend/src/screens/v2/fbsWorkspaceFreshness.ts',
+  'frontend/src/screens/v2/fbsWorkspaceFreshness.test.ts',
   'frontend/src/screens/v2/FfFbsSupplyAssembly.dom.test.tsx',
   'backend/tests/fbs_picking_browser_verify.py',
 ])
@@ -187,6 +189,8 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       'backend/tests/test_fbs_ozon_lane.py',
       'frontend/src/screens/v2/fbsStickerPrefetch.ts',
       'frontend/src/screens/v2/fbsStickerPrefetch.test.ts',
+      'frontend/src/screens/v2/fbsWorkspaceFreshness.ts',
+      'frontend/src/screens/v2/fbsWorkspaceFreshness.test.ts',
       'frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx',
       'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms514.test.ts',
       'frontend/src/screens/v2/FfFbsSupplyAssembly.tsx',
