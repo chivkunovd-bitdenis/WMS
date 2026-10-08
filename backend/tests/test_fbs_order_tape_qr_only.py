@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -148,9 +149,13 @@ async def test_delivered_wb_reuses_saved_code_without_packaging_task(
     monkeypatch.setattr(service, "_line_by_product", AsyncMock(return_value={}))
     monkeypatch.setattr(service, "_existing_sgtin_marking", lambda _: marking)
     allocate = AsyncMock()
+    allocate_from_product = AsyncMock(
+        side_effect=AssertionError("historical reprint must not allocate a new code")
+    )
     attach_to_wb = AsyncMock()
     record_event = AsyncMock()
     monkeypatch.setattr(service.mc_svc, "print_codes_for_packaging_line", allocate)
+    monkeypatch.setattr(service.mc_svc, "print_codes_for_product", allocate_from_product)
     monkeypatch.setattr(service.mc_svc, "record_event", record_event)
     monkeypatch.setattr(service.marking_svc, "attach_order_meta_to_wb_and_sync", attach_to_wb)
 
@@ -173,8 +178,9 @@ async def test_delivered_wb_reuses_saved_code_without_packaging_task(
         assert record_event.call_args.kwargs.get("packaging_task") is None
     else:
         assert result.orders == []
-        assert result.order_errors[0].code == "packaging_line_not_found"
+        assert result.order_errors[0].code == "nothing_to_reprint"
         record_event.assert_not_awaited()
+    allocate_from_product.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -193,17 +199,19 @@ async def test_ozon_inline_reprint_selects_only_clicked_operator_kiz(
         id=uuid.uuid4(),
         kind="sgtin",
         meta_status="accepted",
+        meta_details_json={},
         order_product_id=first_position_id,
         marking_code=first_code,
-        created_at="1",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     second_marking = SimpleNamespace(
         id=uuid.uuid4(),
         kind="sgtin",
         meta_status="accepted",
+        meta_details_json={},
         order_product_id=second_position_id,
         marking_code=second_code,
-        created_at="2",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(seconds=1),
     )
     order = SimpleNamespace(
         id=order_id,
@@ -212,8 +220,8 @@ async def test_ozon_inline_reprint_selects_only_clicked_operator_kiz(
         product=SimpleNamespace(requires_honest_sign=True),
         required_meta_json=["sgtin"],
         product_positions=[
-            SimpleNamespace(id=first_position_id, position_index=0),
-            SimpleNamespace(id=second_position_id, position_index=1),
+            SimpleNamespace(id=first_position_id, position_index=0, quantity=1),
+            SimpleNamespace(id=second_position_id, position_index=1, quantity=1),
         ],
         markings=[first_marking, second_marking],
     )

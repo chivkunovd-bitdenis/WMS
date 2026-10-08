@@ -992,6 +992,45 @@
         }
       }
     },
+    "/operations/fbs-orders/print-bindings/validate": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Validate Fbs Print Bindings",
+        "operationId": "validate_fbs_print_bindings_operations_fbs_orders_print_bindings_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsPrintBindingsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/operations/fbs-orders/kiz/lookup": {
       "get": {
         "tags": [
@@ -2201,6 +2240,58 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FbsSupplyWorklistOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/picking-context": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Get Fbs Picking Context",
+        "operationId": "get_fbs_picking_context_operations_fbs_supplies__supply_id__picking_context_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FbsPickingContextOut"
+                  },
+                  "title": "Response Get Fbs Picking Context Operations Fbs Supplies  Supply Id  Picking Context Get"
                 }
               }
             }
@@ -6550,6 +6641,18 @@
             "type": "string",
             "title": "Pools Json"
           },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
           "seller_id": {
             "anyOf": [
               {
@@ -9329,6 +9432,11 @@
             "maxLength": 128,
             "minLength": 1,
             "title": "Attempt Key"
+          },
+          "include_binding": {
+            "type": "boolean",
+            "title": "Include Binding",
+            "default": false
           }
         },
         "type": "object",
@@ -10467,6 +10575,28 @@
       },
       "FbsOrderTapePrintedCodeOut": {
         "properties": {
+          "marking_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marking Id"
+          },
+          "supply_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supply Id"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -11400,6 +11530,42 @@
         ],
         "title": "FbsPickUndoBody"
       },
+      "FbsPickingContextOut": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "inbound_supplies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Inbound Supplies"
+          },
+          "locations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Locations"
+          },
+          "source_groups": {
+            "items": {
+              "$ref": "#/components/schemas/FbsPickingSourceGroupOut"
+            },
+            "type": "array",
+            "title": "Source Groups"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "inbound_supplies",
+          "locations"
+        ],
+        "title": "FbsPickingContextOut"
+      },
       "FbsPickingListItemOut": {
         "properties": {
           "article": {
@@ -11462,6 +11628,32 @@
           "items"
         ],
         "title": "FbsPickingListOut"
+      },
+      "FbsPickingSourceGroupOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "lines"
+        ],
+        "title": "FbsPickingSourceGroupOut"
       },
       "FbsPrintAssetAppliedBody": {
         "properties": {
@@ -11675,6 +11867,64 @@
           "kind"
         ],
         "title": "FbsPrintBatchRequest"
+      },
+      "FbsPrintBindingIn": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Order Id"
+          },
+          "supply_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Supply Id"
+          },
+          "marking_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Marking Id"
+          },
+          "cis_code": {
+            "type": "string",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Cis Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "supply_id",
+          "marking_id",
+          "cis_code"
+        ],
+        "title": "FbsPrintBindingIn"
+      },
+      "FbsPrintBindingsBody": {
+        "properties": {
+          "bindings": {
+            "items": {
+              "$ref": "#/components/schemas/FbsPrintBindingIn"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Bindings"
+          },
+          "reprint_marking_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Reprint Marking Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bindings"
+        ],
+        "title": "FbsPrintBindingsBody"
       },
       "FbsPrintJobCreateBody": {
         "properties": {
@@ -12295,6 +12545,17 @@
           "started": {
             "type": "boolean",
             "title": "Started"
+          },
+          "marking_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marking Id"
           },
           "kiz": {
             "anyOf": [
@@ -15775,6 +16036,11 @@
           "tape_order_index": {
             "type": "integer",
             "title": "Tape Order Index"
+          },
+          "marking_available_count": {
+            "type": "integer",
+            "title": "Marking Available Count",
+            "default": 0
           }
         },
         "type": "object",
@@ -16222,6 +16488,10 @@
           "has_packaging_instructions": {
             "type": "boolean",
             "title": "Has Packaging Instructions"
+          },
+          "requires_honest_sign": {
+            "type": "boolean",
+            "title": "Requires Honest Sign"
           }
         },
         "type": "object",
@@ -16234,7 +16504,8 @@
           "barcode",
           "size",
           "packaging_instructions",
-          "has_packaging_instructions"
+          "has_packaging_instructions",
+          "requires_honest_sign"
         ],
         "title": "FbsWorkspaceProductOut"
       },
@@ -17558,6 +17829,28 @@
           "product_name": {
             "type": "string",
             "title": "Product Name"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
           },
           "wb_barcode": {
             "anyOf": [
@@ -20786,6 +21079,18 @@
             ],
             "title": "Side"
           },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier"
+          },
           "position": {
             "anyOf": [
               {
@@ -20798,6 +21103,28 @@
               }
             ],
             "title": "Position"
+          },
+          "use_sides": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Sides"
+          },
+          "use_tiers": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Tiers"
           }
         },
         "type": "object",
@@ -20820,6 +21147,39 @@
           "barcode": {
             "type": "string",
             "title": "Barcode"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
           }
         },
         "type": "object",
@@ -23429,6 +23789,28 @@
             "type": "string",
             "title": "Product Name"
           },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
           "quantity": {
             "type": "integer",
             "title": "Quantity"
@@ -24859,6 +25241,28 @@
           "product_name": {
             "type": "string",
             "title": "Product Name"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
           },
           "storage_location_id": {
             "anyOf": [

@@ -420,6 +420,22 @@ async def print_fbs_order_tape(
                     message="nothing_to_reprint",
                 ))
                 continue
+            if (
+                line is None
+                and getattr(supply, "marketplace", "wb") == "wb"
+                and getattr(supply, "status", None)
+                in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
+                and (existing is None or existing.marking_code is None)
+            ):
+                # A historical reprint may only reuse an already-bound KIZ.
+                # Never spend a new pool code to replace evidence that is absent.
+                errors.append(FbsOrderTapeError(
+                    order_id=order.id,
+                    wb_order_id=int(order.wb_order_id),
+                    code="nothing_to_reprint",
+                    message="nothing_to_reprint",
+                ))
+                continue
             if existing is not None and existing.source == "operator" and not reprint:
                 errors.append(FbsOrderTapeError(
                     order_id=order.id,
