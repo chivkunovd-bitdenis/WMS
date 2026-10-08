@@ -1228,7 +1228,9 @@ export function FfPackagingTaskPanel({
           })}
         </Stack>
       )}
-      {taskEditable ? (
+      {/* WMS-686: у заданий отгрузок FBO «Завершить упаковку» нет — упаковка FBO идёт
+          в самой отгрузке и от статуса задания не зависит. */}
+      {taskEditable && !isMpUnloadTask ? (
         <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-complete-panel">
           <Stack spacing={1.5}>
             {hasIncompleteMarking && !isMpUnloadTask ? (
@@ -1895,7 +1897,14 @@ export function FfPackagingPage({ token, addressStorageEnabled = true }: PagePro
     if (!res.ok) {
       setError(await readPackagingApiErrorMessage(res))
     } else {
-      setTasks((await res.json()) as PackagingTask[])
+      const loaded = (await res.json()) as PackagingTask[]
+      // WMS-686: задания отгрузок FBO в списке «Открытые» не показываем — их упаковка
+      // идёт на вкладке «Упаковка» самой отгрузки.
+      setTasks(
+        statusFilter === 'open'
+          ? loaded.filter((task) => !task.marketplace_unload_request_id)
+          : loaded,
+      )
     }
     try {
       const pending = await fetchPendingMarking(token)

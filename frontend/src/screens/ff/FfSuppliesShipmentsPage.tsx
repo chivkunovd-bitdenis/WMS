@@ -15,6 +15,7 @@ import {
   Box,
   Button,
   Chip,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -39,22 +40,20 @@ import {
   Typography,
   Snackbar,
 } from '@mui/material'
-import { alpha } from '@mui/material/styles'
+import { alpha, type Theme } from '@mui/material/styles'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import { WbProductPickerDialog, type WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { WmsDateField } from '../../components/WmsDateField'
-import { MarketplaceChip } from '../../ui-kit'
+import { AppDialog, MarketplaceChip } from '../../ui-kit'
 
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { PageHeader } from '../../ui/PageHeader'
 import type { FfInboundSummary, FfOutboundSummary } from './FfDashboard'
-import {
-  FfPackagingTaskPanel,
-  type PackagingTask,
-} from './FfPackagingPage'
+import { FboPackingTop } from './fbo-packing/FboPackingTop'
+import { FboPassDialog } from '../../components/FboPassDialog'
 import { FfMarketplaceUnloadBoxAddDialog } from './FfMarketplaceUnloadBoxAddDialog'
 import { FfUnloadPickPage } from './unload-pick/FfUnloadPickPage'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
@@ -65,6 +64,7 @@ import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import { createLatestRequestSequence } from '../../utils/latestRequestSequence'
+import { playScanError } from '../../utils/scanFeedback'
 
 export type FfMarketplaceUnloadSummary = {
   id: string
@@ -131,14 +131,6 @@ type MarketplaceUnloadPickAllocation = {
   quantity: number
 }
 
-type LinkedPackagingTask = {
-  task_id: string
-  status: string
-  qty_done: number
-  qty_total: number
-  is_complete: boolean
-}
-
 type MarketplaceUnloadDetail = {
   id: string
   document_number: string | null
@@ -158,7 +150,8 @@ type MarketplaceUnloadDetail = {
   lines: DocLineRow[]
   boxes: MarketplaceUnloadBox[]
   pick_allocations: MarketplaceUnloadPickAllocation[]
-  linked_packaging_task: LinkedPackagingTask | null
+  /** Сведения пропуска (WMS-686): null, пока ФФ их не внёс. */
+  pass_details?: Record<string, unknown> | null
 }
 
 type DiscrepancyActDetail = {
@@ -166,6 +159,14 @@ type DiscrepancyActDetail = {
   status: string
   inbound_intake_request_id: string | null
   lines: DocLineRow[]
+}
+
+/** Отказ «Завершить» с кодом marking_incomplete: товар с ЧЗ, где привязано меньше КИЗ, чем отгружается. */
+type MarkingIncompleteItem = {
+  product_id: string
+  product_name: string
+  linked: number
+  quantity: number
 }
 
 type DocKind = 'inbound' | 'outbound' | 'marketplace_unload' | 'discrepancy_act'
@@ -187,6 +188,57 @@ type UnifiedRow = {
   marketplace: string | null
   extraLabel: string | null
   ffModified: boolean
+}
+
+/** Тело отказа 422 {detail: {code: "marking_incomplete", items: [...]}} → перечень товаров, иначе null. */
+async function readMarkingIncompleteItems(res: Response): Promise<MarkingIncompleteItem[] | null> {
+  if (res.status !== 422) return null
+  try {
+    const data = (await res.json()) as { detail?: unknown }
+    const detail = data.detail
+    if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null
+    const structured = detail as { code?: unknown; items?: unknown }
+    if (structured.code !== 'marking_incomplete') return null
+    const rawItems = Array.isArray(structured.items) ? structured.items : []
+    return rawItems.map((raw) => {
+      const item = (raw ?? {}) as Partial<MarkingIncompleteItem>
+      return {
+        product_id: String(item.product_id ?? ''),
+        product_name: String(item.product_name ?? ''),
+        linked: Number(item.linked ?? 0),
+        quantity: Number(item.quantity ?? 0),
+      }
+    })
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Отказ переноса короба: сервер присылает detail.message готовым текстом; если его нет,
+ * но есть items [{product_name, in_box, remaining}], текст собираем здесь тем же словами.
+ */
+async function readBoxAttachError(res: Response): Promise<string> {
+  try {
+    const data = (await res.clone().json()) as { detail?: unknown }
+    const detail = data.detail
+    if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+      const structured = detail as { code?: unknown; message?: unknown; items?: unknown }
+      const hasMessage = typeof structured.message === 'string' && structured.message.trim() !== ''
+      if (!hasMessage && structured.code === 'plan_limit_exceeded' && Array.isArray(structured.items)) {
+        const parts = structured.items.map((raw) => {
+          const item = (raw ?? {}) as { product_name?: unknown; in_box?: unknown; remaining?: unknown }
+          return `${String(item.product_name ?? 'Товар')} — в коробе ${Number(item.in_box ?? 0)}, осталось ${Number(item.remaining ?? 0)}`
+        })
+        if (parts.length > 0) {
+          return `Количество товаров в коробе больше, чем осталось подобрать: ${parts.join('; ')}. Откройте короб и подберите поштучно`
+        }
+      }
+    }
+  } catch {
+    // не JSON — общий разбор ниже
+  }
+  return readApiErrorMessage(res)
 }
 
 function statusRu(status: string): string {
@@ -234,12 +286,11 @@ function mpUnloadStepLabel(step: MpUnloadTab): string {
   return mpUnloadSteps.find((item) => item.value === step)?.label ?? step
 }
 
-/** Человеческий размер короба вместо служебного кода пресета («60_40_40»). */
-function mpBoxPresetLabel(preset: string): string {
-  if (preset === '60_40_40') return '60×40×40 см'
-  if (preset === '30_20_30') return '30×20×30 см'
-  return preset
-}
+/**
+ * WMS-686: выбор размера короба и подпись «60 × 40 × 40» с экрана FBO убраны.
+ * При создании и загрузке по накладной уходит прежнее значение по умолчанию.
+ */
+const MP_BOX_DEFAULT_PRESET = '60_40_40'
 
 type ProductPick = { id: string; sku_code: string; name: string }
 type AvailableProductPick = ProductPick & { available: number }
@@ -317,15 +368,12 @@ export function FfSuppliesShipmentsPage({
   const [docModal, setDocModal] = useState<null | 'marketplace_unload' | 'discrepancy_act'>(null)
   const [docModalId, setDocModalId] = useState<string | null>(null)
   const [mpUnloadTab, setMpUnloadTab] = useState<MpUnloadTab>('plan')
-  const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
-  const [packagingTaskError, setPackagingTaskError] = useState<string | null>(null)
   const [modalBusy, setModalBusy] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
   const [unloadDetail, setUnloadDetail] = useState<MarketplaceUnloadDetail | null>(null)
   const [divergeDetail, setDivergeDetail] = useState<DiscrepancyActDetail | null>(null)
   const [lineProductId, setLineProductId] = useState<string>('')
   const [lineQty, setLineQty] = useState<string>('1')
-  const [boxPreset, setBoxPreset] = useState<'60_40_40' | '30_20_30'>('60_40_40')
   const [boxBatchCount, setBoxBatchCount] = useState<string>('1')
   const [scanBarcode, setScanBarcode] = useState<string>('')
   const [inboundRefLines, setInboundRefLines] = useState<
@@ -345,8 +393,25 @@ export function FfSuppliesShipmentsPage({
   const [mpShipConfirmOpen, setMpShipConfirmOpen] = useState(false)
   const [mpCancelConfirmOpen, setMpCancelConfirmOpen] = useState(false)
   const [mpAttachConfirmOpen, setMpAttachConfirmOpen] = useState(false)
-  const [mpAttachOverPlanOpen, setMpAttachOverPlanOpen] = useState(false)
   const [pendingAttachBarcode, setPendingAttachBarcode] = useState<string | null>(null)
+  // WMS-686: текущий короб упаковки, раскрытые короба, ошибки раздела коробов,
+  // окно «Извлечь товар», красное окно «Не на все товары привязаны КИЗ» и пропуск.
+  const [currentBoxId, setCurrentBoxId] = useState<string | null>(null)
+  const [expandedBoxIds, setExpandedBoxIds] = useState<Set<string>>(() => new Set())
+  const [boxSectionError, setBoxSectionError] = useState<string | null>(null)
+  const [extractBoxId, setExtractBoxId] = useState<string | null>(null)
+  const [extractBusy, setExtractBusy] = useState(false)
+  const [extractError, setExtractError] = useState<string | null>(null)
+  const [markingIncomplete, setMarkingIncomplete] = useState<{
+    items: MarkingIncompleteItem[]
+    acknowledgeDiscrepancy: boolean
+  } | null>(null)
+  const [passDialogOpen, setPassDialogOpen] = useState(false)
+  const attachInFlightRef = useRef(false)
+  // Один и тот же скан короба может прийти двумя путями (поле и слушатель вкладки):
+  // повтор того же кода за доли секунды не должен открывать второе окно переноса.
+  const lastBoxScanRef = useRef<{ code: string; at: number } | null>(null)
+  const prevMpTabRef = useRef<MpUnloadTab>('plan')
   const mpCatalogSellerId = unloadDetail?.seller_id ?? null
   const { catalog, catalogById, getDisplayMeta, reload: reloadWbCatalog } = useWbProductCatalog(
     token,
@@ -380,6 +445,13 @@ export function FfSuppliesShipmentsPage({
     setWbFbwExportBusy(false)
     setWbFbwExportError(null)
     setWbFbwExportWarning(null)
+    // Текущий короб, раскрытие и окна принадлежат конкретному документу.
+    setCurrentBoxId(null)
+    setExpandedBoxIds(new Set())
+    setBoxSectionError(null)
+    setExtractBoxId(null)
+    setMarkingIncomplete(null)
+    setPassDialogOpen(false)
   }, [docModal, docModalId])
 
   useEffect(() => {
@@ -491,13 +563,7 @@ export function FfSuppliesShipmentsPage({
             location_code: string
             quantity: number
           }[]
-          linked_packaging_task?: {
-            task_id: string
-            status: string
-            qty_done: number
-            qty_total: number
-            is_complete: boolean
-          } | null
+          pass_details?: Record<string, unknown> | null
         }
         if (!docDetailRequests.current.isLatest(docDetailRequestId)) {
           return
@@ -507,7 +573,10 @@ export function FfSuppliesShipmentsPage({
           setStatusChangeMsg(`Статус документа изменился: «${statusRu(prevStatusInfo.status)}» → «${statusRu(j.status)}».`)
         }
         prevMpStatusRef.current = { id: j.id, status: j.status }
+        // WMS-686: поля, которые сервер добавил к строкам и коробам (КИЗ, ШК короба
+        // приёмки и т. п.), не теряем — их читает верхний блок упаковки.
         setUnloadDetail({
+          ...j,
           id: j.id,
           document_number: j.document_number ?? null,
           display_number: j.display_number ?? null,
@@ -523,7 +592,9 @@ export function FfSuppliesShipmentsPage({
           wb_mp_warehouse_id: j.wb_mp_warehouse_id ?? null,
           planned_shipment_date: j.planned_shipment_date ?? null,
           created_at: j.created_at ?? null,
+          pass_details: j.pass_details ?? null,
           lines: j.lines.map((ln) => ({
+            ...ln,
             id: ln.id,
             product_id: ln.product_id,
             sku_code: ln.sku_code,
@@ -534,11 +605,13 @@ export function FfSuppliesShipmentsPage({
             inbound_intake_line_id: null,
           })),
           boxes: (j.boxes ?? []).map((b) => ({
+            ...b,
             id: b.id,
             box_preset: b.box_preset,
             internal_barcode: b.internal_barcode ?? null,
             closed_at: b.closed_at,
             lines: (b.lines ?? []).map((ln) => ({
+              ...ln,
               id: ln.id,
               product_id: ln.product_id,
               sku_code: ln.sku_code,
@@ -555,7 +628,6 @@ export function FfSuppliesShipmentsPage({
             location_code: a.location_code,
             quantity: a.quantity,
           })),
-          linked_packaging_task: j.linked_packaging_task ?? null,
         })
         setConfirmDate(j.planned_shipment_date ?? '')
         const stockParams = new URLSearchParams({ warehouse_id: j.warehouse_id })
@@ -771,7 +843,6 @@ export function FfSuppliesShipmentsPage({
     setModalError(null)
     setLineProductId('')
     setLineQty('1')
-    setBoxPreset('60_40_40')
     setScanBarcode('')
     setInboundRefLines([])
     setSelectedInboundLineId('')
@@ -779,8 +850,13 @@ export function FfSuppliesShipmentsPage({
     setMpPickerOpen(false)
     setMpLineBarcodeScan('')
     setMpUnloadTab('plan')
-    setPackagingTask(null)
-    setPackagingTaskError(null)
+    setCurrentBoxId(null)
+    setExpandedBoxIds(new Set())
+    setBoxSectionError(null)
+    setExtractBoxId(null)
+    setExtractError(null)
+    setMarkingIncomplete(null)
+    setPassDialogOpen(false)
     mpTabInitForRef.current = null
   }
 
@@ -878,6 +954,28 @@ export function FfSuppliesShipmentsPage({
     setDocModalId(created.id)
   }
 
+  // WMS-686: текущий короб держим по id, а не по номеру «Короб N» — номера в списке
+  // пересчитываются, когда пустой короб получает товар и поднимается вверх.
+  const selectCurrentBox = (boxId: string) => {
+    setCurrentBoxId(boxId)
+    setExpandedBoxIds((current) => {
+      if (current.has(boxId)) return current
+      const next = new Set(current)
+      next.add(boxId)
+      return next
+    })
+    setBoxSectionError(null)
+  }
+
+  const toggleBoxExpanded = (boxId: string) => {
+    setExpandedBoxIds((current) => {
+      const next = new Set(current)
+      if (next.has(boxId)) next.delete(boxId)
+      else next.add(boxId)
+      return next
+    })
+  }
+
   const createBox = async () => {
     if (
       !token ||
@@ -890,11 +988,12 @@ export function FfSuppliesShipmentsPage({
     }
     const count = Number(boxBatchCount)
     if (!Number.isInteger(count) || count < 1 || count > 50) {
-      setModalError('Укажите количество коробов от 1 до 50.')
+      setBoxSectionError('Укажите количество коробов от 1 до 50.')
       return
     }
     setModalBusy(true)
     setModalError(null)
+    setBoxSectionError(null)
     try {
       const res = await fetch(
         apiUrl(`/operations/marketplace-unload-requests/${docModalId}/boxes/batch`),
@@ -904,19 +1003,29 @@ export function FfSuppliesShipmentsPage({
             ...authHeaders,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ count, box_preset: boxPreset }),
+          body: JSON.stringify({ count, box_preset: MP_BOX_DEFAULT_PRESET }),
         },
       )
       if (!res.ok) {
-        setModalError(await readApiErrorMessage(res))
+        setBoxSectionError(await readApiErrorMessage(res))
         return
+      }
+      // Только что созданный короб становится текущим (при нескольких — первый).
+      let createdBoxId: string | null = null
+      try {
+        const created = (await res.json()) as { id?: string }[]
+        createdBoxId = Array.isArray(created) ? (created[0]?.id ?? null) : null
+      } catch {
+        createdBoxId = null
       }
       setScanBarcode('')
       await loadDocDetail()
-      await loadPackagingTask()
       await onRefreshFfSupplyExtras()
+      if (createdBoxId) {
+        selectCurrentBox(createdBoxId)
+      }
     } catch (e) {
-      setModalError(
+      setBoxSectionError(
         e instanceof Error ? e.message : 'Не удалось создать короб(а).',
       )
     } finally {
@@ -924,10 +1033,13 @@ export function FfSuppliesShipmentsPage({
     }
   }
 
-  const attachBoxByBarcode = async (
-    barcode: string,
-    allowOverPlan: boolean,
-  ): Promise<'ok' | 'over_plan' | 'error'> => {
+  /**
+   * Перенос готового короба целиком (POST /boxes/attach). Сверх остатка плана
+   * сервер отказывает целому коробу и присылает готовый текст с товаром и
+   * числами — показываем его красным в разделе коробов и звучит ошибка;
+   * вопроса «Добавить всё» больше нет. Введённый код при отказе не стираем.
+   */
+  const attachBoxByBarcode = async (barcode: string): Promise<'ok' | 'error'> => {
     if (
       !token ||
       !authHeaders ||
@@ -937,69 +1049,89 @@ export function FfSuppliesShipmentsPage({
     ) {
       return 'error'
     }
+    if (attachInFlightRef.current) {
+      return 'error'
+    }
+    attachInFlightRef.current = true
     setModalBusy(true)
     setModalError(null)
+    setBoxSectionError(null)
     try {
       const attachRes = await fetch(
         apiUrl(`/operations/marketplace-unload-requests/${docModalId}/boxes/attach`),
         {
           method: 'POST',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            barcode,
-            box_preset: boxPreset,
-            allow_over_plan: allowOverPlan,
-          }),
+          body: JSON.stringify({ barcode, allow_over_plan: false }),
         },
       )
       if (attachRes.ok) {
+        let attachedBoxId: string | null = null
+        try {
+          attachedBoxId = ((await attachRes.json()) as { id?: string }).id ?? null
+        } catch {
+          attachedBoxId = null
+        }
         setScanBarcode('')
         await loadDocDetail()
-        await loadPackagingTask()
         await onRefreshFfSupplyExtras()
+        if (attachedBoxId) {
+          selectCurrentBox(attachedBoxId)
+        }
         return 'ok'
       }
-      const attachText = await attachRes.text()
-      let attachDetail: string | null = null
-      try {
-        const attachBody = JSON.parse(attachText) as { detail?: unknown }
-        attachDetail =
-          typeof attachBody.detail === 'string' ? attachBody.detail : null
-      } catch {
-        attachDetail = null
-      }
-      if (attachDetail === 'plan_limit_exceeded' && !allowOverPlan) {
-        return 'over_plan'
-      }
-      setModalError(
-        attachDetail ?? attachText.slice(0, 200) ?? 'Не удалось добавить короб.',
-      )
+      playScanError()
+      setBoxSectionError(await readBoxAttachError(attachRes))
       return 'error'
     } catch (e) {
-      setModalError(
+      playScanError()
+      setBoxSectionError(
         e instanceof Error ? e.message : 'Не удалось добавить короб.',
       )
       return 'error'
     } finally {
+      attachInFlightRef.current = false
       setModalBusy(false)
     }
   }
 
-  const requestAttachBoxScan = (rawInput?: string) => {
+  /**
+   * Единая точка скана ШК короба: и поле раздела коробов, и верхний блок упаковки
+   * (onBoxBarcodeScanned; он же слушает сканер всей вкладки) приходят сюда. Короб этой отгрузки (созданный, перенесённый
+   * целиком, короб приёмки INB) делает текущим и раскрывает без запроса на сервер;
+   * неизвестный отгрузке — предлагает перенести целиком.
+   */
+  const handleBoxBarcodeScan = async (rawInput?: string): Promise<void> => {
     if (!canUseMpBoxOperationalControls) {
       return
     }
     const raw = (rawInput ?? scanBarcode).trim()
     if (!raw) {
-      setModalError('Введите штрихкод готового короба (WHB-…).')
+      setBoxSectionError('Введите штрихкод готового короба (WHB-…).')
+      return
+    }
+    const nowMs = Date.now()
+    const lastScan = lastBoxScanRef.current
+    if (lastScan && lastScan.code === raw && nowMs - lastScan.at < 800) {
+      return
+    }
+    lastBoxScanRef.current = { code: raw, at: nowMs }
+    const known = (unloadDetail?.boxes ?? []).find(
+      (box) => (box.internal_barcode ?? '').trim().toUpperCase() === raw.toUpperCase(),
+    )
+    if (known) {
+      setScanBarcode('')
+      selectCurrentBox(known.id)
       return
     }
     if (!raw.startsWith('WHB-') && !raw.startsWith('INB-')) {
-      setModalError(
+      playScanError()
+      setBoxSectionError(
         addressStorageEnabled ? 'На этой строке сканируют только готовый короб (WHB-…). Для ячейки или товара откройте «Добавить товары» у короба.' : 'На этой строке сканируют только готовый короб (WHB-…). Для товара откройте «Добавить товары» у короба.',
       )
       return
     }
+    setBoxSectionError(null)
     setModalError(null)
     setPendingAttachBarcode(raw)
     setMpAttachConfirmOpen(true)
@@ -1011,26 +1143,50 @@ export function FfSuppliesShipmentsPage({
     if (!barcode) {
       return
     }
-    const result = await attachBoxByBarcode(barcode, false)
-    if (result === 'over_plan') {
-      setMpAttachOverPlanOpen(true)
-      return
-    }
+    await attachBoxByBarcode(barcode)
     setPendingAttachBarcode(null)
   }
 
-  const confirmAttachBoxOverPlan = async () => {
-    setMpAttachOverPlanOpen(false)
-    const barcode = pendingAttachBarcode
-    if (!barcode) {
-      return
-    }
-    setPendingAttachBarcode(null)
-    await attachBoxByBarcode(barcode, true)
+  const doCollectScan = () => {
+    handleBoxBarcodeScan()
   }
 
-  const doCollectScan = async () => {
-    requestAttachBoxScan()
+  // «Извлечь товар»: окно с ШК короба и составом, действие — «Извлечь всё».
+  const openExtractDialog = (box: MarketplaceUnloadBox) => {
+    setExtractError(null)
+    setExtractBoxId(box.id)
+  }
+
+  const closeExtractDialog = () => {
+    setExtractBoxId(null)
+    setExtractError(null)
+  }
+
+  const extractAllFromBox = async () => {
+    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId || !extractBoxId) {
+      return
+    }
+    setExtractBusy(true)
+    setExtractError(null)
+    try {
+      const res = await fetch(
+        apiUrl(
+          `/operations/marketplace-unload-requests/${docModalId}/boxes/${extractBoxId}/extract-all`,
+        ),
+        { method: 'POST', headers: authHeaders },
+      )
+      if (!res.ok) {
+        setExtractError(await readApiErrorMessage(res))
+        return
+      }
+      setExtractBoxId(null)
+      await loadDocDetail()
+      await onRefreshFfSupplyExtras()
+    } catch (e) {
+      setExtractError(e instanceof Error ? e.message : 'Не удалось извлечь товар из короба.')
+    } finally {
+      setExtractBusy(false)
+    }
   }
 
   const boxById = useMemo(() => {
@@ -1040,6 +1196,8 @@ export function FfSuppliesShipmentsPage({
     }
     return map
   }, [unloadDetail?.boxes])
+
+  const extractBox = extractBoxId ? (boxById.get(extractBoxId) ?? null) : null
 
   const openBoxMenu = (event: MouseEvent<HTMLElement>, boxId: string) => {
     event.stopPropagation()
@@ -1156,7 +1314,6 @@ export function FfSuppliesShipmentsPage({
         return
       }
       await loadDocDetail()
-      await loadPackagingTask()
       await onRefreshFfSupplyExtras()
     } catch (e) {
       setModalError(e instanceof Error ? e.message : 'Не удалось скопировать короб.')
@@ -1188,7 +1345,6 @@ export function FfSuppliesShipmentsPage({
         return
       }
       await loadDocDetail()
-      await loadPackagingTask()
       await onRefreshFfSupplyExtras()
     } catch (e) {
       setModalError(e instanceof Error ? e.message : 'Не удалось удалить короб.')
@@ -1249,9 +1405,54 @@ export function FfSuppliesShipmentsPage({
       setBoxImportOpen(false)
       setPendingAttachBarcode(null)
       setMpAttachConfirmOpen(false)
-      setMpAttachOverPlanOpen(false)
     }
   }, [canUseMpBoxDestructiveControls, canUseMpBoxOperationalControls])
+
+  // WMS-686: короб, которого больше нет в отгрузке (удалён, перенесён), не может
+  // оставаться текущим — иначе товар уйдёт в никуда.
+  useEffect(() => {
+    if (currentBoxId && unloadDetail && !unloadDetail.boxes.some((box) => box.id === currentBoxId)) {
+      setCurrentBoxId(null)
+    }
+  }, [currentBoxId, unloadDetail])
+
+  // Текущий короб должен быть виден в длинном списке.
+  useEffect(() => {
+    if (!currentBoxId) return
+    const node = document.querySelector(`[data-testid="ff-mp-box-row-${currentBoxId}"]`)
+    node?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+  }, [currentBoxId])
+
+  // Подбор сообщает о каждом изменении; серию быстрых сканов сводим к одному
+  // перечитыванию отгрузки, чтобы страница не дёргала сервер на каждую штуку.
+  const pickChangedTimerRef = useRef<number | null>(null)
+  const handlePickChanged = useCallback(() => {
+    if (pickChangedTimerRef.current !== null) {
+      window.clearTimeout(pickChangedTimerRef.current)
+    }
+    pickChangedTimerRef.current = window.setTimeout(() => {
+      pickChangedTimerRef.current = null
+      void loadDocDetail()
+    }, 300)
+  }, [loadDocDetail])
+  useEffect(
+    () => () => {
+      if (pickChangedTimerRef.current !== null) {
+        window.clearTimeout(pickChangedTimerRef.current)
+      }
+    },
+    [],
+  )
+
+  // WMS-686: при переходе на «Упаковку» перечитываем отгрузку — упаковка видит
+  // свежие короба и подбор, а не снимок на момент открытия документа.
+  useEffect(() => {
+    const previousTab = prevMpTabRef.current
+    prevMpTabRef.current = mpUnloadTab
+    if (mpUnloadTab === 'packaging' && previousTab !== 'packaging' && docModal === 'marketplace_unload') {
+      void loadDocDetail()
+    }
+  }, [mpUnloadTab, docModal, loadDocDetail])
 
   const mpVisibleBoxes = useMemo(() => {
     const boxes = unloadDetail?.boxes ?? []
@@ -1328,6 +1529,15 @@ export function FfSuppliesShipmentsPage({
             >
               Наполнить
             </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={modalBusy || totalQty < 1}
+              onClick={() => openExtractDialog(box)}
+              data-testid={`ff-mp-box-extract-${box.id}`}
+            >
+              Извлечь товар
+            </Button>
           </>
         ) : null}
         {canUseMpBoxDestructiveControls ? (
@@ -1375,90 +1585,121 @@ export function FfSuppliesShipmentsPage({
     const boxBarcode = box.internal_barcode?.trim()
     const boxLabel = `Короб ${boxOrdinal}`
     const hasLines = box.lines.length > 0
+    const boxUnits = box.lines.reduce((sum, ln) => sum + ln.quantity, 0)
+    const isCurrent = box.id === currentBoxId
+    const isExpanded = expandedBoxIds.has(box.id)
 
     return (
       <Paper
         key={box.id}
         variant="outlined"
-        sx={mpBoxPanelSx(hasLines)}
+        sx={{
+          ...mpBoxPanelSx(hasLines),
+          // Текущий короб отмечен тем же способом, что выбранная строка таблицы
+          // (DataTable, selectedKey): акцентная полоса слева.
+          ...(isCurrent
+            ? { boxShadow: (theme: Theme) => `inset 3px 0 0 ${theme.palette.primary.main}` }
+            : null),
+        }}
         data-testid={`ff-mp-box-row-${box.id}`}
+        data-current={isCurrent ? 'true' : undefined}
       >
         <Box sx={mpBoxHeaderSx} data-testid={`ff-mp-box-header-${box.id}`}>
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
-              {boxLabel}
-            </Typography>
-            {/* Дизайн-разбор 2026-08-16: раньше здесь была одна строка «60_40_40 ·
-                WHB-2A67351D829F» — служебный код пресета и штрихкод наравне, человек
-                это не читает и не называет вслух. Человеческий размер — основная
-                подпись, штрихкод — мелкая техническая строка ниже, для сверки со
-                сканером, а не для чтения. */}
-            <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
-              {mpBoxPresetLabel(box.box_preset)}
-              {!hasLines ? ' · готов к наполнению' : ''}
-            </Typography>
-            {boxBarcode ? (
-              <Typography
-                variant="caption"
-                color="text.disabled"
-                sx={{ display: 'block', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+          <Box
+            sx={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'flex-start', gap: 0.5, cursor: hasLines ? 'pointer' : 'default' }}
+            onClick={hasLines ? () => toggleBoxExpanded(box.id) : undefined}
+          >
+            {hasLines ? (
+              <IconButton
+                size="small"
+                aria-label={isExpanded ? `Свернуть ${boxLabel}` : `Раскрыть ${boxLabel}`}
+                aria-expanded={isExpanded}
+                data-testid={`ff-mp-box-expand-${box.id}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggleBoxExpanded(box.id)
+                }}
               >
-                {boxBarcode}
-              </Typography>
+                <ExpandMoreOutlined
+                  fontSize="small"
+                  sx={{ transform: isExpanded ? 'rotate(180deg)' : undefined }}
+                />
+              </IconButton>
             ) : null}
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                {boxLabel}
+              </Typography>
+              {/* WMS-686: размер короба («60×40×40 см») с экрана убран; вместо него —
+                  сколько штук в коробе, чтобы свёрнутый короб читался без раскрытия. */}
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
+                {hasLines ? `${boxUnits} шт` : 'готов к наполнению'}
+              </Typography>
+              {boxBarcode ? (
+                <Typography
+                  variant="caption"
+                  color="text.disabled"
+                  sx={{ display: 'block', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                >
+                  {boxBarcode}
+                </Typography>
+              ) : null}
+            </Box>
           </Box>
           {renderBoxActions(box)}
         </Box>
 
         {hasLines ? (
-          <Box
-            sx={{ ...mpBoxBodySx, ...mpBoxTableWrapSx, mt: 0 }}
-            data-testid={tableTestId ?? `ff-mp-box-lines-${box.id}`}
-          >
-            {/* MPU-07 (18.08): раньше строка товара в коробе была обезличенной —
-                артикул/название/число. Заказчик просил ту же строку товара, что и
-                везде в системе (фото, ШК, артикул продавца, артикул WB, размер) —
-                переиспользуем FfProductLineCells/FfProductTableHeadCells, как на
-                вкладке «Товары» этого же экрана (ff-supplies-doc-lines) и в
-                диалоге наполнения короба. */}
-            <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
-              <TableHead>
-                <TableRow>
-                  <FfProductTableHeadCells showPrint={false} />
-                  <TableCell align="right" sx={{ width: 104 }}>
-                    В коробе
-                  </TableCell>
-                  {canUseMpBoxDestructiveControls ? <TableCell sx={{ width: 40 }} /> : null}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {box.lines.map((ln) => {
-                  const displayMeta = getDisplayMeta(ln.product_id, ln)
-                  return (
-                    <TableRow key={ln.id}>
-                      <FfProductLineCells meta={displayMeta} showPrint={false} />
-                      <TableCell align="right">{ln.quantity}</TableCell>
-                      {canUseMpBoxDestructiveControls ? (
-                        <TableCell align="right">
-                          <Tooltip title="Убрать из короба">
-                            <IconButton
-                              size="small"
-                              aria-label="Убрать из короба"
-                              data-testid={`ff-mp-box-line-remove-${ln.id}`}
-                              disabled={modalBusy}
-                              onClick={() => void removeBoxLine(box.id, ln.id)}
-                            >
-                              <DeleteOutlineOutlined fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      ) : null}
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </Box>
+          <Collapse in={isExpanded} unmountOnExit>
+            <Box
+              sx={{ ...mpBoxBodySx, ...mpBoxTableWrapSx, mt: 0 }}
+              data-testid={tableTestId ?? `ff-mp-box-lines-${box.id}`}
+            >
+              {/* MPU-07 (18.08): раньше строка товара в коробе была обезличенной —
+                  артикул/название/число. Заказчик просил ту же строку товара, что и
+                  везде в системе (фото, ШК, артикул продавца, артикул WB, размер) —
+                  переиспользуем FfProductLineCells/FfProductTableHeadCells, как на
+                  вкладке «Товары» этого же экрана (ff-supplies-doc-lines) и в
+                  диалоге наполнения короба. */}
+              <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+                <TableHead>
+                  <TableRow>
+                    <FfProductTableHeadCells showPrint={false} />
+                    <TableCell align="right" sx={{ width: 104 }}>
+                      В коробе
+                    </TableCell>
+                    {canUseMpBoxDestructiveControls ? <TableCell sx={{ width: 40 }} /> : null}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {box.lines.map((ln) => {
+                    const displayMeta = getDisplayMeta(ln.product_id, ln)
+                    return (
+                      <TableRow key={ln.id}>
+                        <FfProductLineCells meta={displayMeta} showPrint={false} />
+                        <TableCell align="right">{ln.quantity}</TableCell>
+                        {canUseMpBoxDestructiveControls ? (
+                          <TableCell align="right">
+                            <Tooltip title="Убрать из короба">
+                              <IconButton
+                                size="small"
+                                aria-label="Убрать из короба"
+                                data-testid={`ff-mp-box-line-remove-${ln.id}`}
+                                disabled={modalBusy}
+                                onClick={() => void removeBoxLine(box.id, ln.id)}
+                              >
+                                <DeleteOutlineOutlined fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        ) : null}
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </Box>
+          </Collapse>
         ) : null}
       </Paper>
     )
@@ -1478,7 +1719,7 @@ export function FfSuppliesShipmentsPage({
     return unloadDetail.lines.some((ln) => (ln.picked_qty ?? 0) !== ln.quantity)
   }, [unloadDetail, docModal])
 
-  const shipMpUnload = async (acknowledgeDiscrepancy = false) => {
+  const shipMpUnload = async (acknowledgeDiscrepancy = false, acknowledgeMarking = false) => {
     if (!token || !authHeaders || !docModalId) {
       return
     }
@@ -1490,10 +1731,22 @@ export function FfSuppliesShipmentsPage({
         {
           method: 'POST',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ acknowledge_discrepancy: acknowledgeDiscrepancy }),
+          body: JSON.stringify({
+            acknowledge_discrepancy: acknowledgeDiscrepancy,
+            acknowledge_marking: acknowledgeMarking,
+          }),
         },
       )
       if (!res.ok) {
+        // WMS-686: не на все товары с ЧЗ привязаны КИЗ — вместо ошибки большое красное
+        // окно с перечнем; «Завершить» в нём повторяет запрос с подтверждением.
+        const incompleteItems = await readMarkingIncompleteItems(res.clone())
+        if (incompleteItems) {
+          setMpShipConfirmOpen(false)
+          setMarkingIncomplete({ items: incompleteItems, acknowledgeDiscrepancy })
+          return
+        }
+        setMarkingIncomplete(null)
         const msg = await readApiErrorMessage(res)
         if (msg.includes('distribution_incomplete')) {
           setModalError(
@@ -1507,6 +1760,7 @@ export function FfSuppliesShipmentsPage({
         return
       }
       setMpShipConfirmOpen(false)
+      setMarkingIncomplete(null)
       await loadDocDetail()
       await onRefreshFfSupplyExtras()
     } catch (e) {
@@ -1829,39 +2083,14 @@ export function FfSuppliesShipmentsPage({
   const mpCollecting =
     docModal === 'marketplace_unload' && unloadDetail?.status === 'collecting'
   const mpExecutionPhase = mpConfirmed || mpCollecting
+  // Кнопки шапки (XLSX для WB, пропуск) осмысленны, когда у отгрузки уже есть короба
+  // и машина: после утверждения и после проведения.
+  const mpPassFilled = Object.values(unloadDetail?.pass_details ?? {}).some(
+    (value) => value !== null && value !== undefined && String(value).trim() !== '',
+  )
+  const mpHeaderActionsVisible =
+    mpExecutionPhase || (docModal === 'marketplace_unload' && unloadDetail?.status === 'shipped')
   const mpCancellable = mpSubmitted || mpConfirmed || mpCollecting
-  const loadPackagingTask = useCallback(async () => {
-    if (!token || !authHeaders || !docModalId || docModal !== 'marketplace_unload') {
-      setPackagingTask(null)
-      setPackagingTaskError(null)
-      return
-    }
-    if (!unloadDetail?.linked_packaging_task) {
-      setPackagingTask(null)
-      setPackagingTaskError(null)
-      return
-    }
-    try {
-      const res = await fetch(apiUrl(`/operations/packaging-tasks/by-unload/${docModalId}`), {
-        headers: authHeaders,
-      })
-      if (!res.ok) {
-        setPackagingTaskError(await readApiErrorMessage(res))
-        setPackagingTask(null)
-        return
-      }
-      setPackagingTask((await res.json()) as PackagingTask)
-      setPackagingTaskError(null)
-    } catch (e) {
-      setPackagingTaskError(e instanceof Error ? e.message : 'Не удалось загрузить упаковку.')
-      setPackagingTask(null)
-    }
-  }, [token, authHeaders, docModalId, docModal, unloadDetail?.linked_packaging_task])
-
-  useEffect(() => {
-    void loadPackagingTask()
-  }, [loadPackagingTask])
-
   useEffect(() => {
     if (!unloadDetail || docModal !== 'marketplace_unload' || !docModalId) {
       return
@@ -1893,13 +2122,17 @@ export function FfSuppliesShipmentsPage({
       (sum, alloc) => sum + alloc.quantity,
       0,
     )
+    // WMS-686: «Упаковано» — сумма по коробам из данных самой отгрузки (B), а не
+    // выработка задания упаковки: для FBO задание больше ни от чего не зависит.
+    const packed = unloadDetail.boxes.reduce(
+      (sum, box) => sum + box.lines.reduce((lineSum, ln) => lineSum + ln.quantity, 0),
+      0,
+    )
     return {
       planned,
       distributed,
       remaining: planned - distributed,
-      packed: unloadDetail.linked_packaging_task
-        ? `${unloadDetail.linked_packaging_task.qty_done}/${unloadDetail.linked_packaging_task.qty_total}`
-        : null,
+      packed,
     }
   }, [unloadDetail, docModal])
 
@@ -1916,7 +2149,10 @@ export function FfSuppliesShipmentsPage({
         return mpSubmitted || mpConfirmed || mpCollecting
       }
       if (step === 'packaging') {
-        return Boolean(unloadDetail.linked_packaging_task)
+        // WMS-686: упаковка FBO не требует задания упаковки — доступна, пока
+        // отгрузка утверждена или на сборке. После «Завершить» вкладка остаётся
+        // для просмотра коробов (как было с заданием), без операций.
+        return mpConfirmed || mpCollecting || unloadDetail.status === 'shipped'
       }
       return false
     },
@@ -1940,15 +2176,11 @@ export function FfSuppliesShipmentsPage({
         return 'Утвердите план поставки, чтобы открыть подбор.'
       }
       if (step === 'packaging') {
-        const remaining = mpCollectSummary?.remaining ?? 0
-        if (remaining > 0) {
-          return `Подберите ещё ${remaining} шт., чтобы перейти к упаковке.`
-        }
-        return 'Задание на упаковку появится после утверждения плана поставки.'
+        return 'Утвердите план поставки, чтобы открыть упаковку.'
       }
       return ''
     },
-    [mpCollectSummary],
+    [],
   )
   // Дизайн-разбор 2026-08-16: галочка раньше означала «шаг разблокирован», а не
   // «шаг закончен» — на утверждённой отгрузке с планом 4 и подобрано 0 «Товары ✓»
@@ -1971,7 +2203,22 @@ export function FfSuppliesShipmentsPage({
         return planned > 0 && remaining <= 0
       }
       if (step === 'packaging') {
-        return Boolean(unloadDetail.linked_packaging_task?.is_complete)
+        // WMS-686: галочка от задания упаковки больше не зависит — упаковка
+        // закончена, когда по всем строкам «В коробах» не меньше «Нужно».
+        if (unloadDetail.lines.length === 0) return false
+        const plannedByProduct = new Map<string, number>()
+        for (const ln of unloadDetail.lines) {
+          plannedByProduct.set(ln.product_id, (plannedByProduct.get(ln.product_id) ?? 0) + ln.quantity)
+        }
+        const boxedByProduct = new Map<string, number>()
+        for (const box of unloadDetail.boxes) {
+          for (const ln of box.lines) {
+            boxedByProduct.set(ln.product_id, (boxedByProduct.get(ln.product_id) ?? 0) + ln.quantity)
+          }
+        }
+        return Array.from(plannedByProduct).every(
+          ([productId, planned]) => (boxedByProduct.get(productId) ?? 0) >= planned,
+        )
       }
       return false
     },
@@ -2105,24 +2352,6 @@ export function FfSuppliesShipmentsPage({
     onScan: (code) => {
       setMpLineBarcodeScan(code)
       void addMpLineByBarcode(code)
-    },
-  })
-
-  useBarcodeScanner({
-    enabled:
-      docModal !== null &&
-      docModalId !== null &&
-      docModal === 'marketplace_unload' &&
-      mpUnloadTab === 'packaging' &&
-      mpExecutionPhase &&
-      boxAddDialogBoxId == null &&
-      !mpPickerOpen &&
-      !modalBusy &&
-      !mpAttachConfirmOpen &&
-      !mpAttachOverPlanOpen,
-    onScan: (code) => {
-      setScanBarcode(code)
-      requestAttachBoxScan(code)
     },
   })
 
@@ -2642,6 +2871,20 @@ export function FfSuppliesShipmentsPage({
           ) : null}
           {docModal === 'marketplace_unload' && unloadDetail ? (
             <Box sx={{ mb: 2 }} data-testid="ff-mp-process">
+              {/* WMS-686: «Скачать XLSX для WB» и «Пропуск» стоят справа в строке вкладок
+                  документа (на узкой ширине переносятся ниже), а не внутри вкладки «Упаковка». */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  columnGap: 1.5,
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  mb: 2,
+                }}
+                data-testid="ff-mp-process-tabs-row"
+              >
               <Tabs
                 value={mpUnloadTab}
                 onChange={(_e, value: MpUnloadTab) => {
@@ -2651,7 +2894,7 @@ export function FfSuppliesShipmentsPage({
                 }}
                 variant="scrollable"
                 scrollButtons="auto"
-                sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
+                sx={{ flex: '1 1 auto', minWidth: 0 }}
                 data-testid="ff-mp-process-tabs"
               >
                 {mpUnloadSteps.map((step) => {
@@ -2681,6 +2924,45 @@ export function FfSuppliesShipmentsPage({
                   )
                 })}
               </Tabs>
+              {mpHeaderActionsVisible ? (
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{ alignItems: 'center', ml: 'auto', py: 0.5, flexShrink: 0 }}
+                  data-testid="ff-mp-doc-header-actions"
+                >
+                  {unloadDetail.marketplace === 'wb' ? (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => void downloadWbFbwPackaging()}
+                      disabled={wbFbwExportBusy}
+                      data-testid="ff-mp-wb-fbw-export"
+                    >
+                      Скачать XLSX для WB
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setPassDialogOpen(true)}
+                    data-testid="ff-mp-pass-open"
+                  >
+                    {mpPassFilled ? 'Пропуск' : 'Внести пропуск'}
+                  </Button>
+                </Stack>
+              ) : null}
+              </Box>
+              {wbFbwExportError ? (
+                <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-mp-wb-fbw-export-error">
+                  {wbFbwExportError}
+                </Alert>
+              ) : null}
+              {wbFbwExportWarning ? (
+                <Alert severity="warning" sx={{ mb: 2 }} data-testid="ff-mp-wb-fbw-export-warning">
+                  {wbFbwExportWarning}
+                </Alert>
+              ) : null}
               {mpUnloadTab === 'plan' ? (
                 <Stack spacing={2} data-testid="ff-mp-tab-plan-panel">
                   {unloadDetail.seller_name ? (
@@ -2856,54 +3138,30 @@ export function FfSuppliesShipmentsPage({
                     // Подбор идёт внутри окна документа, поэтому его завершение
                     // переводит на упаковку, а не уводит на список отгрузок.
                     onFinished={() => setMpUnloadTab('packaging')}
+                    // WMS-686: подбор сохраняется сразу, шаг за шагом — упаковка должна
+                    // видеть свежие короба и подбор, поэтому после изменений перечитываем отгрузку.
+                    onChanged={handlePickChanged}
                   />
                 </Box>
               ) : null}
               {mpUnloadTab === 'packaging' ? (
                 <Box data-testid="ff-mp-tab-packaging-panel">
-                  {packagingTaskError ? (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                      {packagingTaskError}
-                    </Alert>
-                  ) : null}
-                  {packagingTask && token ? (
-                    <FfPackagingTaskPanel
+                  {/* WMS-686: вместо панели задания упаковки — верхний блок упаковки FBO
+                      (строка скана, общая таблица товаров, КИЗ). Он собирается из данных
+                      отгрузки, задание упаковки для FBO ничего не решает. */}
+                  {mpExecutionPhase && token && authHeaders ? (
+                    <FboPackingTop
                       token={token}
-                      task={packagingTask} addressStorageEnabled={addressStorageEnabled}
-                      hideDocumentHeader
-                      compactLayout
-                      // Пункт 10 итерации 2026-08-14: единое поле скана на упаковке различает
-                      // короб и товар — скан короба делегируется существующему флоу привязки.
-                      onBoxBarcodeScan={requestAttachBoxScan}
-                      onUpdated={(task) => {
-                        const changedStage =
-                          task.status !== packagingTask.status ||
-                          task.is_complete !== packagingTask.is_complete
-                        setPackagingTask(task)
-                        if (changedStage) {
-                          void loadDocDetail()
-                        }
-                      }}
+                      authHeaders={authHeaders}
+                      detail={unloadDetail}
+                      currentBoxId={currentBoxId}
+                      onBoxBarcodeScanned={handleBoxBarcodeScan}
+                      onChanged={() => loadDocDetail()}
                     />
-                  ) : unloadDetail?.linked_packaging_task ? (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      data-testid="ff-mp-packaging-task-created"
-                    >
-                      Задание на упаковку создано.
-                    </Typography>
-                  ) : (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      data-testid="ff-mp-packaging-empty"
-                    >
-                      Задание на упаковку ещё не создано.
-                    </Typography>
-                  )}
+                  ) : null}
                   <Accordion
                     disableGutters
+                    defaultExpanded
                     variant="outlined"
                     sx={{ mt: 2 }}
                     data-testid="ff-mp-boxes-accordion"
@@ -2941,91 +3199,14 @@ export function FfSuppliesShipmentsPage({
                     </AccordionSummary>
                     <AccordionDetails>
                       <Stack spacing={1.25} data-testid="ff-mp-boxes">
-                        {unloadDetail.marketplace === 'wb' ? (
-                          <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              onClick={() => void downloadWbFbwPackaging()}
-                              disabled={wbFbwExportBusy}
-                              data-testid="ff-mp-wb-fbw-export"
-                            >
-                              Скачать XLSX для WB
-                            </Button>
-                            {wbFbwExportError ? (
-                              <Alert severity="error" data-testid="ff-mp-wb-fbw-export-error">
-                                {wbFbwExportError}
-                              </Alert>
-                            ) : null}
-                            {wbFbwExportWarning ? (
-                              <Alert severity="warning" data-testid="ff-mp-wb-fbw-export-warning">
-                                {wbFbwExportWarning}
-                              </Alert>
-                            ) : null}
-                          </Stack>
-                        ) : null}
-                        {canUseMpBoxOperationalControls ? (
-                          <Box
-                            sx={{
-                              display: 'grid',
-                              gap: 1,
-                              gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) auto' },
-                              alignItems: 'start',
-                            }}
-                          >
-                            <TextField
-                              size="small"
-                              label="Штрихкод готового короба (WHB-…)"
-                              value={scanBarcode}
-                              onChange={(e) => setScanBarcode(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  void doCollectScan()
-                                }
-                              }}
-                              disabled={modalBusy}
-                              fullWidth
-                              slotProps={{ htmlInput: { 'data-testid': 'ff-mp-pick-scan-input' } }}
-                              data-testid="ff-mp-pick-scan-field"
-                              sx={{ minWidth: 0 }}
-                            />
-                            <Button
-                              variant="outlined"
-                              size="medium"
-                              sx={{ whiteSpace: 'nowrap' }}
-                              onClick={() => void doCollectScan()}
-                              disabled={modalBusy}
-                              data-testid="ff-mp-pick-scan"
-                            >
-                              Привязать
-                            </Button>
-                          </Box>
-                        ) : null}
-
-                        {mpVisibleBoxes.length > 0 ? (
-                          <Stack spacing={1.5}>
-                            {mpBoxesOrdered.map((b, idx) =>
-                              renderMpBoxCard(
-                                b,
-                                idx + 1,
-                                idx === 0 && b.lines.length > 0
-                                  ? 'ff-mp-open-box-lines'
-                                  : `ff-mp-box-lines-${b.id}`,
-                              ),
-                            )}
-                          </Stack>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Короба появятся после создания или скана готового короба.
-                          </Typography>
-                        )}
-
+                        {/* Шапка раздела: количество, «Создать короб», «Загрузить по накладной».
+                            Выбора размера нет — при создании уходит значение по умолчанию. */}
                         {canUseMpBoxOperationalControls ? (
                           <Stack
                             direction="row"
                             spacing={1}
-                            sx={{ alignItems: 'center', flexWrap: 'wrap', pt: 0.5 }}
+                            sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                            data-testid="ff-mp-boxes-header"
                           >
                             <TextField
                               size="small"
@@ -3038,22 +3219,6 @@ export function FfSuppliesShipmentsPage({
                               disabled={modalBusy}
                               data-testid="ff-mp-box-batch-count"
                             />
-                            <FormControl size="small" sx={{ minWidth: 160 }}>
-                              <InputLabel id="ff-mp-box-preset">Пресет</InputLabel>
-                              <Select
-                                labelId="ff-mp-box-preset"
-                                label="Пресет"
-                                value={boxPreset}
-                                onChange={(e) =>
-                                  setBoxPreset(String(e.target.value) as '60_40_40' | '30_20_30')
-                                }
-                                data-testid="ff-mp-box-preset"
-                                disabled={modalBusy}
-                              >
-                                <MenuItem value="60_40_40">60×40×40</MenuItem>
-                                <MenuItem value="30_20_30">30×20×30</MenuItem>
-                              </Select>
-                            </FormControl>
                             <Button
                               variant="outlined"
                               size="small"
@@ -3074,6 +3239,66 @@ export function FfSuppliesShipmentsPage({
                             </Button>
                           </Stack>
                         ) : null}
+                        {canUseMpBoxOperationalControls ? (
+                          <Box
+                            sx={{
+                              display: 'grid',
+                              gap: 1,
+                              gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) auto' },
+                              alignItems: 'start',
+                            }}
+                          >
+                            <TextField
+                              size="small"
+                              label="Штрихкод готового короба (WHB-…)"
+                              value={scanBarcode}
+                              onChange={(e) => setScanBarcode(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  doCollectScan()
+                                }
+                              }}
+                              fullWidth
+                              slotProps={{ htmlInput: { 'data-testid': 'ff-mp-pick-scan-input' } }}
+                              data-testid="ff-mp-pick-scan-field"
+                              sx={{ minWidth: 0 }}
+                            />
+                            <Button
+                              variant="outlined"
+                              size="medium"
+                              sx={{ whiteSpace: 'nowrap' }}
+                              onClick={() => doCollectScan()}
+                              disabled={modalBusy}
+                              data-testid="ff-mp-pick-scan"
+                            >
+                              Привязать
+                            </Button>
+                          </Box>
+                        ) : null}
+                        {boxSectionError ? (
+                          <Alert severity="error" data-testid="ff-mp-box-section-error">
+                            {boxSectionError}
+                          </Alert>
+                        ) : null}
+
+                        {mpVisibleBoxes.length > 0 ? (
+                          <Stack spacing={1.5}>
+                            {mpBoxesOrdered.map((b, idx) =>
+                              renderMpBoxCard(
+                                b,
+                                idx + 1,
+                                idx === 0 && b.lines.length > 0
+                                  ? 'ff-mp-open-box-lines'
+                                  : `ff-mp-box-lines-${b.id}`,
+                              ),
+                            )}
+                          </Stack>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Короба появятся после создания или скана готового короба.
+                          </Typography>
+                        )}
                       </Stack>
                     </AccordionDetails>
                   </Accordion>
@@ -3475,7 +3700,6 @@ export function FfSuppliesShipmentsPage({
           warehouseStockByProductId={mpStockByProductId}
           onUpdated={async () => {
             await loadDocDetail()
-            await loadPackagingTask()
             await onRefreshFfSupplyExtras()
           }}
           onAddSuccess={(quantity) =>
@@ -3508,12 +3732,11 @@ export function FfSuppliesShipmentsPage({
           requestId={docModalId}
           importBasePath={`/operations/marketplace-unload-requests/${docModalId}/import-boxes`}
           testIdPrefix="ff-mp-box-import"
-          mpBoxPreset={boxPreset}
+          mpBoxPreset={MP_BOX_DEFAULT_PRESET}
           onClose={() => setBoxImportOpen(false)}
           onApplied={async (message) => {
             setBoxAddSuccessMsg(message)
             await loadDocDetail()
-            await loadPackagingTask()
             await onRefreshFfSupplyExtras()
           }}
         />
@@ -3612,41 +3835,126 @@ export function FfSuppliesShipmentsPage({
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog
-        open={mpAttachOverPlanOpen}
+      {/* WMS-686: «Завершить» при неполной маркировке — большое красное окно вместо отказа.
+          Повтор запроса идёт с подтверждением (acknowledge_marking) и прежним
+          подтверждением расхождения. */}
+      <AppDialog
+        open={markingIncomplete !== null}
         onClose={() => {
-          setMpAttachOverPlanOpen(false)
-          setPendingAttachBarcode(null)
+          if (!modalBusy) setMarkingIncomplete(null)
         }}
-        data-testid="ff-mp-attach-over-plan-dialog"
+        maxWidth="md"
+        testId="ff-mp-ship-marking-dialog"
+        title={
+          <Box component="span" sx={{ color: 'error.main', fontWeight: 800, fontSize: '1.5rem' }}>
+            Не на все товары привязаны КИЗ
+          </Box>
+        }
+        actions={
+          <>
+            <Button
+              onClick={() => setMarkingIncomplete(null)}
+              disabled={modalBusy}
+              data-testid="ff-mp-ship-marking-cancel"
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              disabled={modalBusy}
+              onClick={() =>
+                void shipMpUnload(markingIncomplete?.acknowledgeDiscrepancy ?? false, true)
+              }
+              data-testid="ff-mp-ship-ack-marking"
+            >
+              Завершить
+            </Button>
+          </>
+        }
       >
-        <DialogTitle>Больше, чем в плане</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">
-            В коробе больше товара, чем осталось по плану отгрузки. Добавить всё содержимое короба?
+        <Stack spacing={1.5} sx={{ color: 'error.main' }}>
+          {(markingIncomplete?.items ?? []).length > 0 ? (
+            <Stack spacing={0.5} data-testid="ff-mp-ship-marking-items">
+              {(markingIncomplete?.items ?? []).map((item) => (
+                <Typography
+                  key={item.product_id || item.product_name}
+                  variant="body1"
+                  sx={{ fontWeight: 700 }}
+                >
+                  {item.product_name} — {item.linked} из {item.quantity}
+                </Typography>
+              ))}
+            </Stack>
+          ) : null}
+          <Typography variant="body1">
+            Возможно, часть товара добавлена целым коробом без сканирования КИЗ. Отгрузка без
+            маркировки может привести к штрафам. Завершить отгрузку?
           </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setMpAttachOverPlanOpen(false)
-              setPendingAttachBarcode(null)
-            }}
-            disabled={modalBusy}
-          >
-            Отмена
-          </Button>
-          <Button
-            variant="contained"
-            color="warning"
-            disabled={modalBusy}
-            onClick={() => void confirmAttachBoxOverPlan()}
-            data-testid="ff-mp-attach-over-plan-confirm"
-          >
-            Добавить всё
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </Stack>
+      </AppDialog>
+      {/* «Извлечь товар»: ШК короба, состав и одно действие — «Извлечь всё». */}
+      <AppDialog
+        open={extractBoxId !== null && boxById.has(extractBoxId)}
+        onClose={() => {
+          if (!extractBusy) closeExtractDialog()
+        }}
+        maxWidth="sm"
+        testId="ff-mp-box-extract-dialog"
+        title="Извлечь товар из короба"
+        actions={
+          <>
+            <Button
+              onClick={closeExtractDialog}
+              disabled={extractBusy}
+              data-testid="ff-mp-box-extract-cancel"
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="contained"
+              disabled={extractBusy || (extractBox?.lines.length ?? 0) < 1}
+              onClick={() => void extractAllFromBox()}
+              data-testid="ff-mp-box-extract-all"
+            >
+              Извлечь всё
+            </Button>
+          </>
+        }
+      >
+        <Stack spacing={1.25}>
+          {extractError ? (
+            <Alert severity="error" data-testid="ff-mp-box-extract-error">
+              {extractError}
+            </Alert>
+          ) : null}
+          <Typography variant="body2" color="text.secondary">
+            ШК короба:{' '}
+            <strong data-testid="ff-mp-box-extract-barcode">
+              {extractBox?.internal_barcode?.trim() || '—'}
+            </strong>
+          </Typography>
+          <Stack spacing={0.5} data-testid="ff-mp-box-extract-lines">
+            {(extractBox?.lines ?? []).map((ln) => (
+              <Typography key={ln.id} variant="body2">
+                {ln.product_name} ({ln.sku_code}) — {ln.quantity}
+              </Typography>
+            ))}
+          </Stack>
+        </Stack>
+      </AppDialog>
+      {docModal === 'marketplace_unload' && docModalId && token && authHeaders && unloadDetail ? (
+        <FboPassDialog
+          open={passDialogOpen}
+          token={token}
+          authHeaders={authHeaders}
+          requestId={docModalId}
+          mode="ff"
+          marketplace={unloadDetail.marketplace}
+          onClose={() => setPassDialogOpen(false)}
+          onSaved={() => void loadDocDetail()}
+        />
+      ) : null}
       <Dialog
         open={mpCancelConfirmOpen}
         onClose={() => setMpCancelConfirmOpen(false)}
