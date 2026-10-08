@@ -766,8 +766,8 @@ async def prefetch_created_supply_stickers(
 ) -> None:
     """Fetch after the caller has committed creation, before any sticker writes.
 
-    Keep the HTTP responses in memory, then pass them through the normal asset
-    validation/persistence path. Other print callers retain their own transaction.
+    Persist each original HTTP response through the normal asset path before
+    fetching the next chunk. Other print callers retain their own transaction.
     """
     supply = await _get_supply(session, tenant_id, supply_id)
     requested_ids = set(order_ids)
@@ -791,9 +791,9 @@ async def prefetch_created_supply_stickers(
     # Only read-only preparation follows the creation commit. Release that read
     # transaction too: no DB transaction may span the optional WB round trip.
     await session.commit()
-    responses: list[tuple[list[uuid.UUID], list[dict[str, Any]] | WildberriesClientError]] = []
     for offset in range(0, len(snapshot), WB_STICKER_CHUNK_SIZE):
         chunk = snapshot[offset : offset + WB_STICKER_CHUNK_SIZE]
+        chunk_ids = [order_id for order_id, _ in chunk]
         response: list[dict[str, Any]] | WildberriesClientError
         try:
             response = await fetch_marketplace_order_stickers(
@@ -801,51 +801,53 @@ async def prefetch_created_supply_stickers(
             )
         except WildberriesClientError as exc:
             response = exc
-        responses.append(([order_id for order_id, _ in chunk], response))
 
-    # Orders may have been cancelled or moved while HTTP was pending. Reload
-    # their current tenant/supply membership before applying the original response.
-    current = {
-        order.id: order
-        for order in (
-            await session.execute(
-                select(FbsOrder)
-                .where(
-                    FbsOrder.tenant_id == tenant_id,
-                    FbsOrder.id.in_(requested_ids),
+        # Orders may have been cancelled or moved while HTTP was pending. Reload
+        # current membership before applying this chunk's original response.
+        current = {
+            order.id: order
+            for order in (
+                await session.execute(
+                    select(FbsOrder)
+                    .where(
+                        FbsOrder.tenant_id == tenant_id,
+                        FbsOrder.id.in_(chunk_ids),
+                    )
+                    .execution_options(populate_existing=True)
                 )
-                .execution_options(populate_existing=True)
-            )
-        ).scalars()
-        if order.supply_id == supply_id and order.status != FBS_ORDER_STATUS_CANCELLED
-    }
-    for chunk_ids, response in responses:
+            ).scalars()
+            if order.supply_id == supply_id and order.status != FBS_ORDER_STATUS_CANCELLED
+        }
         eligible = [
             order_id
             for order_id in chunk_ids
             if order_id in current and not current[order_id].sticker_code
         ]
-        if not eligible:
-            continue
+        if eligible:
+            async def original_response(
+                _external_ids: list[str],
+                cached: list[dict[str, Any]] | WildberriesClientError = response,
+            ) -> list[dict[str, Any]]:
+                if isinstance(cached, WildberriesClientError):
+                    raise cached
+                return cached
 
-        async def original_response(
-            _external_ids: list[str],
-            cached: list[dict[str, Any]] | WildberriesClientError = response,
-        ) -> list[dict[str, Any]]:
-            if isinstance(cached, WildberriesClientError):
-                raise cached
-            return cached
-
-        await request_supply_print_batch(
-            session,
-            tenant_id,
-            supply_id,
-            kind=PRINT_ASSET_KIND_ORDER_STICKER,
-            order_ids=eligible,
-            retry_missing=True,
-            http_client=http_client,
-            _wb_sticker_fetch=original_response,
-        )
+            await request_supply_print_batch(
+                session,
+                tenant_id,
+                supply_id,
+                kind=PRINT_ASSET_KIND_ORDER_STICKER,
+                order_ids=eligible,
+                retry_missing=True,
+                http_client=http_client,
+                _wb_sticker_fetch=original_response,
+            )
+            del original_response
+        # Preserve completed responses even if a later chunk times out. Close
+        # the read transaction too when every order was removed/cancelled, so
+        # the next WB request never holds a DB transaction or previous PNG batch.
+        await session.commit()
+        del response
 
 
 async def request_supply_print_batch(
