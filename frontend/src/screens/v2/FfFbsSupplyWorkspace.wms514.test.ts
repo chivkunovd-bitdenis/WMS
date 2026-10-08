@@ -146,7 +146,9 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     )
     expect(preparation).toContain('fetchFbsPrintBatch(token, authHeaders, workspace.supply.id')
     expect(preparation).toContain('setRetryAction(() => () =>')
-    expect(preparation).toContain('void run(operation, success, onError, onSuccess)')
+    expect(preparation).toContain('if (write.isCurrent()) void run(retryOperation, \'\', undefined, onRetrySuccess)')
+    expect(preparation).toContain('const current = await fetchFbsWorkspace(token, authHeaders, supplyIdAtStart)')
+    expect(preparation).toContain('.filter((order) => !order.sticker.code)')
   })
 
   it('finishes a cancelled product reprint attempt before clearing the active target', () => {
