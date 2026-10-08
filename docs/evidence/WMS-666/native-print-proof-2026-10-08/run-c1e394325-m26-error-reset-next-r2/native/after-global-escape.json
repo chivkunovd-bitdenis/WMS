@@ -1,0 +1,93 @@
+{
+  "ui": {
+    "url": "http://127.0.0.1:16696/app/ff/fbs?supply_id=2b4990b9-97e6-4294-b7fb-ba6232f8bcbe",
+    "alert": "",
+    "error": "",
+    "message": "",
+    "active": null,
+    "activeRow": null,
+    "kizInput": null,
+    "rowInput": null,
+    "scanner": {
+      "value": "",
+      "placeholder": "Сканируйте штрихкод товара",
+      "disabled": false
+    },
+    "reset": {
+      "exists": false,
+      "disabled": null
+    },
+    "focus": {
+      "tag": "DIV",
+      "testid": null,
+      "id": null,
+      "placeholder": null
+    },
+    "body": "Заказы FBS\nОбновлено только что\nОбновить\nЗаказы\n0,0\nчаса\n\nсреднее время сборки: от поступления заказа до нажатия «Отгрузить»\n\nвсе продавцы\n\n0\nотгружено заказов\n0%\nуложились в 12 часов\n0%\nуложились в сутки\nНеделя\nМесяц\nСвой период\nПродавец\nВсе продавцы\nПродавец\nНовые\nВ работе\nВ доставке\nПросрочены\nЗавершённые\nОтменённые\nСеллер\nВсе селлеры\nСеллер\nМаркетплейс\nВсе\nМаркетплейс\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\n​\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\nНомер / название поставки\tСеллер\tСклад\tЗаказы / единицы\tКороба\tСтатус\tДата отгрузки\tПечать\n\n\nKIZ supply 1791427152164547000\n\nWB №WB-GI-KIZ-1791427152164547000-a28559fd\tTape race\t\n\nWB 99\n\nWMS: Tape race\t2 / 2\t0\t\nВ работе\n\t—\t\nQR\nKIZ supply 1791427152164547000\n\nTape race · № WB WB-GI-KIZ-1791427152164547000-a28559fd\n\nСклад WMS\n\nTape race\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 09.10.2026, 06:39:12\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\nУпаковка и маркировка\n\nНапечатано 0 из 2 · упаковано 0 из 2 · выбрано 0\n\nВыбрать всё\nПечать всего (2)\nПроверить в WB\nДействия с поставкой\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800392\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-A\n\nЧЗ\n\nТЗ\nQR\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800393\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-B\n\nЧЗ\n\nТЗ\nQR\nДалее: Короба →"
+  },
+  "db": {
+    "markings": [],
+    "codes": [
+      {
+        "id": "5d601cd4-334a-44b4-919b-0c73bd478e22",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "available"
+      },
+      {
+        "id": "c3eb99e3-bfec-4bdf-b381-e5ecefa32287",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "f28d67dc-2fc1-41cc-bbfd-e5ad169ceba6",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "2558b72d-cd4a-41f3-b951-e7299a2d5d7d",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      }
+    ],
+    "orders": [
+      {
+        "id": "76acfc47-3dcf-4cb6-a2e7-5521add6eab7",
+        "pack_status": "pending",
+        "sticker_code": "*WMS666-FINAL-ORDER-B",
+        "sticker_barcode": "*WMS666-FINAL-ORDER-B",
+        "supply_id": "2b4990b9-97e6-4294-b7fb-ba6232f8bcbe",
+        "seller_id": "0ae19f99-368c-419a-836f-2101163fd550"
+      },
+      {
+        "id": "eeefa697-d170-4f11-9602-95021bd8d7d1",
+        "pack_status": "pending",
+        "sticker_code": "*WMS666-FINAL-ORDER-A",
+        "sticker_barcode": "*WMS666-FINAL-ORDER-A",
+        "supply_id": "2b4990b9-97e6-4294-b7fb-ba6232f8bcbe",
+        "seller_id": "0ae19f99-368c-419a-836f-2101163fd550"
+      }
+    ],
+    "stock": "([(UUID('7f96ff3a-e611-4279-b74a-bd8cb6f3e68b'), 3, 3, 0)], [(UUID('5acaf936-dd1c-45d5-9468-f1fb270f531e'), 1), (UUID('b53822d7-5b58-4225-a89d-a94e3da747dc'), 1)], 0)",
+    "synthetic_provider_readbacks": []
+  },
+  "native": {
+    "drop_next_response": false,
+    "accepted_png_count": 0,
+    "product_sha": "c1e394325ef62c5b5508786f461cd20c1edd69f9",
+    "runtime_checkout_sha": "c1e394325ef62c5b5508786f461cd20c1edd69f9"
+  },
+  "cancel_requests": [
+    {
+      "at": "2026-10-08T02:39:22.238Z",
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/2b4990b9-97e6-4294-b7fb-ba6232f8bcbe/scan-auto-print/81062594-3084-42a7-bf57-0ab0b22ac053/cancel",
+      "status": 204
+    },
+    {
+      "at": "2026-10-08T02:39:22.304Z",
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/2b4990b9-97e6-4294-b7fb-ba6232f8bcbe/scan-auto-print/81062594-3084-42a7-bf57-0ab0b22ac053/cancel",
+      "status": 204
+    }
+  ]
+}
