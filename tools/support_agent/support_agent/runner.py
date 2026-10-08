@@ -111,7 +111,7 @@ class Agent:
         """Resolve only interrupted explicit native sends, never the legacy outbox."""
         from .case_journal import CaseJournal
         from .media import archive_root
-        from .telegram import native_delivery_case_link, reconcile_unconfirmed_native_delivery
+        from .telegram import reconcile_unconfirmed_native_delivery
 
         journal = CaseJournal(self.store, archive_root(self.cfg))
         interrupted = self.store.rows(
@@ -119,10 +119,6 @@ class Agent:
             "AND status IN ('sending', 'unknown') ORDER BY id"
         )
         for item in interrupted:
-            # Startup may settle only sends already linked to an addressable card.
-            # An unlinked row remains lazy-resolved by NativeBridge.send on a replay.
-            if native_delivery_case_link(self.store, self.cfg.telegram.owner_chat_id, item) is None:
-                continue
             if item['status'] == 'sending':
                 self.store.execute(
                     "UPDATE outbox SET status='unknown' WHERE id=? AND status='sending'",
@@ -239,18 +235,24 @@ class Agent:
     def run_forever(self) -> None:
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, "stop", True))
         signal.signal(signal.SIGINT, lambda *_: setattr(self, "stop", True))
-        self.startup()
-        log.info("support agent started (%s)", "one bot" if self.bots.single else "intake and owner bots")
+        visible = self.cfg.agent.visible_moderator
+        background_polling = not self.bots.single or visible
+        if not visible:
+            self.startup()
         threads = []
-        if not self.bots.single:  # два бота опрашиваются независимо, каждый в своём потоке
+        if background_polling:
             for bot in self.bots.named():
                 thread = threading.Thread(target=self._poll_forever, args=(bot,), daemon=True,
                                           name=f"poll-{bot}")
                 thread.start()
                 threads.append(thread)
+        if visible:
+            # Start intake before startup reconciliation can wait on a Telegram edit.
+            self.startup()
+        log.info("support agent started (%s)", "one bot" if self.bots.single else "intake and owner bots")
         while not self.stop:
             try:
-                self.loop_once(poll=self.bots.single)
+                self.loop_once(poll=not background_polling)
                 if threads:
                     time.sleep(2)
             except Exception:

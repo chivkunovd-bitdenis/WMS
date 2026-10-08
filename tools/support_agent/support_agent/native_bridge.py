@@ -120,7 +120,11 @@ class NativeBridge:
              topic_id: str | int | None = None,
              message_kind: str = "answer") -> dict[str, Any]:
         agent = self._delivery()
-        from .telegram import flush_outbox, reconcile_case_delivery
+        from .telegram import (
+            flush_outbox,
+            reconcile_case_delivery,
+            reconcile_unconfirmed_native_delivery,
+        )
         if chat_id != self.cfg.telegram.owner_chat_id and self.store.binding(chat_id) is None:
             raise ValueError("unknown connected chat")
         stable_key = "native-send:" + key
@@ -157,6 +161,11 @@ class NativeBridge:
             )
             result = self.store.outbox_by_key(stable_key)
             self.journal.sync_chat(chat_id)
+            if result is not None and result['status'] == 'unknown':
+                reconcile_unconfirmed_native_delivery(
+                    self.journal, self.store, agent.bots.owner,
+                    self.cfg.telegram.owner_chat_id, result,
+                )
             return {"key": key, "status": result["status"], "message_id": result["tg_message_id"]}
         was_already_sent = row["status"] == "sent"
         flush_outbox(agent.store, agent.bots, self.cfg, only_ids={int(row["id"])},
@@ -168,6 +177,11 @@ class NativeBridge:
             # linked card event was committed. The stable delivered key deduplicates it.
             reconcile_case_delivery(self.journal, self.store, agent.bots.owner,
                                     self.cfg.telegram.owner_chat_id, result)
+        elif result['status'] == 'unknown':
+            reconcile_unconfirmed_native_delivery(
+                self.journal, self.store, agent.bots.owner,
+                self.cfg.telegram.owner_chat_id, result,
+            )
         return {"key": key, "status": result["status"], "message_id": result["tg_message_id"]}
 
     def context(self, thread_id: str) -> dict[str, Any]:
