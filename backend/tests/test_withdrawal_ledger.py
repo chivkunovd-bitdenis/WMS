@@ -75,7 +75,7 @@ _LEGACY_SALES_ENABLED = ContextVar("legacy_sales_enabled", default=False)
 
 
 @pytest.fixture(autouse=True)
-def legacy_sales_http(monkeypatch):
+def legacy_sales_http(monkeypatch, redis_ownership_io):
     """Supply synthetic sale evidence at HTTP only for this legacy test module."""
     _SYNTHETIC_SALES.clear()
     original_send = httpx.AsyncClient.send
@@ -85,16 +85,21 @@ def legacy_sales_http(monkeypatch):
     from app.services import wb_sales_report
 
     class RedisBoundary:
-        async def eval(self, *args):
-            return 0
+        async def eval(self, script, numkeys, *keys_and_args):
+            # Vendor rate waits are outside this legacy ledger contract;
+            # native Redis still executes every owner/lease/cache Lua operation.
+            if script in {wb_sales_report._RESERVE, wb_sales_report._DEFER}:
+                return 0
+            return await redis_ownership_io.client.eval(script, numkeys, *keys_and_args)
 
         async def get(self, key):
-            return None
+            return await redis_ownership_io.client.get(key)
 
         async def set(self, key, value, **kwargs):
-            pass
+            return await redis_ownership_io.client.set(key, value, **kwargs)
 
         async def aclose(self):
+            # The shared I/O fixture owns this connection and subprocess.
             pass
 
     # The legacy boundary needs no real broker. Injecting a fake broker URL here

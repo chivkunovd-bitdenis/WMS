@@ -1,0 +1,35 @@
+{
+  "runtime_source_sha": "a32306cfe8a37e063711fd77ab1246b9ade836ee",
+  "first_full_run": 37856202750,
+  "checks": [
+    {
+      "suite": "workspace_marking_pool",
+      "passed": 6,
+      "seconds": 14.59
+    },
+    {
+      "suite": "draft_stickers_hotfix_compatibility",
+      "passed": 4,
+      "seconds": 20.53
+    },
+    {
+      "suite": "backend_fixture_batch_first",
+      "passed": 170,
+      "failed": 3,
+      "skipped": 3,
+      "seconds": 114.56
+    },
+    {
+      "suite": "old_history_corrected_cases",
+      "passed": 3,
+      "seconds": 1.68
+    }
+  ],
+  "product_changes_in_fixture_batch": false,
+  "baseline_live_api_source_verification": {
+    "sha": "9971abed35e003abd5be8d2bc3e0032f3ca9f5c7",
+    "files": 352,
+    "mismatches": []
+  },
+  "full_final_ci_completed": false
+}

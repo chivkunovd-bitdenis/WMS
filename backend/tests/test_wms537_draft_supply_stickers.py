@@ -155,10 +155,11 @@ async def test_prefetch_is_identical_across_editable_supply_statuses(
     b_row = next(row for row in workspace["orders"] if row["wb_order_id"] == 537102)
     assert b_row["sticker"]["code"]
     a_row = next(row for row in workspace["orders"] if row["wb_order_id"] == 537101)
-    if target_status == "draft":
-        # A was never requested by this action — it has no code either way,
-        # since it wasn't touched by "start work" in this scenario.
-        assert a_row["sticker"]["code"] is None
+    # The production sticker hotfix prefetches A during creation, including
+    # drafts. Adding B must preserve that already usable sticker.
+    a_created = next(row for row in created.json()["orders"] if row["wb_order_id"] == 537101)
+    assert a_created["sticker"]["code"]
+    assert a_row["sticker"]["code"] == a_created["sticker"]["code"]
     # The status this action started with must be exactly what it ends with;
     # adding orders and prefetching stickers is not allowed to move the
     # supply along the WB FBS pipeline on its own (R2).
@@ -520,21 +521,34 @@ async def test_repeat_add_then_start_work_then_more_orders_only_request_missing(
         product,
         order_id=537503,
     )
-    created = await async_client.post(
-        "/operations/fbs-supplies/from-orders",
-        headers=headers,
-        json={
-            "name": "C7 repeat",
-            "order_ids": [str(order_a)],
-            "planned_delivery_type": "warehouse_sc",
-            "idempotency_key": str(uuid.uuid4()),
-        },
-    )
+    creation_requests: list[list[uuid.UUID]] = []
+
+    async def creation_sticker_outage(*args: Any, **kwargs: Any) -> Any:
+        creation_requests.append(kwargs["order_ids"])
+        raise print_assets.FbsPrintAssetError("wb_stickers_incomplete")
+
+    # Creation now requests A immediately. Model an actual sticker outage
+    # so the later start-work action still has one genuinely missing order.
+    with monkeypatch.context() as creation_patch:
+        creation_patch.setattr(
+            print_assets, "request_supply_print_batch", creation_sticker_outage
+        )
+        created = await async_client.post(
+            "/operations/fbs-supplies/from-orders",
+            headers=headers,
+            json={
+                "name": "C7 repeat",
+                "order_ids": [str(order_a)],
+                "planned_delivery_type": "warehouse_sc",
+                "idempotency_key": str(uuid.uuid4()),
+            },
+        )
     assert created.status_code == 201, created.text
+    assert creation_requests == [[order_a]]
     supply_id = created.json()["supply"]["id"]
 
-    # A itself never got a code (created straight from-orders, no start-work
-    # yet), matching C1's "A has no code" setup.
+    # A remains missing because the initial WB request failed; creation
+    # itself succeeded and start-work must recover only this missing code.
     async with SessionLocal() as session:
         a_row = await session.get(FbsOrder, order_a)
         assert a_row is not None

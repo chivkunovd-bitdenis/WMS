@@ -73,6 +73,7 @@ class SalesHTTP:
         self.rows: list[dict[str, Any]] = []
         self.pages: list[Any] | None = None
         self.status: int | None = None
+        self.finance_status = 204
         self.error: str | None = None
         self.requests: list[httpx.Request] = []
         self.waits: list[float] = []
@@ -86,6 +87,19 @@ class SalesHTTP:
         self.cursor_index = 0
 
     async def handle(self, request: httpx.Request) -> httpx.Response:
+        if (
+            request.method == "POST"
+            and request.url.host == "finance-api.wildberries.ru"
+            and request.url.path == "/api/finance/v1/sales-reports/detailed"
+        ):
+            # The documented finance report POST reads history; no WB mutation
+            # endpoint is allowed by this fixture.
+            body = json.loads(request.content)
+            assert body["dateFrom"] and body["dateTo"]
+            assert body["period"] == "weekly" and body["limit"] == 100000
+            assert isinstance(body["rrdId"], int) and body["rrdId"] >= 0
+            self.requests.append(request)
+            return httpx.Response(self.finance_status, request=request)
         assert request.method == "GET", "Sales audit must never mutate WB"
         assert request.url.path == "/api/v1/supplier/sales", "orders is not sale evidence"
         assert request.url.params.get("flag", "0") == "0", "flag=1 loses multi-day history"
@@ -385,6 +399,9 @@ async def test_sc6_old_missing_sale_reports_coverage_not_unsold(
     order.created_at_wb = datetime.now(UTC) - timedelta(days=120)
     supply.delivered_at = datetime.now(UTC) - timedelta(days=110)
     sales_http.rows = []
+    # This case represents unavailable historical evidence, not a complete
+    # finance report proving no sale; retain the coverage-error assertion.
+    sales_http.finance_status = 503
     await db_session.commit()
     with pytest.raises(WithdrawalError, match=r"(?i)coverage|history|90|incomplete"):
         await create_operation(

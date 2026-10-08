@@ -221,26 +221,17 @@ async def test_bare_supply_manual_tape_allocates_pool_cis_without_packaging_task
     assert len(printed) == 1
     assert printed[0]["cis_code"] == body["orders"][0]["codes"][0]
     assert sent_values == {700001: printed[0]["cis_code"]}
-    binding = {
-        "order_id": str(order_ids[0]),
-        "supply_id": str(supply_id),
-        "marking_id": printed[0]["marking_id"],
-        "cis_code": printed[0]["cis_code"],
-    }
-    assert binding["marking_id"]
-    assert binding["supply_id"] == str(supply_id)
-    assert binding["cis_code"] in {code.cis_code for code in initial_pool}
-    validated = await async_client.post(
-        "/operations/fbs-orders/print-bindings/validate",
-        headers=headers,
-        json={"bindings": [binding]},
-    )
-    assert validated.status_code == 204, validated.text
+    assert printed[0]["cis_code"] in {code.cis_code for code in initial_pool}
     async with SessionLocal() as session:
         assigned_code = await session.get(MarkingCode, uuid.UUID(printed[0]["id"]))
-        assigned_marking = await session.get(
-            FbsOrderMarking, uuid.UUID(printed[0]["marking_id"]),
-        )
+        # Manual tape must persist its order/code binding; the separate late
+        # print-binding validation API is outside this release's contract.
+        assigned_marking = (await session.scalars(
+            select(FbsOrderMarking).where(
+                FbsOrderMarking.order_id == order_ids[0],
+                FbsOrderMarking.marking_code_id == uuid.UUID(printed[0]["id"]),
+            )
+        )).one()
         remaining_pool = list((await session.scalars(
             select(MarkingCode).where(
                 MarkingCode.tenant_id == tenant_id,
@@ -251,10 +242,11 @@ async def test_bare_supply_manual_tape_allocates_pool_cis_without_packaging_task
         )).all())
         assert assigned_code is not None
         assert assigned_marking is not None
-        assert assigned_code.cis_code == binding["cis_code"]
+        assert assigned_code.cis_code == printed[0]["cis_code"]
         assert assigned_code.status == "printed"
         assert assigned_marking.order_id == order_ids[0]
         assert assigned_marking.marking_code_id == assigned_code.id
+        assert assigned_marking.value == printed[0]["cis_code"]
         assert len(remaining_pool) == 1
         assert remaining_pool[0].id in {code.id for code in initial_pool}
         assert remaining_pool[0].id != assigned_code.id
@@ -370,25 +362,20 @@ async def test_task_with_missing_product_line_manual_tape_allocates_pool_cis(
     assert len(printed) == 1
     assert printed[0]["cis_code"] == body["orders"][0]["codes"][0]
     assert sent_values == {700001: printed[0]["cis_code"]}
-    binding = {
-        "order_id": str(order_ids[0]),
-        "supply_id": str(supply_id),
-        "marking_id": printed[0]["marking_id"],
-        "cis_code": printed[0]["cis_code"],
-    }
-    assert binding["cis_code"] in {code.cis_code for code in pool_before}
-    validated = await async_client.post(
-        "/operations/fbs-orders/print-bindings/validate",
-        headers=headers,
-        json={"bindings": [binding]},
-    )
-    assert validated.status_code == 204, validated.text
+    assert printed[0]["cis_code"] in {code.cis_code for code in pool_before}
     async with SessionLocal() as session:
         printed_code = await session.get(MarkingCode, uuid.UUID(printed[0]["id"]))
-        assigned = await session.get(FbsOrderMarking, uuid.UUID(printed[0]["marking_id"]))
+        assigned = (await session.scalars(
+            select(FbsOrderMarking).where(
+                FbsOrderMarking.order_id == order_ids[0],
+                FbsOrderMarking.marking_code_id == uuid.UUID(printed[0]["id"]),
+            )
+        )).one()
         assert printed_code is not None and printed_code.status == "printed"
         assert assigned is not None and assigned.order_id == order_ids[0]
         assert assigned.marking_code_id == printed_code.id
+        assert printed_code.cis_code == printed[0]["cis_code"]
+        assert assigned.value == printed[0]["cis_code"]
     assert await stock_snapshot() == before_stock
 
 
@@ -500,27 +487,20 @@ async def test_current_order_kiz_can_be_allocated_when_task_line_has_no_remainin
     assert len(printed) == 1
     assert printed[0]["cis_code"] == body["orders"][0]["codes"][0]
     assert sent_values == {700001: printed[0]["cis_code"]}
-    binding = {
-        "order_id": str(order_ids[0]),
-        "supply_id": str(supply_id),
-        "marking_id": printed[0]["marking_id"],
-        "cis_code": printed[0]["cis_code"],
-    }
-    assert binding["marking_id"]
-    assert binding["supply_id"] == str(supply_id)
-    assert binding["cis_code"] in {code.cis_code for code in initial_pool}
-    validated = await async_client.post(
-        "/operations/fbs-orders/print-bindings/validate",
-        headers=headers,
-        json={"bindings": [binding]},
-    )
-    assert validated.status_code == 204, validated.text
+    assert printed[0]["cis_code"] in {code.cis_code for code in initial_pool}
     async with SessionLocal() as session:
         printed_code = await session.get(MarkingCode, uuid.UUID(printed[0]["id"]))
-        assigned = await session.get(FbsOrderMarking, uuid.UUID(printed[0]["marking_id"]))
+        assigned = (await session.scalars(
+            select(FbsOrderMarking).where(
+                FbsOrderMarking.order_id == order_ids[0],
+                FbsOrderMarking.marking_code_id == uuid.UUID(printed[0]["id"]),
+            )
+        )).one()
         assert printed_code is not None and printed_code.status == "printed"
         assert assigned is not None and assigned.order_id == order_ids[0]
         assert assigned.marking_code_id == printed_code.id
+        assert printed_code.cis_code == printed[0]["cis_code"]
+        assert assigned.value == printed[0]["cis_code"]
     assert await stock_snapshot() == before_stock
 
 

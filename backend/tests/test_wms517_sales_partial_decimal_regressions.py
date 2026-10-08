@@ -214,22 +214,26 @@ async def test_old_missing_history_does_not_block_selected_current_sale(
     db_session, sales_http, redis_boundary, phase
 ):
     scope, current_mark, current_order, _ = await fixture_order(db_session, sales_http)
-    old_mark, _ = await add_same_scope_order(
+    old_mark, old_order = await add_same_scope_order(
         db_session,
         current_order,
         rid="outside-guaranteed-history",
         serial="oldhistory",
         age_days=100,
     )
+    # Production now reads finance history from 2024-01-29, so a 100-day-old
+    # order is covered. Keep this case outside the actual available archive.
+    old_order.created_at_wb = datetime(2023, 1, 1, tzinfo=UTC)
+    await db_session.commit()
     # The complete accessible HTTP report proves current, but says nothing about old.
     sales_http.rows = [sale(current_order.wb_rid, identifier="S-current", price="7.89")]
-    with pytest.raises(WithdrawalError, match=r"history.*coverage|coverage.*incomplete"):
+    with pytest.raises(WithdrawalError, match=r"^wb_sales_history_before_2024_incomplete$"):
         await registry(db_session, scope)
     with pytest.raises(HTTPException) as products_error:
         await withdrawal_products(db_session, scope, search=None, limit=100)
     assert products_error.value.status_code == 409
-    assert products_error.value.detail == "wb_sales_history_coverage_90_days_incomplete"
-    with pytest.raises(WithdrawalError, match=r"history.*coverage|coverage.*incomplete"):
+    assert products_error.value.detail == "wb_sales_history_before_2024_incomplete"
+    with pytest.raises(WithdrawalError, match=r"^wb_sales_history_before_2024_incomplete$"):
         await create_operation(
             db_session,
             scope,

@@ -134,7 +134,18 @@ async def test_create_http_releases_pool_and_persists_identity(
     ) -> dict[str, Any]:
         supply = await session.get(FbsSupply, supply_id)
         assert supply
-        return {"id": str(supply_id), "wb_id": supply.wb_supply_id}
+        return {
+            "id": str(supply_id), "wb_id": supply.wb_supply_id,
+            "supply": {
+                "id": str(supply_id), "wb_supply_id": supply.wb_supply_id,
+                "marketplace": "wb",
+            },
+        }
+
+    async def request_stickers(*args: Any, **kwargs: Any) -> None:
+        # This contract owns create/add/readback HTTP and the pool boundary.
+        # Isolate the production sticker prefetch transport, not create logic.
+        return None
 
     monkeypatch.setattr(service, "_require_marketplace_token", token)
     monkeypatch.setattr(service, "validate_supply_composition", validate)
@@ -142,6 +153,7 @@ async def test_create_http_releases_pool_and_persists_identity(
     monkeypatch.setattr(service, "_execute_wb_batch_add", add)
     monkeypatch.setattr(service, "reconcile_supply_orders", readback)
     monkeypatch.setattr(service, "get_supply_workspace", workspace)
+    monkeypatch.setattr(service, "_request_order_stickers_for_picking", request_stickers)
 
     async def run(name: str, key: str, order_index: int = 0) -> dict[str, Any]:
         async with sessions() as session, httpx.AsyncClient() as client:
