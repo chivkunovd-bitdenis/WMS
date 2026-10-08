@@ -165,7 +165,7 @@ export function FboPackingProductsTable({ controller, disabled = false }: {
               <TableCell sx={{ width: '9%' }}>Артикул продавца</TableCell>
               <TableCell sx={{ width: '8%' }}>Артикул WB</TableCell>
               <TableCell sx={{ width: '6%' }}>Размер</TableCell>
-              <TableCell sx={{ width: '13%' }}>ШК</TableCell>
+              <TableCell sx={{ width: '13%', whiteSpace: 'nowrap' }}>ШК</TableCell>
               <TableCell align="center" sx={{ width: '4%' }}>ТЗ</TableCell>
               <TableCell align="right" sx={{ width: '6%' }}>Нужно</TableCell>
               <TableCell align="right" sx={{ width: '7%' }}>В коробах</TableCell>
@@ -220,8 +220,8 @@ export function FboPackingProductsTable({ controller, disabled = false }: {
                         {meta.wb_size || ''}
                       </Typography>
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ wordBreak: 'break-word' }} data-testid={`ff-packaging-line-barcode-${lineId}`}>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }} data-testid={`ff-packaging-line-barcode-${lineId}`}>
                         {barcode || '—'}
                       </Typography>
                     </TableCell>
