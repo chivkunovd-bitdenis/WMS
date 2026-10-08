@@ -474,6 +474,49 @@
           "afterEntry": "100644 blob 80cf3f2ecf333fcb1e60c079bb00b2f8b26856aa\tbackend/app/services/fbs_supply_service.py"
         }
       ]
+    },
+    {
+      "commit": "30de00e5f70c3fde354036702aa921ebaab7fd65",
+      "changedPaths": [
+        "backend/tests/test_wb_catalog_schedule.py",
+        "backend/tests/test_wms666_packing_sticker_request.py",
+        "backend/tests/test_withdrawal_ledger.py",
+        "docs/requirements/WMS-666.md",
+        "docs/requirements/WMS-689.md",
+        "guards/PROCESS_CONTRACTS.json"
+      ],
+      "files": [
+        {
+          "path": "backend/tests/test_wb_catalog_schedule.py",
+          "beforeEntry": "100644 blob b22007910e910a102105982e3531d36a2930c344\tbackend/tests/test_wb_catalog_schedule.py",
+          "afterEntry": "100644 blob cce26bacce70ae86c65c1febfd23f915df58958a\tbackend/tests/test_wb_catalog_schedule.py"
+        },
+        {
+          "path": "backend/tests/test_wms666_packing_sticker_request.py",
+          "beforeEntry": "100644 blob fa797ead6126fa239cdfa39a306a08a02287b222\tbackend/tests/test_wms666_packing_sticker_request.py",
+          "afterEntry": "100644 blob 7b7bd5bfc36050cc697dd84500255a7dc04a26b7\tbackend/tests/test_wms666_packing_sticker_request.py"
+        },
+        {
+          "path": "backend/tests/test_withdrawal_ledger.py",
+          "beforeEntry": "100644 blob ac14733de2530eb4e0f4ae285cab806d5eec3755\tbackend/tests/test_withdrawal_ledger.py",
+          "afterEntry": "100644 blob f20342fe34f3c7d05b96960028087dd2968d0960\tbackend/tests/test_withdrawal_ledger.py"
+        },
+        {
+          "path": "docs/requirements/WMS-666.md",
+          "beforeEntry": "100644 blob 57577022c980e9efbee01d06cf9e14330eb2a871\tdocs/requirements/WMS-666.md",
+          "afterEntry": "100644 blob 4a79c1858e870f0e497a17a2a100fc828e23cc63\tdocs/requirements/WMS-666.md"
+        },
+        {
+          "path": "docs/requirements/WMS-689.md",
+          "beforeEntry": "100644 blob 6a4243254c80844602b57170f8ed716f4f22f2f2\tdocs/requirements/WMS-689.md",
+          "afterEntry": "100644 blob 0a0a9a8744f1892e9cb330324f8f88674c691592\tdocs/requirements/WMS-689.md"
+        },
+        {
+          "path": "guards/PROCESS_CONTRACTS.json",
+          "beforeEntry": "100644 blob 4f80f9ea11d7e51c1bd6a64e7e99a4d362472125\tguards/PROCESS_CONTRACTS.json",
+          "afterEntry": "100644 blob 6daab1ccf12d79d2e462bcb651c55692fbd06151\tguards/PROCESS_CONTRACTS.json"
+        }
+      ]
     }
   ]
 }

@@ -185,12 +185,14 @@ export function wms666AcceptedHistoryChange(
       const expected = (side: 'beforeEntry' | 'afterEntry') => recovery.files
         .map((file) => file[side]).filter(Boolean).sort()
       const isRc7History = WMS_666_RC7_HISTORY.some((entry) => entry.commit === commit)
-      // RC7's exception is limited to commits whose every changed path has an
-      // exact before/after tree entry. Other legacy recovery records intentionally
-      // describe only the task-owned paths in broader commits.
-      const completeRc7FileList = !isRc7History
+      const requiresCompleteFileList = isRc7History
+        || recovery.commit === WMS_517_FINANCIAL_FIXTURE_HISTORY.commit
+      // RC7 and the mixed WMS-517 fixture correction must pin every changed
+      // path, including companions outside WMS-666's allowed scope. Older
+      // recovery records intentionally describe only task-owned paths in broader commits.
+      const completeChangedFileList = !requiresCompleteFileList
         || JSON.stringify([...paths].sort()) === JSON.stringify(changed)
-      recoveryReads.set(commit, completeRc7FileList
+      recoveryReads.set(commit, completeChangedFileList
         && JSON.stringify(changed) === JSON.stringify([...recovery.changedPaths].sort())
         && JSON.stringify(entries(`${commit}^`)) === JSON.stringify(expected('beforeEntry'))
         && JSON.stringify(entries(commit)) === JSON.stringify(expected('afterEntry')))
