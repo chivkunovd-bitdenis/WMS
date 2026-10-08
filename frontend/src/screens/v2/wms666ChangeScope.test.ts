@@ -105,7 +105,8 @@ export function wms666TaskChangedPaths(
   const head = git('rev-parse', 'HEAD').trim()
   const pinnedSource = wms666PinnedHistorySource(cwd, contract, head)
   const historyStart = pinnedSource ?? contract
-  const history = git('log', '--ancestry-path', '--format=%H%x09%P%x09%s', `${historyStart}..${head}`)
+  const history = git('log', ...(pinnedSource ? [] : ['--ancestry-path']),
+    '--format=%H%x09%P%x09%s', `${historyStart}..${head}`)
   const root = pinnedSource ? '' : git('show', '-s', '--format=%H%x09%P%x09%s', contract)
   const paths = new Set<string>()
   // Reuse only immutable commit verification within this single history walk.
@@ -359,6 +360,32 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       repo.git('add', stagedPath)
       expect(wms666TaskChangedPaths(repo.cwd, repo.contract)).toEqual([
         'backend/app/services/inventory_service.py', stagedPath, unstagedPath,
+      ])
+    } finally {
+      repo.close()
+    }
+  })
+
+  it('checks WMS-666 side-branch commits merged after the pinned source', () => {
+    const repo = fixtureRepository()
+    try {
+      repo.write('base.txt', 'reviewed base\n')
+      const base = repo.commit('WMS-652: reviewed base')
+      repo.write('frontend/src/screens/v2/packing.ts', 'reviewed source\n')
+      const source = repo.commit('WMS-666: independently reviewed source')
+
+      repo.git('checkout', '-b', 'pin', source)
+      repo.write('scripts/ci/process_bootstrap.json', JSON.stringify({ base_sha: base, source_sha: source }))
+      const pinCommit = repo.commit('WMS-652: publish trusted history pin')
+      repo.git('update-ref', 'refs/remotes/origin/main', pinCommit)
+
+      repo.git('checkout', '-b', 'side', base)
+      repo.write('backend/app/services/inventory_service.py', 'unreviewed side-branch change\n')
+      repo.commit('WMS-666: forbidden side-branch backend edit')
+      repo.git('checkout', '-b', 'task', source)
+      repo.git('merge', '--no-ff', '--no-edit', 'side')
+      expect(wms666TaskChangedPaths(repo.cwd, repo.contract)).toEqual([
+        'backend/app/services/inventory_service.py',
       ])
     } finally {
       repo.close()
