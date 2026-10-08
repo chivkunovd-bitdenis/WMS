@@ -1,4 +1,6 @@
 """An active native reader must see edits and asynchronously prepared material."""
+import pytest
+
 from support_agent.native_bridge import NativeBridge
 from support_agent.telegram import Bots
 
@@ -128,6 +130,146 @@ def test_confirmed_native_send_links_answer_to_same_case_card_once(tmp_path):
     assert "Подтверждённый ответ клиенту" in tg.edits[0][2]
     assert sum(event["text"].count("Подтверждённый ответ клиенту")
                for event in saved_card["events"]) == 1
+
+
+def test_claimed_native_send_is_unknown_after_visible_restart_and_never_retried(tmp_path):
+    from types import SimpleNamespace
+
+    from support_agent.runner import Agent
+
+    class ProcessStopped(BaseException):
+        pass
+
+    class Telegram:
+        def __init__(self, stop_after_claim=False):
+            self.stop_after_claim = stop_after_claim
+            self.sent = []
+
+        def send_message(self, chat_id, text, reply_to=None):
+            self.sent.append((chat_id, text, reply_to))
+            if self.stop_after_claim:
+                raise ProcessStopped
+            return "9001"
+
+    cfg = make_config(tmp_path)
+    cfg.agent.visible_moderator = True
+    cfg.agent.client_replies_enabled = True
+    first = NativeBridge(cfg)
+    first.store.set_binding(
+        CLIENT_CHAT, {"tenant_id": "tenant-test", "tenant_name": "Тест"}, bound_by="owner"
+    )
+    interrupted_tg = Telegram(stop_after_claim=True)
+    first_bots = Bots(interrupted_tg, interrupted_tg, cfg.telegram.owner_chat_id)
+    first._delivery = lambda: SimpleNamespace(store=first.store, bots=first_bots)
+
+    with pytest.raises(ProcessStopped):
+        first.send(CLIENT_CHAT, "Подтверждённый ответ", key="after-claim")
+
+    stable_key = "native-send:after-claim"
+    interrupted = first.store.outbox_by_key(stable_key)
+    assert interrupted["status"] == "sending"
+    assert interrupted["attempts"] == 1
+    assert len(interrupted_tg.sent) == 1
+    first.store.db.close()
+
+    restarted = NativeBridge(cfg)
+    Agent(cfg, restarted.store, None, None, lambda: 1.0).startup()
+    assert restarted.store.outbox_by_key(stable_key)["status"] == "sending"
+
+    retry_tg = Telegram()
+    retry_bots = Bots(retry_tg, retry_tg, cfg.telegram.owner_chat_id)
+    restarted._delivery = lambda: SimpleNamespace(store=restarted.store, bots=retry_bots)
+    result = restarted.send(CLIENT_CHAT, "Подтверждённый ответ", key="after-claim")
+    resolved = restarted.store.outbox_by_key(stable_key)
+
+    assert result["status"] in {"unknown", "unresolved"}
+    assert resolved["status"] in {"unknown", "unresolved"}
+    assert resolved["attempts"] == 1
+    assert [item for item in retry_tg.sent if item[0] == CLIENT_CHAT] == []
+
+
+def test_sent_native_answer_is_reconciled_to_card_after_crash(tmp_path, monkeypatch):
+    from itertools import count
+    from types import SimpleNamespace
+
+    from support_agent.case_journal import CaseJournal
+
+    class ProcessStopped(BaseException):
+        pass
+
+    class CardsTelegram:
+        def __init__(self):
+            self.ids = count(1000)
+            self.sent = []
+            self.edits = []
+
+        def send_message(self, chat_id, text, reply_to=None):
+            message_id = str(next(self.ids))
+            self.sent.append((chat_id, text, reply_to, message_id))
+            return message_id
+
+        def edit_message(self, chat_id, message_id, text):
+            self.edits.append((chat_id, message_id, text))
+
+    cfg = make_config(tmp_path)
+    cfg.agent.visible_moderator = True
+    cfg.agent.client_replies_enabled = True
+    cfg.agent.history_dir = str(tmp_path / "history")
+    first = NativeBridge(cfg)
+    first.store.set_binding(
+        CLIENT_CHAT, {"tenant_id": "tenant-test", "tenant_name": "Тест"}, bound_by="owner"
+    )
+    tg = CardsTelegram()
+    topic_id = "native:sent-before-card-event"
+    original_card = first.journal.update_card(
+        tg, cfg.telegram.owner_chat_id, topic_id, CLIENT_CHAT,
+        title="Проверка поставки", statuses={"working": True},
+        event="Получено обращение", event_key="incoming:client-9",
+    )
+    bots = Bots(tg, tg, cfg.telegram.owner_chat_id)
+    first._delivery = lambda: SimpleNamespace(store=first.store, bots=bots)
+    original_update_card = CaseJournal.update_card
+
+    def stop_before_card_event(self, *args, **kwargs):
+        if str(kwargs.get("event_key", "")).startswith("delivered:"):
+            raise ProcessStopped
+        return original_update_card(self, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(CaseJournal, "update_card", stop_before_card_event)
+        with pytest.raises(ProcessStopped):
+            first.send(
+                CLIENT_CHAT, "Проверенный ответ", key="sent-before-card-event",
+                reply_to="client-9", topic_id=topic_id,
+            )
+
+    stable_key = "native-send:sent-before-card-event"
+    sent_outbox = first.store.outbox_by_key(stable_key)
+    delivered_key = f"delivered:{sent_outbox['id']}"
+    assert sent_outbox["status"] == "sent"
+    assert sent_outbox["tg_message_id"] is not None
+    assert not any(event["key"] == delivered_key
+                   for event in first.store.kv_get(f"case_card:{topic_id}")["events"])
+    first.store.db.close()
+
+    restarted = NativeBridge(cfg)
+    restart_bots = Bots(tg, tg, cfg.telegram.owner_chat_id)
+    restarted._delivery = lambda: SimpleNamespace(store=restarted.store, bots=restart_bots)
+    result = restarted.send(
+        CLIENT_CHAT, "Проверенный ответ", key="sent-before-card-event",
+        reply_to="client-9", topic_id=topic_id,
+    )
+
+    saved_card = restarted.store.kv_get(f"case_card:{topic_id}")
+    answer_events = [event for event in saved_card["events"] if event["key"] == delivered_key]
+    client_sends = [item for item in tg.sent if item[0] == CLIENT_CHAT]
+    assert result["status"] == "sent"
+    assert len(client_sends) == 1
+    assert saved_card["number"] == original_card["number"]
+    assert saved_card["message_id"] == original_card["message_id"]
+    assert len(answer_events) == 1
+    assert "Проверенный ответ" in answer_events[0]["text"]
+    assert tg.edits[-1][1] == original_card["message_id"]
 
 
 def test_visible_service_only_collects_and_does_not_drain_old_outbox(env):

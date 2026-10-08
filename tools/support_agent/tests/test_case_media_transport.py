@@ -76,6 +76,24 @@ def test_single_card_edits_drops_oldest_visible_events_and_keeps_complete_journa
     assert journal.find_topic('1004') == 'native:817'
 
 
+def test_long_details_are_truncated_before_the_latest_card_event(tmp_path):
+    store, tg = Store(tmp_path / 'state.db'), Cards()
+    journal = CaseJournal(store, tmp_path / 'history')
+    summary = '\n'.join(
+        f'Поле {index}: ' + ('длинное значение ' * 25)
+        for index in range(14)
+    )
+    card = journal.update_card(
+        tg, 900, 'native:long-details', 10, title='Длинные подробности',
+        summary=summary, statuses={'working': True},
+        event='Последнее содержательное событие', event_key='latest-event',
+    )
+
+    body = journal.render(card)
+    assert len(body.encode('utf-16-le')) // 2 <= 4096
+    assert 'Последнее содержательное событие' in body
+
+
 def test_card_render_separates_facts_and_shows_one_current_status(tmp_path):
     store, tg = Store(tmp_path / 'state.db'), Cards()
     journal = CaseJournal(store, tmp_path / 'history')
@@ -107,6 +125,26 @@ def test_card_render_separates_facts_and_shows_one_current_status(tmp_path):
     status_lines = [line for line in lines if any(label in line for label in status_labels)]
     assert len(status_lines) == 1
     assert 'Взято в работу' in status_lines[0]
+
+
+def test_new_unique_event_reopens_answered_case_as_working(tmp_path):
+    store, tg = Store(tmp_path / 'state.db'), Cards()
+    journal = CaseJournal(store, tmp_path / 'history')
+    topic_id = 'native:answered-then-updated'
+    journal.update_card(
+        tg, 900, topic_id, 10, title='Поставка проверена',
+        statuses={'answer_sent': True}, event='Ответ отправлен', event_key='answer:1',
+    )
+
+    updated = journal.update_card(
+        tg, 900, topic_id, 10,
+        event='Получено новое сообщение клиента', event_key='inbound:2',
+    )
+
+    assert updated['current_status'] == 'working'
+    assert updated['statuses']['working'] is True
+    assert updated['statuses']['answer_sent'] is not True
+    assert 'Статус: 🟡 Взято в работу' in journal.render(updated)
 
 
 def test_journal_enospc_keeps_sqlite_event_and_edits_existing_card(tmp_path, monkeypatch):
