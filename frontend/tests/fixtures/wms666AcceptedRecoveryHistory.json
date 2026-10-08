@@ -423,6 +423,57 @@
       "reviewCommit": "e351b201f314e6bfe3af142fa43bb650fefe8c02",
       "reviewPath": "docs/reviews/WMS-666-689-independent-correction-review-20261008.md",
       "acceptanceCommit": "c2cbd700fbf7f03fb00465b27ee8214428f9386e"
+    },
+    {
+      "commit": "603720d6dc4751e6f29593207e4ea7b1219d0509",
+      "changedPaths": [
+        "backend/app/services/fbs_print_asset_service.py",
+        "backend/app/services/fbs_supply_service.py"
+      ],
+      "files": [
+        {
+          "path": "backend/app/services/fbs_print_asset_service.py",
+          "beforeEntry": "100644 blob 878cdce1c8750b2bce274048c6a6afb9919fcb10\tbackend/app/services/fbs_print_asset_service.py",
+          "afterEntry": "100644 blob d49ee1ae8ef20c5814001c90046b6c849835dc9b\tbackend/app/services/fbs_print_asset_service.py"
+        },
+        {
+          "path": "backend/app/services/fbs_supply_service.py",
+          "beforeEntry": "100644 blob 96860f53021e7442d300c1f8e1330ef57181d76d\tbackend/app/services/fbs_supply_service.py",
+          "afterEntry": "100644 blob 3c5b84686e7ac860257297d60785dc9d867d4614\tbackend/app/services/fbs_supply_service.py"
+        }
+      ]
+    },
+    {
+      "commit": "70c2c2c6cf16aee81292042a9dde6161fb5384e2",
+      "changedPaths": [
+        "backend/app/services/fbs_print_asset_service.py"
+      ],
+      "files": [
+        {
+          "path": "backend/app/services/fbs_print_asset_service.py",
+          "beforeEntry": "100644 blob d49ee1ae8ef20c5814001c90046b6c849835dc9b\tbackend/app/services/fbs_print_asset_service.py",
+          "afterEntry": "100644 blob 2281ff64b91f1f743c44df746ce16e9e319f8ced\tbackend/app/services/fbs_print_asset_service.py"
+        }
+      ]
+    },
+    {
+      "commit": "739a63343fc38d2a3441d9b613b4652c7f0380e0",
+      "changedPaths": [
+        "backend/app/services/fbs_print_asset_service.py",
+        "backend/app/services/fbs_supply_service.py"
+      ],
+      "files": [
+        {
+          "path": "backend/app/services/fbs_print_asset_service.py",
+          "beforeEntry": "100644 blob 2281ff64b91f1f743c44df746ce16e9e319f8ced\tbackend/app/services/fbs_print_asset_service.py",
+          "afterEntry": "100644 blob b6b44641b76dc8516a25614414c8fc4ee5d5e65c\tbackend/app/services/fbs_print_asset_service.py"
+        },
+        {
+          "path": "backend/app/services/fbs_supply_service.py",
+          "beforeEntry": "100644 blob 3c5b84686e7ac860257297d60785dc9d867d4614\tbackend/app/services/fbs_supply_service.py",
+          "afterEntry": "100644 blob 80cf3f2ecf333fcb1e60c079bb00b2f8b26856aa\tbackend/app/services/fbs_supply_service.py"
+        }
+      ]
     }
   ]
 }

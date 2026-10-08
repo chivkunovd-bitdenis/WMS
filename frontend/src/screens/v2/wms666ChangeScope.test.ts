@@ -126,7 +126,14 @@ export function wms666AcceptedHistoryChange(
         .split('\n').filter(Boolean).sort()
       const expected = (side: 'beforeEntry' | 'afterEntry') => recovery.files
         .map((file) => file[side]).filter(Boolean).sort()
-      recoveryReads.set(commit, JSON.stringify(changed) === JSON.stringify([...recovery.changedPaths].sort())
+      const isRc7History = WMS_666_RC7_HISTORY.some((entry) => entry.commit === commit)
+      // RC7's exception is limited to commits whose every changed path has an
+      // exact before/after tree entry. Other legacy recovery records intentionally
+      // describe only the task-owned paths in broader commits.
+      const completeRc7FileList = !isRc7History
+        || JSON.stringify([...paths].sort()) === JSON.stringify(changed)
+      recoveryReads.set(commit, completeRc7FileList
+        && JSON.stringify(changed) === JSON.stringify([...recovery.changedPaths].sort())
         && JSON.stringify(entries(`${commit}^`)) === JSON.stringify(expected('beforeEntry'))
         && JSON.stringify(entries(commit)) === JSON.stringify(expected('afterEntry')))
     }
