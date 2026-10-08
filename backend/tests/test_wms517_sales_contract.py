@@ -12,6 +12,7 @@ import json
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -75,6 +76,7 @@ class SalesHTTP:
         self.status: int | None = None
         self.error: str | None = None
         self.requests: list[httpx.Request] = []
+        self.finance_requests: list[httpx.Request] = []
         self.waits: list[float] = []
         self.tokens: dict[uuid.UUID, str] = {}
         self.rows_by_token: dict[str, list[dict[str, Any]]] = {}
@@ -86,11 +88,15 @@ class SalesHTTP:
         self.cursor_index = 0
 
     async def handle(self, request: httpx.Request) -> httpx.Response:
-        assert request.method == "GET", "Sales audit must never mutate WB"
-        assert request.url.path == "/api/v1/supplier/sales", "orders is not sale evidence"
-        assert request.url.params.get("flag", "0") == "0", "flag=1 loses multi-day history"
-        assert request.url.params.get("dateFrom"), "Sales cursor is mandatory"
-        self.requests.append(request)
+        if request.url.path == "/api/finance/v1/sales-reports/detailed":
+            assert request.method == "POST", "Finance history is a read-only report POST"
+            self.finance_requests.append(request)
+        else:
+            assert request.method == "GET", "Sales audit must never mutate WB"
+            assert request.url.path == "/api/v1/supplier/sales", "orders is not sale evidence"
+            assert request.url.params.get("flag", "0") == "0", "flag=1 loses multi-day history"
+            assert request.url.params.get("dateFrom"), "Sales cursor is mandatory"
+            self.requests.append(request)
         if self.error == "timeout":
             raise httpx.ReadTimeout("fixture sales timeout", request=request)
         if self.error == "json":
@@ -102,6 +108,8 @@ class SalesHTTP:
                 headers={"Retry-After": "2"},
                 request=request,
             )
+        if request.url.path == "/api/finance/v1/sales-reports/detailed":
+            return httpx.Response(204, request=request)
         if self.pages is not None:
             index = self.cursor_index
             self.cursor_index += 1
@@ -382,14 +390,31 @@ async def test_sc6_old_missing_sale_reports_coverage_not_unsold(
     db_session: AsyncSession, sales_http: SalesHTTP
 ) -> None:
     scope, marking, order, supply = await fixture_order(db_session, sales_http)
-    order.created_at_wb = datetime.now(UTC) - timedelta(days=120)
+    oldest_order_date = datetime.now(UTC) - timedelta(days=120)
+    order.created_at_wb = oldest_order_date
     supply.delivered_at = datetime.now(UTC) - timedelta(days=110)
     sales_http.rows = []
     await db_session.commit()
-    with pytest.raises(WithdrawalError, match=r"(?i)coverage|history|90|incomplete"):
+    # Older than the supplier-sales 90-day window, this order is checked against
+    # the complete financial archive. A completed archive with no matching row
+    # cannot authorize the order as sold.
+    assert (await registry(db_session, scope))[1] == 0
+    with pytest.raises(WithdrawalError, match="withdrawal_rows_not_found"):
         await create_operation(
             db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4()
         )
+    # View and fresh create each read the archive independently; both must use
+    # the read-only finance endpoint and complete cursor from the archive start.
+    assert len(sales_http.finance_requests) == 2
+    for finance_request in sales_http.finance_requests:
+        assert finance_request.method == "POST"
+        assert finance_request.url.path == "/api/finance/v1/sales-reports/detailed"
+        finance_query = json.loads(finance_request.content)
+        assert finance_query["dateFrom"] == oldest_order_date.astimezone(
+            ZoneInfo("Europe/Moscow")
+        ).date().isoformat()
+        assert finance_query["rrdId"] == 0
+    assert await db_session.scalar(select(func.count(WithdrawalDocument.id))) == 0
 
 
 async def test_sc5_failed_refresh_preserves_prior_useful_attempt(

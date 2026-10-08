@@ -134,6 +134,11 @@ async def test_prefetch_is_identical_across_editable_supply_statuses(
             supply_row.status = FBS_SUPPLY_STATUS_PACKED
             await session.commit()
 
+    async with SessionLocal() as session:
+        a_record = await session.get(FbsOrder, order_a)
+        assert a_record is not None
+        a_code_before_add = a_record.sticker_code
+
     batch_order_ids: list[list[uuid.UUID]] = []
     real_batch = print_assets.request_supply_print_batch
 
@@ -155,10 +160,9 @@ async def test_prefetch_is_identical_across_editable_supply_statuses(
     b_row = next(row for row in workspace["orders"] if row["wb_order_id"] == 537102)
     assert b_row["sticker"]["code"]
     a_row = next(row for row in workspace["orders"] if row["wb_order_id"] == 537101)
-    if target_status == "draft":
-        # A was never requested by this action — it has no code either way,
-        # since it wasn't touched by "start work" in this scenario.
-        assert a_row["sticker"]["code"] is None
+    # WMS-666 may already have fetched A while creating the supply (or while
+    # starting work). Adding B must leave A's existing sticker untouched.
+    assert a_row["sticker"]["code"] == a_code_before_add
     # The status this action started with must be exactly what it ends with;
     # adding orders and prefetching stickers is not allowed to move the
     # supply along the WB FBS pipeline on its own (R2).
@@ -520,6 +524,27 @@ async def test_repeat_add_then_start_work_then_more_orders_only_request_missing(
         product,
         order_id=537503,
     )
+    # This scenario verifies later recovery when A has no sticker. WMS-666 now
+    # fetches stickers during creation, so simulate that initial fetch missing
+    # its result, then restore the real request path before the tested actions.
+    real_create_prefetch = print_assets.request_supply_print_batch
+    create_prefetch_order_ids: list[list[uuid.UUID] | None] = []
+
+    async def miss_create_prefetch(
+        session: AsyncSession,
+        tenant_id: uuid.UUID,
+        supply_id: uuid.UUID,
+        *,
+        kind: str,
+        order_ids: list[uuid.UUID] | None,
+        retry_missing: bool,
+        http_client: httpx.AsyncClient,
+        _wb_sticker_fetch: print_assets.OrderLabelFetch | None = None,
+    ) -> None:
+        del session, tenant_id, supply_id, kind, retry_missing, http_client, _wb_sticker_fetch
+        create_prefetch_order_ids.append(order_ids)
+
+    monkeypatch.setattr(print_assets, "request_supply_print_batch", miss_create_prefetch)
     created = await async_client.post(
         "/operations/fbs-supplies/from-orders",
         headers=headers,
@@ -531,10 +556,11 @@ async def test_repeat_add_then_start_work_then_more_orders_only_request_missing(
         },
     )
     assert created.status_code == 201, created.text
+    assert create_prefetch_order_ids == [[order_a]]
+    monkeypatch.setattr(print_assets, "request_supply_print_batch", real_create_prefetch)
     supply_id = created.json()["supply"]["id"]
 
-    # A itself never got a code (created straight from-orders, no start-work
-    # yet), matching C1's "A has no code" setup.
+    # The simulated create-time miss leaves A ready for the recovery path below.
     async with SessionLocal() as session:
         a_row = await session.get(FbsOrder, order_a)
         assert a_row is not None

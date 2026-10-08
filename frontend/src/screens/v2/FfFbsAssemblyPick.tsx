@@ -26,6 +26,7 @@ import {
   type GroupPickSupplyState,
 } from './fbsSupplyAssembly'
 import { createFbsIdempotencyKey } from './fbsApi'
+import { trackPickSave, waitForPickSaves } from '../ff/unload-pick/pickSaveLifecycle'
 
 // WMS-574 R8–R10: «Подбор» окна сборки — тот же экран подбора
 // (UnloadPickScreen), что во вкладке «Подбор» карточки поставки, только план
@@ -172,17 +173,23 @@ function supplyPickState(options: ApiPickProduct[]): SupplyPickState {
 type Props = {
   token: string
   /** Поставки группы в порядке раздачи (Д5) и их селлеры — для каталога товаров. */
-  supplies: Array<{ id: string; sellerId: string }>
+  supplies: Array<{ id: string; sellerId: string; marketplace?: 'wb' | 'ozon' }>
 }
 
 export function FfFbsAssemblyPick({ token, supplies }: Props) {
   const supplyIds = useMemo(() => supplies.map((one) => one.id), [supplies])
   const idsKey = supplyIds.join(',')
+  const isOzon = supplies.every((one) => one.marketplace === 'ozon')
   const sellerKey = [...new Set(supplies.map((one) => one.sellerId))].join(',')
   const [options, setOptions] = useState<Array<ApiPickProduct[] | null>>(() => supplyIds.map(() => null))
   const [catalogById, setCatalogById] = useState<Map<string, MarketplaceProductCatalogRow>>(() => new Map())
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const mounted = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
@@ -214,11 +221,12 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
     return (await res.json()) as ApiPickProduct[]
   }, [token])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (waitForSave = true) => {
     const ids = idsKey ? idsKey.split(',') : []
     setLoading(true)
     setError(null)
     try {
+      if (waitForSave) await waitForPickSaves(ids.map((id) => `${FBS_BASE}/${id}`))
       const next = await Promise.all(ids.map((id) => fetchOptions(id)))
       statesRef.current = next.map(supplyPickState)
       mutationRef.current = ids.map((_, index) => (mutationRef.current[index] ?? 0) + 1)
@@ -346,14 +354,15 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
     const products: PickProduct[] = productOrder.map((productId) => {
       const item = productInfo.get(productId)!
       const catalog = catalogById.get(productId)
+      const ozon = catalog?.marketplace_bindings?.find((binding) => binding.marketplace === 'ozon')
       return {
         id: productId,
         name: item.product_name,
         sku: item.sku_code ?? '',
-        sellerArticle: catalog?.wb_vendor_code ?? '',
-        barcode: catalog?.wb_primary_barcode ?? catalog?.wb_barcodes[0] ?? '',
-        photo: catalog?.wb_primary_image_url ?? '',
-        size: catalog?.wb_size ?? null,
+        sellerArticle: isOzon ? item.seller_article ?? ozon?.external_offer_id ?? '' : catalog?.wb_vendor_code ?? '',
+        barcode: isOzon ? item.barcode ?? ozon?.external_barcodes?.[0] ?? '' : catalog?.wb_primary_barcode ?? catalog?.wb_barcodes[0] ?? '',
+        photo: isOzon ? '' : catalog?.wb_primary_image_url ?? '',
+        size: isOzon ? null : catalog?.wb_size ?? null,
       }
     })
     const plan: PlanLine[] = productOrder.map((productId) => ({
@@ -370,7 +379,7 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
       picked,
       placeSource,
     }
-  }, [catalogById, options, supplyIds.length])
+  }, [catalogById, isOzon, options, supplyIds.length])
 
   const statesFor = useCallback((productId: string, placeKey: string | null): GroupPickSupplyState[] => {
     const result: GroupPickSupplyState[] = []
@@ -403,121 +412,128 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
   ), [])
 
   const setPicked = useCallback(
-    (payload: { productId: string; place: { key: string }; quantity: number }) => enqueue(async () => {
-      const source = screenData?.placeSource.get(payload.place.key)
-      const locationId = source?.locationId ?? sourceLocationId(payload.place.key)
-      if (!locationId) {
-        setError('Сервер не вернул ячейку, из которой снимается товар')
-        await load()
-        return
-      }
-      // Do not calculate a new absolute target while a prior save of this
-      // product/source has an unknown outcome. Replaying its exact request is
-      // the only safe way to reconcile it; a confirmed old target is never
-      // presented as if it had saved the newly requested number.
-      const scopeKey = `${payload.productId}\u0000${payload.place.key}`
-      const previousRequests = [...pendingSetRequestsRef.current.entries()]
-        .filter(([, request]) => request.scopeKey === scopeKey)
-      if (previousRequests.length > 0) {
+    (payload: { productId: string; place: { key: string }; quantity: number }) => {
+      const run = enqueue(async () => {
+        const source = screenData?.placeSource.get(payload.place.key)
+        const locationId = source?.locationId ?? sourceLocationId(payload.place.key)
+        if (!locationId) {
+          setError('Сервер не вернул ячейку, из которой снимается товар')
+          await load(false)
+          return
+        }
+        // Do not calculate a new absolute target while a prior save of this
+        // product/source has an unknown outcome. Replaying its exact request is
+        // the only safe way to reconcile it; a confirmed old target is never
+        // presented as if it had saved the newly requested number.
+        const scopeKey = `${payload.productId}\u0000${payload.place.key}`
+        const previousRequests = [...pendingSetRequestsRef.current.entries()]
+          .filter(([, request]) => request.scopeKey === scopeKey)
+        if (previousRequests.length > 0) {
+          setBusy(true)
+          setError(null)
+          let outcomeUnknown = false
+          try {
+            for (const [attemptKey, request] of previousRequests) {
+              try {
+                const res = await fetch(apiUrl(`${FBS_BASE}/${request.supplyId}/pick/set`), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Idempotency-Key': request.idempotencyKey, ...headers(token) },
+                  body: JSON.stringify(request.body),
+                })
+                if (res.ok) {
+                  pendingSetRequestsRef.current.delete(attemptKey)
+                  continue
+                }
+                // Any received 4xx, including a changed source quantity, is a
+                // definitive non-commit for this exact payload. A 5xx remains
+                // unknown and stays available for another exact replay.
+                if (res.status < 500) pendingSetRequestsRef.current.delete(attemptKey)
+                else outcomeUnknown = true
+              } catch {
+                outcomeUnknown = true
+              }
+            }
+            await load(false)
+            setError(outcomeUnknown
+              ? 'Не удалось уточнить предыдущую операцию. Проверьте количество после обновления и повторите сохранение.'
+              : 'Предыдущая операция сверена. Проверьте количество и сохраните его снова.')
+          } finally {
+            setBusy(false)
+          }
+          return
+        }
+        const logKey = pickKey(payload.productId, payload.place.key)
+        const plan = planGroupPickSet(
+          statesFor(payload.productId, payload.place.key),
+          payload.quantity,
+          logsRef.current.get(logKey) ?? [],
+        )
         setBusy(true)
         setError(null)
-        let outcomeUnknown = false
         try {
-          for (const [attemptKey, request] of previousRequests) {
-            try {
-              const res = await fetch(apiUrl(`${FBS_BASE}/${request.supplyId}/pick/set`), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Idempotency-Key': request.idempotencyKey, ...headers(token) },
-                body: JSON.stringify(request.body),
-              })
-              if (res.ok) {
-                pendingSetRequestsRef.current.delete(attemptKey)
-                continue
-              }
-              // Any received 4xx, including a changed source quantity, is a
-              // definitive non-commit for this exact payload. A 5xx remains
-              // unknown and stays available for another exact replay.
-              if (res.status < 500) pendingSetRequestsRef.current.delete(attemptKey)
-              else outcomeUnknown = true
-            } catch {
-              outcomeUnknown = true
+          for (const change of plan.changes) {
+            const attemptKey = [
+              supplyIds[change.index], payload.productId, locationId,
+              source?.containerKind ?? '', source?.containerId ?? '',
+            ].join(':')
+            const state = statesRef.current[change.index]
+            const expectedQuantity = state?.pickedHere.get(pickKey(payload.productId, payload.place.key)) ?? 0
+            const request: PendingPickSetRequest = {
+              scopeKey,
+              supplyId: supplyIds[change.index],
+              idempotencyKey: createFbsIdempotencyKey(),
+              body: {
+                product_id: payload.productId,
+                storage_location_id: locationId,
+                quantity: change.quantity,
+                expected_quantity: expectedQuantity,
+                container_kind: source?.containerKind ?? null,
+                container_id: source?.containerId ?? null,
+              },
             }
+            pendingSetRequestsRef.current.set(attemptKey, request)
+            const res = await fetch(apiUrl(`${FBS_BASE}/${supplyIds[change.index]}/pick/set`), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Idempotency-Key': request.idempotencyKey, ...headers(token) },
+              body: JSON.stringify(request.body),
+            })
+            if (!res.ok) {
+              const code = await pickErrorCode(res)
+              if (res.status === 409 && code === 'pick_quantity_changed') {
+                pendingSetRequestsRef.current.delete(attemptKey)
+                throw new PickQuantityChangedError(change.index)
+              }
+              // A received 4xx is definitive. Keep the exact request after a
+              // 5xx, because its server-side outcome is still unknown.
+              if (res.status < 500) pendingSetRequestsRef.current.delete(attemptKey)
+              throw new Error(await readApiErrorMessage(res))
+            }
+            const out = (await res.json()) as { quantity: number }
+            pendingSetRequestsRef.current.delete(attemptKey)
+            applyPicked(change.index, payload.productId, payload.place.key, out.quantity)
           }
-          await load()
-          setError(outcomeUnknown
-            ? 'Не удалось уточнить предыдущую операцию. Проверьте количество после обновления и повторите сохранение.'
-            : 'Предыдущая операция сверена. Проверьте количество и сохраните его снова.')
+          logsRef.current.set(logKey, plan.log)
+          await Promise.all(plan.changes.map((change) => refreshSupply(change.index)))
+        } catch (err) {
+          if (err instanceof PickQuantityChangedError) {
+            setError(err.message)
+            await refreshSupply(err.index)
+            throw err
+          }
+          const message = err instanceof Error ? err.message : 'Не удалось сохранить снятое количество'
+          setError(message)
+          await load(false)
+          setError(message)
+          throw new Error(message)
         } finally {
           setBusy(false)
         }
-        return
-      }
-      const logKey = pickKey(payload.productId, payload.place.key)
-      const plan = planGroupPickSet(
-        statesFor(payload.productId, payload.place.key),
-        payload.quantity,
-        logsRef.current.get(logKey) ?? [],
-      )
-      setBusy(true)
-      setError(null)
-      try {
-        for (const change of plan.changes) {
-          const attemptKey = [
-            supplyIds[change.index], payload.productId, locationId,
-            source?.containerKind ?? '', source?.containerId ?? '',
-          ].join(':')
-          const state = statesRef.current[change.index]
-          const expectedQuantity = state?.pickedHere.get(pickKey(payload.productId, payload.place.key)) ?? 0
-          const request: PendingPickSetRequest = {
-            scopeKey,
-            supplyId: supplyIds[change.index],
-            idempotencyKey: createFbsIdempotencyKey(),
-            body: {
-              product_id: payload.productId,
-              storage_location_id: locationId,
-              quantity: change.quantity,
-              expected_quantity: expectedQuantity,
-              container_kind: source?.containerKind ?? null,
-              container_id: source?.containerId ?? null,
-            },
-          }
-          pendingSetRequestsRef.current.set(attemptKey, request)
-          const res = await fetch(apiUrl(`${FBS_BASE}/${supplyIds[change.index]}/pick/set`), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': request.idempotencyKey, ...headers(token) },
-            body: JSON.stringify(request.body),
-          })
-          if (!res.ok) {
-            const code = await pickErrorCode(res)
-            if (res.status === 409 && code === 'pick_quantity_changed') {
-              pendingSetRequestsRef.current.delete(attemptKey)
-              throw new PickQuantityChangedError(change.index)
-            }
-            // A received 4xx is definitive. Keep the exact request after a
-            // 5xx, because its server-side outcome is still unknown.
-            if (res.status < 500) pendingSetRequestsRef.current.delete(attemptKey)
-            throw new Error(await readApiErrorMessage(res))
-          }
-          const out = (await res.json()) as { quantity: number }
-          pendingSetRequestsRef.current.delete(attemptKey)
-          applyPicked(change.index, payload.productId, payload.place.key, out.quantity)
-        }
-        logsRef.current.set(logKey, plan.log)
-        await Promise.all(plan.changes.map((change) => refreshSupply(change.index)))
-      } catch (err) {
-        if (err instanceof PickQuantityChangedError) {
-          setError(err.message)
-          await refreshSupply(err.index)
-          return
-        }
-        const message = err instanceof Error ? err.message : 'Не удалось сохранить снятое количество'
-        setError(message)
-        await load()
-        setError(message)
-      } finally {
-        setBusy(false)
-      }
-    }),
+      })
+      trackPickSave(supplyIds.map((id) => `${FBS_BASE}/${id}`), run, () => !mounted.current)
+      // The tracker sees rejection; the UI callback keeps its existing handled
+      // error contract after showing the readback and message.
+      return run.catch(() => undefined)
+    },
     [applyPicked, enqueue, load, refreshSupply, screenData, statesFor, supplyIds, token],
   )
 
@@ -531,7 +547,9 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
         return (
           product.sku.toLowerCase() === normalized ||
           product.barcode === barcode ||
-          catalog?.wb_barcodes.some((one) => one === barcode)
+          (isOzon
+            ? catalog?.marketplace_bindings?.some((binding) => binding.marketplace === 'ozon' && binding.external_barcodes?.includes(barcode))
+            : catalog?.wb_barcodes.some((one) => one === barcode))
         )
       })
       const selectedSource: PlaceSource | null | undefined = sourceKey
@@ -694,7 +712,7 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
         setBusy(false)
       }
     }),
-    [applyPicked, catalogById, enqueue, groupPickedAt, options, refreshSupply, screenData, supplyIds, token],
+    [applyPicked, catalogById, enqueue, groupPickedAt, isOzon, options, refreshSupply, screenData, supplyIds, token],
   )
 
   if (loading && !screenData) {

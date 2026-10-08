@@ -1,0 +1,29 @@
+{
+  "files": {
+    "backend18.log": "50fc482fb81f9d7726b801d5f1dc2e7f8256d1387992509e95f8bc991f1dd359",
+    "backend19.log": "dd708673ca54cc6bee37e1bdd1b95c09453c8fd5cdef6b10f4fb244690ba47ac",
+    "db-cancel-negative.log": "3797499f97e400b962a6374b3dbcbb49d6faee056ca4fbf0a557432e6c167fa3",
+    "stickers17-print20-final.log": "8362a905708d61f90e9a7e0c36d7cf6697a58f25c76d50785acedffbbdde8e77",
+    "kiz31.log": "17988b79e0829d3b855758107a440bfe3272e3c7a6d2d2c5129ce67e483ee9a0",
+    "ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "mypy.log": "ebdb9620809975ffcc00760a8fd2b1f103d87dc708fb187bd30158515598a89f",
+    "typescript-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "frontend-build-final.log": "5f3c4f3d43f81eb665e414b848dedd0338a8663eebdac94410512c69d56bf86e"
+  },
+  "commands_exit_codes": {
+    "ruff": 0,
+    "mypy": 0,
+    "typescript_final": 0,
+    "frontend_build_final": 0,
+    "backend19": 0,
+    "stickers17_print20_final": 0,
+    "kiz31": 0,
+    "negative_db_cancel": 1
+  },
+  "product_source_files": {
+    "backend/app/services/fbs_supply_service.py": "6e08c2e7beca80bfd3ab3c6b9aa5229439914e10273e07c7ba99a94116eef341",
+    "backend/app/celery_app.py": "a59708527b0605081e1eed22ede567f2a2795d3cee8e2f606f8d7a2626710dae",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": "6250921d8ddb875ed67a31b8b95cca967f67beafb1bf2b9a6c676b632689a122",
+    "frontend/src/screens/v2/FfFbsSupplyAssembly.tsx": "cf518dae348e73fadf5d91c982eaa659fb82f30629c85d6e3e874a75402f6845"
+  }
+}

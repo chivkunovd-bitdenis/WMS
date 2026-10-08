@@ -22,7 +22,7 @@ let options: Record<string, unknown[]>
 let printed: string[], closed: boolean
 const originalFetch = globalThis.fetch
 const printWindow = () => ({
-  opener: {}, get closed() { return closed },
+  opener: {}, get closed() { return closed }, close: () => { closed = true },
   document: { open: vi.fn(), close: vi.fn(), write: (html: string) => { if (html.startsWith('<!doctype')) printed.push(html) } },
 })
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -38,6 +38,7 @@ beforeEach(() => {
     if (method !== 'GET') throw new Error(`WMS-673 print must not mutate: ${method} ${path}`)
     const one = fixtures.find((f) => path.startsWith(`/operations/fbs-supplies/${f.supply.id}/`))
     if (one && path.endsWith('/workspace')) return json(one)
+    if (one && path.endsWith('/picking-context')) return json([])
     if (one && path.endsWith('/pick-options')) {
       if (waitPick) await waitPick
       return pickFailure ? json({ detail: 'synthetic failure' }, 503) : json(options[one.supply.id] ?? [])
@@ -76,7 +77,7 @@ function colorCells(document: Document, marketplaceLabel: 'WB' | 'Ozon' | 'ма�
   const index = headers.indexOf('Цвет')
   expect(index, 'missing business column Цвет').toBe(4)
   expect(headers).toEqual([
-    '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара',
+    '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб',
     `Заказы ${marketplaceLabel}`, 'Стикер', 'Взять', 'Подобрано', 'Маркировка',
   ])
   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.children[index].textContent)
@@ -151,7 +152,7 @@ describe('WMS-673 business RED contract through real buttons and API fixtures', 
   it('C6 empty print colspan agrees with all eleven headers', async () => {
     fixtures = [wms673Workspace('empty', [])]; await open('group'); await print(); const document = doc()
     expect([...document.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
-      '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара',
+      '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб',
       'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка',
     ])
     expect(document.querySelector('tbody td')?.getAttribute('colspan')).toBe('12')
@@ -177,11 +178,14 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
       locations: [{ storage_location_id: 'loc-b', location_code: 'A-02', available: 7,
         sources: [{ available: 7, is_loose: false, source_label: 'Короб B-02', container_path: [{ kind: 'box', id: 'b2', code: 'B-02', label: 'Короб B-02' }] }] }] }]
     await open(kind); const beforeClick = requests.length; expect(printed).toHaveLength(0); await print()
-    expect(requests.slice(beforeClick).map(({ path, method }) => [method, path])).toEqual([['GET', '/operations/fbs-supplies/supply-a/pick-options']])
+    expect(requests.slice(beforeClick).map(({ path, method }) => [method, path])).toEqual([
+      ['GET', '/operations/fbs-supplies/supply-a/pick-options'],
+      ['GET', '/operations/fbs-supplies/supply-a/picking-context'],
+    ])
     expect(requests.every((r) => r.method === 'GET' && r.auth === 'Bearer synthetic-wms673')).toBe(true)
     expect(JSON.stringify(fixtures)).toBe(before)
     expect(cellsWithoutColor(doc())).toEqual([
-      ['1', '—', 'Товар red WB 1673 · WB-CODE-red', 'ART-red', '46', 'Нет свободного остатка', '№673000', 'S673 0000', '1', '1 / 1', 'sgtin'],
+      ['1', '—', 'Товар red WB 1673 · WB-CODE-red', 'ART-red', '46', 'Нет текущего остатка', '№673000', 'S673 0000', '1', '1 / 1', 'sgtin'],
       ['2', '—', 'Товар blue WB 1673 · WB-CODE-blue', 'ART-blue', '46', 'A-02 · Короб B-02: 7', '№673001', 'S673 0001', '1', '0 / 1', 'sgtin'],
     ])
   })
@@ -191,6 +195,18 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
     expect(requests).toHaveLength(before); expect(printed).toHaveLength(0)
     expect(document.body.textContent).toContain('Браузер заблокировал окно печати')
     await print(); expect(printed).toHaveLength(1)
+  })
+  it.each(['single', 'group'] as const)('C9 %s: popup exists before delayed pick-options finish; twelve headers arrive after preparation', async (kind) => {
+    await open(kind)
+    let release = () => undefined as void
+    waitPick = new Promise<void>((resolve) => { release = resolve })
+    await print()
+    expect(window.open).toHaveBeenCalledTimes(1)
+    expect(printed).toHaveLength(0)
+    await act(async () => release())
+    expect(printed).toHaveLength(1)
+    expect(doc().querySelectorAll('thead th')).toHaveLength(12)
+    expect(colorCells(doc())).toEqual(['Красный', 'Синий'])
   })
   it.each(['single', 'group'] as const)('C9 %s: closed popup during request prevents document write; repeat works', async (kind) => {
     await open(kind)

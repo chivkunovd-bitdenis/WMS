@@ -36,10 +36,8 @@ celery_app.conf.beat_schedule = {
         "schedule": float(settings.trello_sync_interval_sec),
     },
     "withdrawal-poll": {"task": "wms.withdrawal_poll", "schedule": 2.0},
-    "wb-catalog-hourly": {
-        "task": "wms.wb_catalog_hourly_sync",
-        "schedule": crontab(minute=17),
-    },
+    # WMS-689: full WB catalog scans are operator-triggered only. Keep this
+    # absent from the default schedule so ordinary deployments retain the stop.
     "wb-mp-warehouses-daily": {
         "task": "wms.wb_mp_warehouses_daily_sync",
         "schedule": crontab(hour=3, minute=0),

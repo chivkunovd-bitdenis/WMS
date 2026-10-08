@@ -2143,3 +2143,21 @@ export async function transferFbsOrders(
     }),
   )
 }
+
+export type FbsPickingContext = {
+  product_id: string
+  inbound_supplies: string[]
+  locations: string[]
+  source_groups: Array<{ key: string; title: string; lines: string[] }>
+}
+
+export async function getFbsPickingContext(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  id: string,
+): Promise<FbsPickingContext[]> {
+  const res = await fetch(apiUrl(`/operations/fbs-supplies/${id}/picking-context`), {
+    headers: { ...ah(token) },
+  })
+  return jsonOrThrow<FbsPickingContext[]>(res)
+}

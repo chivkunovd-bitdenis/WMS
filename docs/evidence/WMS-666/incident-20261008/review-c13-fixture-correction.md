@@ -1,0 +1,21 @@
+# Независимое ревью C13 exact fixture admission — 08.10.2026
+
+**Технический вердикт: PASS.** Проверен implementation HEAD `383e0733a4fe2edfb669c76f1a694d4e2305dd43` после test-first commit `b3d15fea9c3d75ed8c4e5665e183436b480fe7d5`. В новой дельте не найдено воспроизводимых P0–P2 дефектов или широкого допуска для новых backend/guard/document изменений. Это отдельное техническое ревью C13 checker и fixture, не формальная приёмка WMS-666, process proof, полный CI или production.
+
+Ревью выполнено независимой сессией `gpt-6.1-sol`, effort `high`, что соответствует фактически прочитанному текущему AGENTS.md. Обновлённый `origin/etalon` — `a5df04f1560de0eaaf855199065936cb22a222b1`; его AGENTS.md идентичен checkout. Полностью прочитаны owner-cases.md и failure-cases.md (их содержимое не менялось с предыдущего аудита этой сессии), текущая постановка C13H1–C13H4 и заключение C13 в WMS-666, точный коррекционный ledger WMS-517, полный wms666ChangeScope.test.ts и recovery fixture. Skills не запускались, Opus не вызывался.
+
+Новая запись разрешает только полный commit `30de00e5f70c3fde354036702aa921ebaab7fd65` и шесть перечисленных путей. Независимое сравнение Python с реальным Git и `historical_fixture_source` WMS-517 подтвердило точный родитель `f2f9b9b835e7e11cabcce1c693e283072417bac2`, полное совпадение changed-path set, режимов `100644` и обоих blob каждого файла. Позитивный тест дополнительно закрепляет subject и девять paths anchor `3c3c1b69…`, ancestry к correction и равенство записи immutable test constant. Проверка режима учитывает весь ls-tree entry; executable, symlink, gitlink или другой путь не совпадут.
+
+Изменение helper в строках 187–198 распространяет требование полного покрытия changed paths на 30de в дополнение к прежним RC7 commits. Оно не ослабляет RC7 и не меняет сырой scope-validator. Историческое разрешение проверяет каждый before/after tree entry всего шестипутевого коммита и кеширует результат только внутри одного прохода истории. Пропущенный companion, соседний путь, другой mode/blob или другой commit не дают исключения. Допуск не распространяется на будущую правку того же guard или чужого документа.
+
+Проверка несохранённой работы остаётся вне исторического допуска: wms666TaskChangedPaths отдельно включает рабочий diff к HEAD, cached diff к HEAD и untracked paths. Поэтому staged правка не исчезает даже при восстановлении прежних байтов в рабочем файле. Новые WMS-666 commits backend/guard/чужого document path и dirty/staged/untracked изменения по-прежнему попадают в сырой запрет. Backend tests и документ WMS-666 сохраняют своё прежнее разрешение как часть исходной scope-политики; новая fixture не предоставляет общего разрешения менять ledger ожидания — этот отдельный контракт защищает WMS-517 checker/guard.
+
+На точном HEAD выполнен независимый полный прогон файла проектным Vitest 3.2.6: **1 файл, 18 тестов PASS, exit 0, 21.41 s**. Команда из `/Users/deniscivkunov/Projects/WMS/frontend`:
+
+```sh
+./node_modules/.bin/vitest run /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-production-regression-fix/frontend/src/screens/v2/wms666ChangeScope.test.ts --config /Users/deniscivkunov/Projects/WMS/frontend/vitest.config.ts --root /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-production-regression-fix/frontend --reporter=verbose
+```
+
+Runner сообщил `RUN v3.2.6` с root кандидатного frontend. Проверены все старые RC7, document-history и merge-resolution сценарии, actual candidate scope, новый 30de positive, mutations commit/path/blob/mode/full list, future paths и dirty/staged/untracked negatives. Выводы Git `fatal: bad object`/`invalid object name` относятся к намеренным missing-history тестам, которые прошли через ожидаемый отказ. Первый запуск через отсутствующий candidate node_modules завершился exit 127; повтор использовал существующие зависимости основного checkout без установки или ссылок.
+
+`git diff --check b3d15fea9 383e0733` проходит. Реализация 383e меняет только test helper и historical fixture JSON; runtime приложения не изменён. Реестр WMS-517, исходные protected tests и guard этим ревью не редактировались. Обязательная формальная приёмка, обновление защищённого отпечатка, process proof и полный CI остаются самостоятельными последующими этапами. Единственное изменение ревьюера — этот отчёт; push не выполняется.

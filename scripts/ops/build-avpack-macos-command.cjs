@@ -93,7 +93,7 @@ const result = launcher.launch({
     },
   },
   helperSource,
-  maxPolls: 120,
+  maxPolls: 2400,
   wait: () => $.NSThread.sleepForTimeInterval(0.25),
 });
 

@@ -386,7 +386,7 @@ describe('WMS-657 · перенос размера в листе подбора 
     const generalCellRule = cssRule(css, 'th, td')
     expect(`${sizeRule};${sizeCellRule}`).not.toMatch(/white-space\s*:\s*nowrap/)
     expect(`${sizeCellRule};${generalCellRule}`).toMatch(/(?:overflow-wrap\s*:\s*(?:anywhere|break-word)|word-break\s*:\s*(?:break-all|break-word)|white-space\s*:\s*(?:normal|pre-wrap|break-spaces))/)
-    expect(tableHeaders(html)).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
+    expect(tableHeaders(html)).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
   })
 
   it('C2: двенадцать колонок, контрольные данные и вход не меняются при повторной генерации', () => {
@@ -402,7 +402,7 @@ describe('WMS-657 · перенос размера в листе подбора 
     const second = buildFbsPickingListPrintHtml(input)
     expect(second).toBe(first)
     expect(JSON.stringify(input)).toBe(before)
-    expect(tableHeaders(first)).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
+    expect(tableHeaders(first)).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
     const bodyRow = onlyTableBodyRow(first)
     expect(tableCells(bodyRow)).toHaveLength(12)
     for (const value of ['PRODUCT-CONTROL', 'SIZE-CONTROL', 'COLOR-CONTROL', 'IDENTIFIER-A', 'IDENTIFIER-B', 'LOCATION-CONTROL', '3', '2', 'ORDER-CONTROL', 'S-1', 'MARKING-CONTROL']) {

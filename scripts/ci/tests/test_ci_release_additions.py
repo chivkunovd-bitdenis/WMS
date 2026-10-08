@@ -1,6 +1,8 @@
 """WMS-652/517 explicit follow-up workflow contracts before command changes."""
+import copy
 import json
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -8,6 +10,19 @@ ROOT = Path(__file__).resolve().parents[3]
 SOURCE_BINDING = ROOT / 'scripts/ci/tests/fixtures/wms652_source_binding_transition.json'
 WMS686_RECEIPT = ROOT / 'scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json'
 PRODUCT_SCOPE_PREFIX = 'python scripts/ci/product_scope.py --root . --trusted-ref '
+WMS666_PREVIOUS_PRODUCT_SOURCE = '8ba63eadd9a4ce65d92f31c18a7276e049548eac'
+WMS666_FINAL_PRODUCT_SOURCE = '739a63343fc38d2a3441d9b613b4652c7f0380e0'
+WMS666_PREVIOUS_ACCEPTANCE_RECORD = 'c2cbd700fbf7f03fb00465b27ee8214428f9386e'
+WMS652_PREVIOUS_ACCEPTED_SOURCES = (
+    'd61805978b3e7878d1056c99b4e6e0823edf49a5',
+    'ef154664e365644f4ba002c6e8affc5607fae725',
+    '98978e667bbc305cc08a9b541016fef06686388e',
+    '10c018092ab6f76928a54115eb824a64adc637be',
+    'b2a03ec118f9b4a184edfc4c2973ff92e044fd6c',
+    '7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b',
+    'd420f8db1e7d69212ad2ea4529a02044689363b0',
+    WMS666_PREVIOUS_PRODUCT_SOURCE,
+)
 
 
 class ReleaseCommandContracts(unittest.TestCase):
@@ -47,6 +62,93 @@ class ReleaseCommandContracts(unittest.TestCase):
         self.assertRegex(binding['independent_acceptance_record'], r'^[0-9a-f]{40}$')
         self.assertNotEqual(binding['independent_acceptance_record'], final)
         return final
+
+    def assert_c71_exact_final_product_binding(self, guard, binding):
+        self.assertEqual(binding['status'], 'independently-accepted-final-freeze')
+        accepted = binding['accepted_reviewed_sources']
+        self.assertEqual(accepted, [*WMS652_PREVIOUS_ACCEPTED_SOURCES,
+                                    WMS666_FINAL_PRODUCT_SOURCE],
+                         'the upgrade must append 739 without rewriting or extending the reviewed history')
+        self.assertEqual(binding['final_reviewed_source'], WMS666_FINAL_PRODUCT_SOURCE)
+        self.assertEqual(binding['frozen_source'], WMS666_FINAL_PRODUCT_SOURCE)
+        trusted_ref = self.trusted_reference(guard)
+        self.assertEqual(trusted_ref, WMS666_FINAL_PRODUCT_SOURCE)
+        self.assertNotIn(trusted_ref, binding['self_selecting_references'])
+        self.assertNotEqual(trusted_ref, binding['unreviewed_candidate_source'])
+        return trusted_ref
+
+    def assert_c71_saved_independent_acceptance_record(self, binding):
+        record = binding.get('independent_acceptance_record')
+        self.assertRegex(record or '', r'^[0-9a-f]{40}$')
+        self.assertNotEqual(record, WMS666_FINAL_PRODUCT_SOURCE)
+        self.assertNotEqual(record, WMS666_PREVIOUS_ACCEPTANCE_RECORD,
+                            'the 8ba acceptance record cannot authorize the 739 transition')
+        resolved = subprocess.run(
+            ['git', '-C', str(ROOT), 'cat-file', '-e', record + '^{commit}'],
+            capture_output=True, text=True, check=False)
+        self.assertEqual(resolved.returncode, 0,
+                         'the independent acceptance record must be a saved Git commit')
+
+    def test_c71_final_binding_uses_exact_739_and_a_new_saved_acceptance_record(self):
+        guard = self.guard_section((ROOT/'.github/workflows/ci.yml').read_text())
+        binding = self.source_binding()
+        self.assertEqual(self.assert_c71_exact_final_product_binding(guard, binding),
+                         WMS666_FINAL_PRODUCT_SOURCE)
+        self.assert_c71_saved_independent_acceptance_record(binding)
+
+    def test_c71_final_binding_rejects_mismatch_self_selecting_and_unreviewed_sources(self):
+        raw = (ROOT/'.github/workflows/ci.yml').read_text()
+        guard = self.guard_section(raw)
+        current = self.trusted_reference(guard)
+        final_guard = guard.replace(PRODUCT_SCOPE_PREFIX + current,
+                                    PRODUCT_SCOPE_PREFIX + WMS666_FINAL_PRODUCT_SOURCE)
+        accepted = copy.deepcopy(self.source_binding())
+        accepted['accepted_reviewed_sources'] = [*WMS652_PREVIOUS_ACCEPTED_SOURCES,
+                                                  WMS666_FINAL_PRODUCT_SOURCE]
+        accepted['final_reviewed_source'] = WMS666_FINAL_PRODUCT_SOURCE
+        accepted['frozen_source'] = WMS666_FINAL_PRODUCT_SOURCE
+        self.assertEqual(self.assert_c71_exact_final_product_binding(final_guard, accepted),
+                         WMS666_FINAL_PRODUCT_SOURCE)
+
+        previous_guard = final_guard.replace(PRODUCT_SCOPE_PREFIX + WMS666_FINAL_PRODUCT_SOURCE,
+                                             PRODUCT_SCOPE_PREFIX + WMS666_PREVIOUS_PRODUCT_SOURCE)
+        with self.subTest(rejected='previous-source-mismatch'):
+            with self.assertRaises(AssertionError):
+                self.assert_c71_exact_final_product_binding(previous_guard, accepted)
+
+        mismatched = copy.deepcopy(accepted)
+        mismatched['frozen_source'] = WMS666_PREVIOUS_PRODUCT_SOURCE
+        with self.subTest(rejected='final-frozen-mismatch'):
+            with self.assertRaises(AssertionError):
+                self.assert_c71_exact_final_product_binding(final_guard, mismatched)
+
+        neighboring = copy.deepcopy(accepted)
+        neighboring['accepted_reviewed_sources'].append('7' * 40)
+        with self.subTest(rejected='neighboring-unreviewed-source'):
+            with self.assertRaises(AssertionError):
+                self.assert_c71_exact_final_product_binding(final_guard, neighboring)
+
+        for rejected in ['HEAD', '${GITHUB_SHA}', accepted['unreviewed_candidate_source']]:
+            candidate_guard = final_guard.replace(
+                PRODUCT_SCOPE_PREFIX + WMS666_FINAL_PRODUCT_SOURCE,
+                PRODUCT_SCOPE_PREFIX + rejected)
+            candidate_binding = copy.deepcopy(accepted)
+            candidate_binding['final_reviewed_source'] = rejected
+            candidate_binding['frozen_source'] = rejected
+            with self.subTest(rejected=rejected):
+                with self.assertRaises(AssertionError):
+                    self.assert_c71_exact_final_product_binding(candidate_guard, candidate_binding)
+
+    def test_c71_final_binding_requires_a_new_saved_independent_acceptance_record(self):
+        binding = self.source_binding()
+        self.assert_c71_saved_independent_acceptance_record(binding)
+        for rejected in [None, WMS666_FINAL_PRODUCT_SOURCE,
+                         WMS666_PREVIOUS_ACCEPTANCE_RECORD, 'f' * 40]:
+            candidate = copy.deepcopy(binding)
+            candidate['independent_acceptance_record'] = rejected
+            with self.subTest(rejected=rejected):
+                with self.assertRaises(AssertionError):
+                    self.assert_c71_saved_independent_acceptance_record(candidate)
 
     def assert_wms686_raw_receipts(self, job, proof, receipt):
         self.assertEqual(receipt['test_count'], 11)

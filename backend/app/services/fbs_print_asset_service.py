@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import uuid
 from collections.abc import Awaitable, Callable
@@ -756,6 +757,109 @@ async def upsert_supply_qr_asset_from_bytes(
     return asset
 
 
+async def prefetch_created_supply_stickers(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    order_ids: list[uuid.UUID],
+    http_client: httpx.AsyncClient,
+    prefetch_timeout: asyncio.Timeout,
+) -> None:
+    """Fetch after the caller has committed creation, before any sticker writes.
+
+    Persist each original HTTP response through the normal asset path before
+    fetching the next chunk. Other print callers retain their own transaction.
+    """
+    deadline = prefetch_timeout.when()
+    supply = await _get_supply(session, tenant_id, supply_id)
+    requested_ids = set(order_ids)
+    snapshot: list[tuple[uuid.UUID, int]] = []
+    for order in supply.orders:
+        if (
+            order.id not in requested_ids
+            or order.sticker_code
+            or order.status == FBS_ORDER_STATUS_CANCELLED
+        ):
+            continue
+        asset = await _find_order_sticker_asset(session, tenant_id, order.id)
+        if asset is None or not _asset_file_ready(asset):
+            snapshot.append((order.id, int(order.wb_order_id)))
+    if not snapshot:
+        return
+    try:
+        token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
+    except FbsPrintAssetSupplyError as exc:
+        raise FbsPrintAssetError(exc.code, message="Нет доступа к маркетплейсу.") from exc
+    # Only read-only preparation follows the creation commit. Release that read
+    # transaction too: no DB transaction may span the optional WB round trip.
+    await session.commit()
+    for offset in range(0, len(snapshot), WB_STICKER_CHUNK_SIZE):
+        if deadline is not None and asyncio.get_running_loop().time() >= deadline:
+            raise TimeoutError
+        prefetch_timeout.reschedule(deadline)
+        chunk = snapshot[offset : offset + WB_STICKER_CHUNK_SIZE]
+        chunk_ids = [order_id for order_id, _ in chunk]
+        response: list[dict[str, Any]] | WildberriesClientError
+        try:
+            response = await fetch_marketplace_order_stickers(
+                http_client, api_token=token, order_ids=[wb_id for _, wb_id in chunk]
+            )
+        except WildberriesClientError as exc:
+            response = exc
+        # The WB response is now known. The network deadline must not cancel
+        # its local persistence, even if this final commit crosses that deadline.
+        # The next HTTP request will use the original remaining budget above.
+        prefetch_timeout.reschedule(None)
+
+        # Orders may have been cancelled or moved while HTTP was pending. Reload
+        # current membership before applying this chunk's original response.
+        current = {
+            order.id: order
+            for order in (
+                await session.execute(
+                    select(FbsOrder)
+                    .where(
+                        FbsOrder.tenant_id == tenant_id,
+                        FbsOrder.id.in_(chunk_ids),
+                    )
+                    .execution_options(populate_existing=True)
+                )
+            ).scalars()
+            if order.supply_id == supply_id and order.status != FBS_ORDER_STATUS_CANCELLED
+        }
+        eligible = [
+            order_id
+            for order_id in chunk_ids
+            if order_id in current and not current[order_id].sticker_code
+        ]
+        if eligible:
+            async def original_response(
+                _external_ids: list[str],
+                cached: list[dict[str, Any]] | WildberriesClientError = response,
+            ) -> list[dict[str, Any]]:
+                if isinstance(cached, WildberriesClientError):
+                    raise cached
+                return cached
+
+            await request_supply_print_batch(
+                session,
+                tenant_id,
+                supply_id,
+                kind=PRINT_ASSET_KIND_ORDER_STICKER,
+                order_ids=eligible,
+                retry_missing=True,
+                http_client=http_client,
+                _wb_sticker_fetch=original_response,
+            )
+            del original_response
+        # Preserve completed responses even if a later chunk times out. Close
+        # the read transaction too when every order was removed/cancelled, so
+        # the next WB request never holds a DB transaction or previous PNG batch.
+        await session.commit()
+        del response
+
+
 async def request_supply_print_batch(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -765,6 +869,7 @@ async def request_supply_print_batch(
     order_ids: list[uuid.UUID] | None,
     retry_missing: bool,
     http_client: httpx.AsyncClient,
+    _wb_sticker_fetch: OrderLabelFetch | None = None,
 ) -> PrintBatchResult:
     if kind not in FBS_PRINT_ASSET_KINDS:
         raise FbsPrintAssetError("invalid_kind", message="Неизвестный тип печатного актива.")
@@ -860,13 +965,15 @@ async def request_supply_print_batch(
 
     if to_fetch:
         token: str | None = None
-        if marketplace == "wb":
+        if marketplace == "wb" and _wb_sticker_fetch is None:
             try:
                 token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
             except FbsPrintAssetSupplyError as exc:
                 raise FbsPrintAssetError(exc.code, message="Нет доступа к маркетплейсу.") from exc
 
         async def wb_fetch(external_order_ids: list[str]) -> list[dict[str, Any]]:
+            if _wb_sticker_fetch is not None:
+                return await _wb_sticker_fetch(external_order_ids)
             if token is None:
                 raise FbsPrintAssetError(
                     "missing_marketplace_token",

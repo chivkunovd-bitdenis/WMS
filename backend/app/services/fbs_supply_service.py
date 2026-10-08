@@ -583,7 +583,65 @@ async def _existing_create_for_orders(
     return None
 
 
+CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS = 8.0
+
+
 async def create_supply_from_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    name: str,
+    order_ids: list[uuid.UUID],
+    planned_delivery_type: str,
+    planned_destination: dict[str, Any] | None,
+    idempotency_key: str,
+    http_client: httpx.AsyncClient,
+    ozon_provider: OzonMarketplaceProvider | None = None,
+    created_by_user_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
+    # WMS-666: creation must return usable stickers before any tab is opened.
+    workspace = await _create_supply_from_orders(
+        session,
+        tenant_id,
+        name=name,
+        order_ids=order_ids,
+        planned_delivery_type=planned_delivery_type,
+        planned_destination=planned_destination,
+        idempotency_key=idempotency_key,
+        http_client=http_client,
+        ozon_provider=ozon_provider,
+        created_by_user_id=created_by_user_id,
+    )
+    supply_data = workspace.get("supply")
+    if not isinstance(supply_data, dict) or supply_data.get("marketplace", "wb") != "wb":
+        return workspace
+    supply_id = uuid.UUID(str(supply_data["id"]))
+    # A sticker outage must not roll back an already confirmed WB supply.
+    await session.commit()
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+    if supply is not None:
+        try:
+            # Creation is committed. The optional prefetch owns its transaction
+            # boundary and performs WB HTTP before opening any sticker writes.
+            async with asyncio.timeout(
+                CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS
+            ) as prefetch_timeout:
+                await _request_order_stickers_for_picking(
+                    session, tenant_id, supply, http_client, creation_timeout=prefetch_timeout
+                )
+        except TimeoutError:
+            # Cancellation can interrupt a DB read before the WB HTTP call and
+            # invalidate the connection. Creation was committed above, so close
+            # this optional transaction fully before rebuilding the workspace.
+            await session.rollback()
+            logger.warning("fbs supply sticker prefetch timed out supply %s", supply_id)
+        refreshed = await get_supply_workspace(session, tenant_id, supply_id)
+        refreshed["partial_rejection"] = workspace.get("partial_rejection")
+        workspace = refreshed
+    return workspace
+
+
+async def _create_supply_from_orders(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
@@ -1272,17 +1330,33 @@ async def _request_order_stickers_for_picking(
     http_client: httpx.AsyncClient,
     *,
     orders: list[FbsOrder] | None = None,
+    creation_timeout: asyncio.Timeout | None = None,
 ) -> None:
     target_orders = supply.orders if orders is None else orders
-    missing = [order.id for order in target_orders if not order.sticker_code]
+    missing = [
+        order.id
+        for order in target_orders
+        if not order.sticker_code and order.status != FBS_ORDER_STATUS_CANCELLED
+    ]
     if not missing:
         return
     try:
         from app.services.fbs_print_asset_service import (
             FbsPrintAssetError,
+            prefetch_created_supply_stickers,
             request_supply_print_batch,
         )
 
+        if creation_timeout is not None:
+            await prefetch_created_supply_stickers(
+                session,
+                tenant_id,
+                supply.id,
+                order_ids=missing,
+                http_client=http_client,
+                prefetch_timeout=creation_timeout,
+            )
+            return
         await request_supply_print_batch(
             session,
             tenant_id,

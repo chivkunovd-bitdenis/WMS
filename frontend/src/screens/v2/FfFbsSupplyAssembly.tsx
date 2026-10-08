@@ -1,3 +1,4 @@
+import { ensureFbsStickers } from './fbsStickerPrefetch'
 import { FbsPackingScanBar } from './FbsPackingScanBar'
 import type { PackingScanController } from './fbsSequentialPacking'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -34,6 +35,7 @@ import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
   fetchFbsWorkspace,
   getFbsPickOptions,
+  getFbsPickingContext,
   type FbsPickOptionProduct,
   type FbsWorkspace,
 } from './fbsApi'
@@ -224,6 +226,19 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     escapeHandlerRef.current = handler
   }, [])
 
+  const stickerAttempts = useRef(new Set<string>())
+  useEffect(() => { stickerAttempts.current.clear() }, [open, stage])
+  useEffect(() => {
+    if (!open || stage !== 'picking') return
+    for (const snapshot of ordered) {
+      if (snapshot.supply.marketplace !== 'wb' || stickerAttempts.current.has(snapshot.supply.id)
+        || !snapshot.orders.some(order => !order.sticker.code && order.status !== 'cancelled')) continue
+      stickerAttempts.current.add(snapshot.supply.id)
+      void ensureFbsStickers(token, authHeaders, snapshot).then(onFrameWorkspace)
+        .catch(cause => setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.'))
+    }
+  }, [open, stage, ordered, token, authHeaders, onFrameWorkspace])
+
   // Д14: лист подбора по всей группе — тот же шаблон, что у карточки; строки —
   // суммарный план, в шапке — номера всех поставок группы.
   const printPickingList = async () => {
@@ -237,6 +252,14 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     setError(null)
     printWindow.document.write('<title>Лист подбора</title><p style="font:14px Arial,sans-serif">Готовим лист подбора…</p>')
     let rows = fbsAssemblyPickingRows(ordered)
+    const printable = await Promise.all(ordered.map(async snapshot => {
+      try { return await ensureFbsStickers(token, authHeaders, snapshot) }
+      catch (cause) {
+        setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+        return snapshot
+      }
+    }))
+    rows = fbsAssemblyPickingRows(printable)
     try {
       const optionLists = await Promise.all(ordered.map((one) => getFbsPickOptions(token, authHeaders, one.supply.id)))
       const byProduct = new Map<string, FbsPickOptionProduct[]>()
@@ -252,6 +275,31 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     } catch {
       rows = rows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
+    }
+    try {
+      const lists = await Promise.all(ordered.map((one) => getFbsPickingContext(token, authHeaders, one.supply.id)))
+      const context = new Map<string, { locations: string[]; inbound_supplies: string[]; source_groups: Array<{ key: string; title: string; lines: string[] }> }>()
+      for (const list of lists) for (const item of list) {
+        const previous = context.get(item.product_id)
+        const mergedGroups = new Map((previous?.source_groups ?? []).map((group) => [group.key, group]))
+        for (const group of item.source_groups) {
+          const earlier = mergedGroups.get(group.key)
+          mergedGroups.set(group.key, { ...group, lines: [...new Set([...(earlier?.lines ?? []), ...group.lines])] })
+        }
+        context.set(item.product_id, {
+          locations: [...new Set([...(previous?.locations ?? []), ...item.locations])],
+          inbound_supplies: [...new Set([...(previous?.inbound_supplies ?? []), ...item.inbound_supplies])],
+          source_groups: [...mergedGroups.values()],
+        })
+      }
+      rows = rows.map((row) => {
+        const item = context.get(row.key)
+        return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies, sourceGroups: item.source_groups } : row
+      })
+    } catch {
+      setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')
+      printWindow.close()
+      return
     }
     if (printWindow.closed) return
     const distinct = (values: string[]) => [...new Set(values)].join(', ')
@@ -279,7 +327,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   }
 
   const pickSupplies = useMemo(
-    () => ordered.map((one) => ({ id: one.supply.id, sellerId: one.supply.seller.id })),
+    () => ordered.map((one) => ({ id: one.supply.id, sellerId: one.supply.seller.id, marketplace: one.supply.marketplace })),
     [ordered],
   )
 

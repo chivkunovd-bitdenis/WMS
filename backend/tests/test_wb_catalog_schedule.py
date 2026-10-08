@@ -46,10 +46,17 @@ async def seller_with_token(
 def test_hourly_schedule_uses_existing_task_executor() -> None:
     from app.tasks.background_jobs import run_wb_catalog_hourly_sync_task
 
-    entry = celery_app.conf.beat_schedule["wb-catalog-hourly"]
-    assert entry["task"] == run_wb_catalog_hourly_sync_task.name
-    assert entry["schedule"].minute == {17}
-    assert entry["schedule"].hour == set(range(24))
+    # WMS-689 stops automatic full scans, while retaining the existing executor
+    # for an explicit operator request and all unrelated periodic operations.
+    assert "wb-catalog-hourly" not in celery_app.conf.beat_schedule
+    registered = celery_app.tasks[run_wb_catalog_hourly_sync_task.name]
+    assert registered.run == run_wb_catalog_hourly_sync_task.run
+    assert set(celery_app.conf.beat_schedule) == {
+        "developer-requests-sync", "withdrawal-poll", "wb-mp-warehouses-daily",
+        "marking-low-stock", "fbs-orders-autopoll", "fbs-orders-full-reconcile",
+        "fbs-order-statuses-autopoll", "fbs-marking-verdicts-autopoll",
+        "fbs-stock-reconcile", "billing-storage-daily",
+    }
 
 
 @pytest.mark.asyncio

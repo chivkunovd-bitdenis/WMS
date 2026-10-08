@@ -248,6 +248,8 @@ export function SellerKizWithdrawalScreen({
   const [details, setDetails] = useState<WithdrawalRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [pageError, setPageError] = useState('')
+  const [registryError, setRegistryError] = useState('')
+  const [productsError, setProductsError] = useState('')
   const [readiness, setReadiness] = useState<CryptoProReadiness | null>(null)
   const [readinessError, setReadinessError] = useState('')
   const [certificateOpen, setCertificateOpen] = useState(false)
@@ -296,57 +298,85 @@ export function SellerKizWithdrawalScreen({
   // every optimistic post-signature update bumps it, so any response that started
   // before the bump is discarded on write instead of overwriting fresher rows.
   const requestVersionRef = useRef(0)
-  const refreshRegistry = useCallback(async (signal?: AbortSignal) => {
+  const foregroundLoadingRef = useRef(false)
+  const refreshRegistry = useCallback(async (signal?: AbortSignal, reportFailure = true) => {
+    // Background polling cannot supersede an explicit load or hide its failure.
+    if (!reportFailure && foregroundLoadingRef.current) return
     requestVersionRef.current += 1
     const version = requestVersionRef.current
-    const response = await api.list(
-      {
-        dateFrom,
-        dateTo,
-        search: debouncedQuery,
-        productId,
-        onlyNotWithdrawn,
-        limit: rowsPerPage,
-        offset: page * rowsPerPage,
-      },
-      signal,
-    )
-    if (signal?.aborted || version !== requestVersionRef.current) return
-    setRows(response.rows)
-    setTotal(response.total)
-  }, [api, dateFrom, dateTo, debouncedQuery, onlyNotWithdrawn, page, productId, rowsPerPage])
+    const isCurrent = () => !signal?.aborted && version === requestVersionRef.current
+    if (reportFailure) {
+      foregroundLoadingRef.current = true
+      setLoading(true)
+      setRegistryError('')
+    }
+    try {
+      const response = await api.list(
+        {
+          dateFrom,
+          dateTo,
+          search: debouncedQuery,
+          productId,
+          onlyNotWithdrawn,
+          limit: rowsPerPage,
+          offset: page * rowsPerPage,
+        },
+        signal,
+      )
+      if (!isCurrent()) return
+      setRows(response.rows)
+      setTotal(response.total)
+      setRegistryError('')
+    } catch (error) {
+      if (!isCurrent() || (error instanceof DOMException && error.name === 'AbortError')) return
+      if (reportFailure) setRegistryError(withdrawalApiErrorMessage(error))
+    } finally {
+      if (isCurrent() && reportFailure) {
+        foregroundLoadingRef.current = false
+        setLoading(false)
+      }
+    }
+  }, [api, sellerId, dateFrom, dateTo, debouncedQuery, onlyNotWithdrawn, page, productId, rowsPerPage])
+
+  useEffect(() => {
+    // Clear the previous seller/session's visible data before its replacement loads.
+    setRows([])
+    setTotal(0)
+    setProducts([])
+    setSelected(new Map())
+    setAllSelected(false)
+    setPageError('')
+    setProductsError('')
+    selectAllVersionRef.current += 1
+  }, [api, sellerId])
 
   useEffect(() => {
     const controller = new AbortController()
-    setLoading(true)
-    setPageError('')
     void refreshRegistry(controller.signal)
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        setPageError(withdrawalApiErrorMessage(error))
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
     return () => {
       controller.abort()
-      // Filter changed: also invalidate any response that has already left the
-      // network but not yet resolved without a signal (manual button, poll tick).
+      // Also invalidate signal-less refreshes already in progress for this filter.
       requestVersionRef.current += 1
     }
   }, [refreshRegistry])
 
   useEffect(() => {
     const controller = new AbortController()
+    setProductsError('')
     void api.listProducts(debouncedProductSearch, controller.signal)
-      .then(setProducts)
+      .then((value) => {
+        if (!controller.signal.aborted) {
+          setProducts(value)
+          setProductsError('')
+        }
+      })
       .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          setPageError(withdrawalApiErrorMessage(error))
+        if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) {
+          setProductsError(withdrawalApiErrorMessage(error))
         }
       })
     return () => controller.abort()
-  }, [api, debouncedProductSearch])
+  }, [api, sellerId, debouncedProductSearch])
 
   useEffect(() => {
     let cancelled = false
@@ -377,7 +407,7 @@ export function SellerKizWithdrawalScreen({
     }
     safeStorageRemove(keys.operation)
     safeStorageRemove(keys.request)
-    void refreshRegistry().catch((error: unknown) => setPageError(withdrawalApiErrorMessage(error)))
+    void refreshRegistry()
   }, [keys.operation, keys.request, refreshRegistry])
 
   // Registry is the source of truth for row status. While any KIZ is transferring
@@ -394,7 +424,7 @@ export function SellerKizWithdrawalScreen({
       timerId = window.setTimeout(async () => {
         if (controller.signal.aborted) return
         try {
-          await refreshRegistry(controller.signal)
+          await refreshRegistry(controller.signal, false)
         } catch (error) {
           if (error instanceof DOMException && error.name === 'AbortError') return
           // Do not surface transient poll failures as a page-level error.
@@ -620,7 +650,7 @@ export function SellerKizWithdrawalScreen({
         setCertificateOpen(false)
         setSelectedCertificateThumbprint('')
         safeStorageRemove(keys.request)
-        void refreshRegistry().catch((error: unknown) => setPageError(withdrawalApiErrorMessage(error)))
+        void refreshRegistry()
         return
       }
       if (operation.auth_error) {
@@ -686,9 +716,7 @@ export function SellerKizWithdrawalScreen({
         setRows((current) =>
           applyOperationItemsToRows(current, localOperation.items, localOperation.operation_id),
         )
-        void refreshRegistry().catch((error: unknown) =>
-          setPageError(withdrawalApiErrorMessage(error)),
-        )
+        void refreshRegistry()
       }
     } catch (error) {
       setCertificateError(withdrawalApiErrorMessage(error))
@@ -713,13 +741,17 @@ export function SellerKizWithdrawalScreen({
           variant="outlined"
           startIcon={loading ? <CircularProgress size={16} /> : <RefreshOutlined />}
           disabled={loading}
-          onClick={() => void refreshRegistry().catch((error: unknown) => setPageError(withdrawalApiErrorMessage(error)))}
+          onClick={() => void refreshRegistry()}
         >
           Обновить
         </Button>
       </Stack>
 
-      {pageError ? <Alert severity="error" onClose={() => setPageError('')}>{pageError}</Alert> : null}
+      {pageError || registryError || productsError ? (
+        <Alert severity="error" onClose={() => { setPageError(''); setRegistryError(''); setProductsError('') }}>
+          {[pageError, registryError, productsError].filter(Boolean).join(' · ')}
+        </Alert>
+      ) : null}
       {readinessError ? <Alert severity="warning">{readinessError}</Alert> : null}
 
       <Paper variant="outlined" sx={{ p: 2 }}>
@@ -783,7 +815,7 @@ export function SellerKizWithdrawalScreen({
 
       <Paper variant="outlined" sx={{ minWidth: 0, overflow: 'hidden' }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={0.5} sx={{ px: 1.5, py: 1, justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-          <Typography variant="body2" sx={{ fontWeight: 700 }}>Найдено: {total}</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 700 }}>{loading ? 'Загрузка отчёта…' : `Найдено: ${total}`}</Typography>
         </Stack>
         <Divider />
         <TableContainer sx={{ maxWidth: '100%', maxHeight: { xs: '62vh', md: 560 }, overflow: 'auto' }}>

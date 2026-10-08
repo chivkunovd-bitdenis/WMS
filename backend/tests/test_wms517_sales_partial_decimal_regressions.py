@@ -21,6 +21,7 @@ from test_wms517_sales_contract import (
     sales_http,  # noqa: F401
 )
 from test_wms517_sales_regressions import redis_boundary  # noqa: F401
+from test_wms517_sales_report_singleflight_contract import redis_ownership_io  # noqa: F401
 
 from app.api.deps import get_current_user
 from app.api.marking_withdrawals import withdrawal_products
@@ -214,28 +215,37 @@ async def test_old_missing_history_does_not_block_selected_current_sale(
     db_session, sales_http, redis_boundary, phase
 ):
     scope, current_mark, current_order, _ = await fixture_order(db_session, sales_http)
-    old_mark, _ = await add_same_scope_order(
+    old_mark, old_order = await add_same_scope_order(
         db_session,
         current_order,
         rid="outside-guaranteed-history",
         serial="oldhistory",
         age_days=100,
     )
-    # The complete accessible HTTP report proves current, but says nothing about old.
+    old_order.created_at_wb = datetime(2024, 1, 28, 12, tzinfo=UTC)
+    await db_session.commit()
+    # Before the archive's 2024-01-29 start, absence stays unknown. That unknown
+    # order cannot block a separately selected, exact current sale.
     sales_http.rows = [sale(current_order.wb_rid, identifier="S-current", price="7.89")]
-    with pytest.raises(WithdrawalError, match=r"history.*coverage|coverage.*incomplete"):
+    with pytest.raises(WithdrawalError, match="wb_sales_history_before_2024_incomplete"):
         await registry(db_session, scope)
     with pytest.raises(HTTPException) as products_error:
         await withdrawal_products(db_session, scope, search=None, limit=100)
     assert products_error.value.status_code == 409
-    assert products_error.value.detail == "wb_sales_history_coverage_90_days_incomplete"
-    with pytest.raises(WithdrawalError, match=r"history.*coverage|coverage.*incomplete"):
+    assert products_error.value.detail == "wb_sales_history_before_2024_incomplete"
+    with pytest.raises(WithdrawalError, match="wb_sales_history_before_2024_incomplete"):
         await create_operation(
             db_session,
             scope,
             row_ids=[old_mark.id],
             client_request_id=uuid.uuid4(),
         )
+    assert len(sales_http.finance_requests) == 2
+    assert all(
+        request.method == "POST"
+        and request.url.path == "/api/finance/v1/sales-reports/detailed"
+        for request in sales_http.finance_requests
+    )
     operation = await create_operation(
         db_session,
         scope,

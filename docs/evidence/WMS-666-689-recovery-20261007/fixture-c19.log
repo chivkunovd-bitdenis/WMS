@@ -1,0 +1,85 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms-666-689-recovery/frontend
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx > C19 already prepared: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged
+React does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+Received `false` for a non-boolean attribute `indicator`.
+
+If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+
+If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+React does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+React does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx > C19 already prepared: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx > C19 already prepared: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx > C19 already prepared: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx > C19 already prepared: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx > C19 already prepared: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx (1 test) 4185ms
+   ✓ C19 already prepared: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged  4184ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  23:47:52
+   Duration  119.72s (transform 862ms, setup 0ms, collect 114.43s, tests 4.18s, environment 599ms, prepare 86ms)
+

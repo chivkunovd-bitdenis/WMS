@@ -1,0 +1,151 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms-666-689-recovery/frontend
+
+ ✓ src/utils/wms680PrintContract.test.ts (20 tests) 21ms
+stderr | src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx > supply: opening a draft displays fetched WB sticker without scan or print
+React does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+Received `false` for a non-boolean attribute `indicator`.
+
+If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+
+If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+React does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+React does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx > requests only missing orders and leaves existing sticker unchanged
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx > does not request WB labels for Ozon
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx > surfaces provider failure and does not loop or pretend the sticker exists
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx > restores CZ quantity and manual print from optional WB metadata without a scan
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx > does not restart an existing packaging task
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx > supply: picking fetches missing stickers without starting packaging
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx > retries missing stickers on tab transition after failure, without looping
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+
+stderr | src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx > switching from picking to packing does not request an already received sticker
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "picking".
+You can provide one of the following values: composition, 1, 2, 3.
+
+ ✓ src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx (17 tests) 4577ms
+   ✓ supply: opening a draft displays fetched WB sticker without scan or print  480ms
+   ✓ assembly: opening a draft displays fetched WB sticker without scan or print  339ms
+   ✓ restores CZ quantity and manual print from optional WB metadata without a scan  366ms
+   ✓ does not restart an existing packaging task  541ms
+   ✓ retries missing stickers on tab transition after failure, without looping  395ms
+   ✓ assembly: printing directly from composition gets stickers into the HTML  315ms
+
+ Test Files  2 passed (2)
+      Tests  37 passed (37)
+   Start at  23:33:20
+   Duration  96.61s (transform 555ms, setup 0ms, collect 91.45s, tests 4.60s, environment 509ms, prepare 138ms)
+
