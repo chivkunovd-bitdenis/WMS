@@ -27,6 +27,7 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
+from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.services import marketplace_unload_collect_service as collect_svc
 from app.services import marketplace_unload_service as mu_svc
@@ -52,8 +53,11 @@ MAX_BATCH_BOX_COUNT = 50
 
 
 class MarketplaceUnloadBoxError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, detail: dict[str, object] | None = None) -> None:
         self.code = code
+        # Структурированный отказ (WMS-686): код плюс сообщение и перечень товаров.
+        # Пусто у всех прежних отказов — они по-прежнему отдаются одной строкой кода.
+        self.detail = detail
         super().__init__(code)
 
 
@@ -278,7 +282,10 @@ async def create_open_box(
     stmt = (
         select(MarketplaceUnloadBox)
         .where(MarketplaceUnloadBox.id == box.id)
-        .options(selectinload(MarketplaceUnloadBox.warehouse_box))
+        .options(
+            selectinload(MarketplaceUnloadBox.warehouse_box),
+            selectinload(MarketplaceUnloadBox.inbound_intake_box),
+        )
     )
     res = await session.execute(stmt)
     return res.scalar_one()
@@ -329,7 +336,10 @@ async def create_boxes_batch(
     stmt = (
         select(MarketplaceUnloadBox)
         .where(MarketplaceUnloadBox.id.in_(created_ids))
-        .options(selectinload(MarketplaceUnloadBox.warehouse_box))
+        .options(
+            selectinload(MarketplaceUnloadBox.warehouse_box),
+            selectinload(MarketplaceUnloadBox.inbound_intake_box),
+        )
         .order_by(MarketplaceUnloadBox.created_at.asc())
     )
     res = await session.execute(stmt)
@@ -395,16 +405,83 @@ async def _source_location(
     )
 
 
-async def _collect_current_box_contents(
+async def _assert_whole_box_fits_plan(
+    session: AsyncSession,
+    req: MarketplaceUnloadRequest,
+    balances: list[InventoryBalance],
+) -> None:
+    """Перенос короба целиком: по каждому товару «в коробе» не больше «плана минус подобрано».
+
+    Проверка идёт до любого изменения: при нарушении нельзя ни взять часть
+    короба, ни оставить полупереложенное. Товар вне плана — тот же отказ с
+    «осталось 0». Короб с лишним нужно открыть и подобрать поштучно.
+    """
+    in_box: dict[uuid.UUID, int] = {}
+    for balance in balances:
+        in_box[balance.product_id] = in_box.get(balance.product_id, 0) + int(balance.quantity)
+    plan = {line.product_id: int(line.quantity) for line in req.lines}
+    picked = await collect_svc.picked_qty_by_product(session, req.id)
+    over = {
+        product_id: (quantity, max(0, plan.get(product_id, 0) - picked.get(product_id, 0)))
+        for product_id, quantity in in_box.items()
+        if quantity > max(0, plan.get(product_id, 0) - picked.get(product_id, 0))
+    }
+    if not over:
+        return
+    names = {
+        product_id: name
+        for product_id, name in (
+            await session.execute(
+                select(Product.id, Product.name).where(Product.id.in_(list(over)))
+            )
+        ).all()
+    }
+    items = sorted(
+        (
+            {
+                "product_id": str(product_id),
+                "product_name": names.get(product_id) or str(product_id),
+                "in_box": quantity,
+                "remaining": remaining,
+            }
+            for product_id, (quantity, remaining) in over.items()
+        ),
+        key=lambda item: (str(item["product_name"]), str(item["product_id"])),
+    )
+    listed = "; ".join(
+        f"{item['product_name']} — в коробе {item['in_box']}, осталось {item['remaining']}"
+        for item in items
+    )
+    raise MarketplaceUnloadBoxError(
+        "plan_limit_exceeded",
+        {
+            "code": "plan_limit_exceeded",
+            "message": (
+                "Количество товаров в коробе больше, чем осталось подобрать: "
+                f"{listed}. Откройте короб и подберите поштучно."
+            ),
+            "items": items,
+        },
+    )
+
+
+@dataclass(frozen=True)
+class _WholeBoxSource:
+    """Короб-источник целиком: что за тара, откуда её брать и что в ней лежит сейчас."""
+
+    kind: ContainerKind
+    container_id: uuid.UUID
+    location_id: uuid.UUID
+    balances: list[InventoryBalance]
+
+
+async def _resolve_whole_box_source(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     req: MarketplaceUnloadRequest,
-    box_id: uuid.UUID,
     barcode: str,
-    *,
-    allow_over_plan: bool,
-    actor_user_id: uuid.UUID | None,
-) -> tuple[int, int]:
+) -> _WholeBoxSource:
+    """Только чтение: определить короб по ШК и его текущий состав. Ничего не меняет."""
     try:
         source = await resolve_container_scan(session, tenant_id, req.warehouse_id, barcode)
         location_id = await _source_location(
@@ -428,25 +505,62 @@ async def _collect_current_box_contents(
         raise MarketplaceUnloadBoxError("box_empty")
     if any(balance.storage_location_id != location_id for balance in balances):
         raise MarketplaceUnloadBoxError("invalid_container_reference")
+    return _WholeBoxSource(
+        kind=source.kind,
+        container_id=source.id,
+        location_id=location_id,
+        balances=balances,
+    )
+
+
+async def _collect_whole_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    req: MarketplaceUnloadRequest,
+    box_id: uuid.UUID,
+    whole: _WholeBoxSource,
+    *,
+    allow_over_plan: bool,
+    actor_user_id: uuid.UUID | None,
+) -> tuple[int, int]:
     total = 0
-    for balance in balances:
+    for balance in whole.balances:
         quantity = int(balance.quantity)
         try:
             await collect_svc.collect_into_box(
                 session, tenant_id, req.id,
                 box_id=box_id,
-                storage_location_id=location_id,
+                storage_location_id=whole.location_id,
                 product_id=balance.product_id,
                 quantity=quantity,
                 allow_over_plan=allow_over_plan,
                 actor_user_id=actor_user_id,
-                container_kind=source.kind,
-                container_id=source.id,
+                container_kind=whole.kind,
+                container_id=whole.container_id,
             )
         except MarketplaceUnloadPickError as exc:
             raise _map_collect_err(exc) from None
         total += quantity
-    return len(balances), total
+    return len(whole.balances), total
+
+
+async def _collect_current_box_contents(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    req: MarketplaceUnloadRequest,
+    box_id: uuid.UUID,
+    barcode: str,
+    *,
+    allow_over_plan: bool,
+    actor_user_id: uuid.UUID | None,
+) -> tuple[int, int]:
+    whole = await _resolve_whole_box_source(session, tenant_id, req, barcode)
+    if not allow_over_plan:
+        await _assert_whole_box_fits_plan(session, req, whole.balances)
+    return await _collect_whole_box(
+        session, tenant_id, req, box_id, whole,
+        allow_over_plan=allow_over_plan, actor_user_id=actor_user_id,
+    )
 
 
 async def collect_ready_box_into_open_box(
@@ -880,10 +994,24 @@ async def attach_existing_box_by_barcode(
     allow_over_plan: bool = False,
     actor_user_id: uuid.UUID | None,
 ) -> MarketplaceUnloadBox:
-    """Привязать существующий короб (WHB или приёмочный) и развернуть состав в подбор."""
+    """Привязать существующий короб (WHB или приёмочный) и развернуть состав в подбор.
+
+    Короб переносится целиком или не переносится вовсе: пока не доказано, что весь
+    состав помещается в оставшийся план, в сессии нет ни одного изменения.
+    """
     preset = box_preset.strip()
     if preset not in ALLOWED_BOX_PRESETS:
         raise MarketplaceUnloadBoxError("invalid_preset")
+    # Замок документа первым: проверка плана и перенос видят одно и то же состояние,
+    # а два одновременных переноса не расходуют один и тот же остаток плана.
+    await session.execute(
+        select(MarketplaceUnloadRequest.id)
+        .where(
+            MarketplaceUnloadRequest.id == request_id,
+            MarketplaceUnloadRequest.tenant_id == tenant_id,
+        )
+        .with_for_update()
+    )
     req = await _request_for_picking(session, tenant_id, request_id)
 
     wh_box, inb_box = await wh_box_svc.resolve_barcode(session, tenant_id, barcode)
@@ -893,28 +1021,38 @@ async def attach_existing_box_by_barcode(
     if wh_box is not None and wh_box.warehouse_id != req.warehouse_id:
         raise MarketplaceUnloadBoxError("warehouse_mismatch")
 
+    # Тот же короб второй раз в той же отгрузке не привязывается — ни складской, ни
+    # приёмочный. Проверка до переноса: понятный отказ вместо «короб пуст».
+    same_box = (
+        MarketplaceUnloadBox.warehouse_box_id == wh_box.id
+        if wh_box is not None
+        else MarketplaceUnloadBox.inbound_intake_box_id == (inb_box.id if inb_box else None)
+    )
+    already = await session.scalar(
+        select(MarketplaceUnloadBox.id)
+        .where(MarketplaceUnloadBox.request_id == request_id, same_box)
+        .limit(1)
+    )
+    if already is not None:
+        raise MarketplaceUnloadBoxError("box_already_attached")
+
+    whole = await _resolve_whole_box_source(session, tenant_id, req, barcode)
+    if not allow_over_plan:
+        await _assert_whole_box_fits_plan(session, req, whole.balances)
+
     mp_box = MarketplaceUnloadBox(
         request_id=request_id,
         box_preset=preset,
         warehouse_box_id=wh_box.id if wh_box is not None else None,
+        inbound_intake_box_id=inb_box.id if inb_box is not None else None,
     )
     session.add(mp_box)
     await session.flush()
 
-    await _collect_current_box_contents(
-        session, tenant_id, req, mp_box.id, barcode,
+    await _collect_whole_box(
+        session, tenant_id, req, mp_box.id, whole,
         allow_over_plan=allow_over_plan, actor_user_id=actor_user_id,
     )
-
-    if wh_box is not None and inb_box is None:
-        dup_stmt = select(MarketplaceUnloadBox).where(
-            MarketplaceUnloadBox.warehouse_box_id == wh_box.id,
-            MarketplaceUnloadBox.request_id == request_id,
-            MarketplaceUnloadBox.id != mp_box.id,
-        )
-        res = await session.execute(dup_stmt)
-        if res.scalar_one_or_none() is not None:
-            raise MarketplaceUnloadBoxError("box_already_attached")
 
     mp_box.closed_at = datetime.now(tz=UTC)
     await mu_svc.record_box_mutation(
@@ -926,8 +1064,70 @@ async def attach_existing_box_by_barcode(
     )
     mu_svc.enter_collecting_if_needed(req)
     await _finish_box_collection(session, tenant_id, req.id)
-    await session.refresh(mp_box, attribute_names=["warehouse_box", "lines"])
+    await session.refresh(
+        mp_box, attribute_names=["warehouse_box", "inbound_intake_box", "lines"]
+    )
     return mp_box
+
+
+async def extract_all_from_box(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+) -> MarketplaceUnloadBox:
+    """«Извлечь всё»: очистить состав короба, сам короб остаётся пустым.
+
+    Меняется только состав этого короба. Подобранное (аллокации), КИЗ, остаток и
+    расположение не трогаются: штуки остаются подобранными и их можно снова
+    разложить. Повторный вызов на пустом коробе ничего не меняет.
+    """
+    # Замок документа первым: статус читается под замком, а «Завершить» и
+    # одновременное наполнение короба не идут параллельно с очисткой.
+    await session.execute(
+        select(MarketplaceUnloadRequest.id)
+        .where(
+            MarketplaceUnloadRequest.id == request_id,
+            MarketplaceUnloadRequest.tenant_id == tenant_id,
+        )
+        .with_for_update()
+    )
+    await _request_for_picking(session, tenant_id, request_id)
+    box = await session.get(MarketplaceUnloadBox, box_id, populate_existing=True)
+    if box is None or box.request_id != request_id:
+        raise MarketplaceUnloadBoxError("box_not_found")
+
+    lines = list(
+        (
+            await session.scalars(
+                select(MarketplaceUnloadBoxLine).where(MarketplaceUnloadBoxLine.box_id == box_id)
+            )
+        ).all()
+    )
+    if lines:
+        before = mu_svc.box_audit_fields(box)
+        before["lines"] = [
+            {"product_id": str(line.product_id), "quantity": int(line.quantity)}
+            for line in sorted(lines, key=lambda x: str(x.product_id))
+        ]
+        after = mu_svc.box_audit_fields(box)
+        after["lines"] = []
+        for line in lines:
+            await session.delete(line)
+        await mu_svc.record_box_mutation(session, tenant_id, box, before=before, after=after)
+        await session.commit()
+
+    res = await session.execute(
+        select(MarketplaceUnloadBox)
+        .where(MarketplaceUnloadBox.id == box_id)
+        .options(
+            selectinload(MarketplaceUnloadBox.lines).selectinload(MarketplaceUnloadBoxLine.product),
+            selectinload(MarketplaceUnloadBox.warehouse_box),
+            selectinload(MarketplaceUnloadBox.inbound_intake_box),
+        )
+        .execution_options(populate_existing=True)
+    )
+    return res.scalars().unique().one()
 
 
 async def close_box(
@@ -951,7 +1151,7 @@ async def close_box(
         after=mu_svc.box_audit_fields(box),
     )
     await session.commit()
-    await session.refresh(box, attribute_names=["warehouse_box"])
+    await session.refresh(box, attribute_names=["warehouse_box", "inbound_intake_box"])
     return box
 
 
@@ -967,6 +1167,7 @@ async def list_boxes_with_lines(
         .options(
             selectinload(MarketplaceUnloadBox.lines).selectinload(MarketplaceUnloadBoxLine.product),
             selectinload(MarketplaceUnloadBox.warehouse_box),
+            selectinload(MarketplaceUnloadBox.inbound_intake_box),
         )
         .order_by(MarketplaceUnloadBox.created_at.asc())
     )
@@ -1071,6 +1272,7 @@ async def copy_box(
         .options(
             selectinload(MarketplaceUnloadBox.lines),
             selectinload(MarketplaceUnloadBox.warehouse_box),
+            selectinload(MarketplaceUnloadBox.inbound_intake_box),
         )
         .execution_options(populate_existing=True)
     )
@@ -1172,6 +1374,7 @@ async def copy_box(
         .options(
             selectinload(MarketplaceUnloadBox.lines).selectinload(MarketplaceUnloadBoxLine.product),
             selectinload(MarketplaceUnloadBox.warehouse_box),
+            selectinload(MarketplaceUnloadBox.inbound_intake_box),
         )
     )
     res = await session.execute(stmt)

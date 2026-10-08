@@ -2585,7 +2585,8 @@ async def test_marketplace_unload_attach_allow_over_plan(
         json={"barcode": whb, "box_preset": "60_40_40", "allow_over_plan": False},
     )
     assert blocked.status_code == 422, blocked.text
-    assert blocked.json()["detail"] == "plan_limit_exceeded"
+    # WMS-686: отказ переноса короба целиком — объект с кодом, сообщением и перечнем.
+    assert blocked.json()["detail"]["code"] == "plan_limit_exceeded"
     assert await _balances_by_container(loc_id, pid) == before
 
     ok = await async_client.post(
