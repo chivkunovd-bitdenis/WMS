@@ -97,27 +97,11 @@ class AgentDispatcher:
                             native = self.store.kv_get(f"reply_case:{outbox['key']}", {})
                             linked_topic = native.get("topic_id")
         elif visible and linked_topic is None:
-            linked_topic = self.agent.case_journal.find_message_topic(m["id"])
-            if linked_topic is None and m["reply_to"]:
-                replied_input = self.store.row(
-                    "SELECT id FROM messages WHERE chat_id=? AND msg_id=?",
-                    (int(m["chat_id"]), str(m["reply_to"])),
-                )
-                if replied_input is not None:
-                    linked_topic = self.agent.case_journal.find_message_topic(
-                        int(replied_input["id"]))
-            if linked_topic is None and m["reply_to"]:
-                linked_topic = self.store.kv_get(
-                    f"case_reply_topic:{m['chat_id']}:{m['reply_to']}")
-                if linked_topic is None:
-                    outbox = self.store.outbox_by_tg(int(m["chat_id"]), str(m["reply_to"]))
-                    if outbox is not None:
-                        metadata = self.store.kv_get(
-                            f"agent_realtime_outbox:{outbox['key']}", {})
-                        linked_topic = metadata.get("topic_id")
-                        if linked_topic is None:
-                            native = self.store.kv_get(f"reply_case:{outbox['key']}", {})
-                            linked_topic = native.get("topic_id")
+            # An explicit reply-to association is stronger than a provisional
+            # card created while a voice message is still being transcribed.
+            linked_topic = self.find_reply_topic(m)
+            if linked_topic is None:
+                linked_topic = self.agent.case_journal.find_message_topic(m["id"])
         if visible and linked_topic and m["role"] != "owner":
             linked_card = self.store.kv_get(f"case_card:{linked_topic}", {})
             try:
@@ -329,6 +313,39 @@ class AgentDispatcher:
                 event_key=f"transcript:{message['id']}:{message['revision']}",
                 statuses={"queued": True}, event_timestamp=self.agent.clock(),
             )
+
+    def find_reply_topic(self, message: Any) -> str | None:
+        """Resolve an explicit reply-to target to its existing case, if any."""
+        reply_to = str(message["reply_to"] or "")
+        if not reply_to:
+            return None
+        chat_id = int(message["chat_id"])
+        linked_topic: str | None = None
+        replied_input = self.store.row(
+            "SELECT id FROM messages WHERE chat_id=? AND msg_id=?",
+            (chat_id, reply_to),
+        )
+        if replied_input is not None:
+            linked_topic = self.agent.case_journal.find_message_topic(int(replied_input["id"]))
+        if linked_topic is None:
+            linked_topic = self.store.kv_get(f"case_reply_topic:{chat_id}:{reply_to}")
+        if linked_topic is None:
+            outbox = self.store.outbox_by_tg(chat_id, reply_to)
+            if outbox is not None:
+                metadata = self.store.kv_get(f"agent_realtime_outbox:{outbox['key']}", {})
+                linked_topic = metadata.get("topic_id")
+                if linked_topic is None:
+                    native = self.store.kv_get(f"reply_case:{outbox['key']}", {})
+                    linked_topic = native.get("topic_id")
+        if linked_topic is None:
+            return None
+        card = self.store.kv_get(f"case_card:{linked_topic}", {})
+        try:
+            if int(card.get("chat_id", 0)) != chat_id:
+                return None
+        except (TypeError, ValueError):
+            return None
+        return str(linked_topic)
 
     def emit_internal(self, topic_id: str, kind: str, payload: dict[str, Any]) -> str:
         with self.store.transaction():

@@ -191,10 +191,14 @@ class AgentTools:
         method = getattr(self, f"_tool_{name}")
         if name == "queue_process_reply":
             return method(args, event, owner,
-                          defer_until_analysis=bool(context.get("defer_reply_until_analysis")))
+                          defer_until_analysis=bool(context.get("defer_reply_until_analysis")),
+                          stage_event_id=str(context.get("realtime_event_id") or ""),
+                          stage_generation=int(context.get("realtime_generation", 0)))
         if name == "queue_reply":
             return method(args, event, owner,
-                          defer_until_analysis=bool(context.get("defer_reply_until_analysis")))
+                          defer_until_analysis=bool(context.get("defer_reply_until_analysis")),
+                          stage_event_id=str(context.get("realtime_event_id") or ""),
+                          stage_generation=int(context.get("realtime_generation", 0)))
         return method(args, event, owner)
 
     def _event(self, context: dict[str, Any]) -> Any:
@@ -490,7 +494,9 @@ class AgentTools:
                 "source_message_id": event["id"]}
 
     def _tool_queue_reply(self, args: dict[str, Any], event: Any, owner: bool,
-                          *, defer_until_analysis: bool = False) -> dict[str, Any]:
+                          *, defer_until_analysis: bool = False,
+                          stage_event_id: str = "", stage_generation: int = 0
+                          ) -> dict[str, Any]:
         tid = int(args.get("ticket_id") or 0)
         chat_id = int(args["chat_id"])
         if (chat_id != self.p.cfg.telegram.owner_chat_id
@@ -512,11 +518,15 @@ class AgentTools:
         slot = self._slot(args.get("slot"))
         if defer_until_analysis:
             key = f"agent_owner_reply_v1:{event['id']}:{chat_id}:{tid}:{slot}"
-            stage_key = f"agent_reply_stage:{event['id']}:owner:{slot}"
+            source_revision = int(event["revision"])
+            stage_event_id = stage_event_id or f"in:{event['id']}:{source_revision}"
+            stage_key = (f"agent_reply_stage:{event['id']}:{source_revision}:"
+                         f"{stage_event_id}:{stage_generation}:owner:{slot}")
             self.store.kv_set(stage_key, {
                 "key": key, "chat_id": chat_id, "text": body,
                 "reply_to": args.get("reply_to"), "ticket_id": tid or None,
-                "purpose": "owner_authorized",
+                "purpose": "owner_authorized", "event_id": stage_event_id,
+                "revision": source_revision, "generation": stage_generation,
             })
             return {"queued": True, "deferred": True, "key": key, "status": "deferred",
                     "owner_message_id": event["id"], "version": version}
@@ -540,7 +550,9 @@ class AgentTools:
         }
 
     def _tool_queue_process_reply(self, args: dict[str, Any], event: Any, owner: bool,
-                                  *, defer_until_analysis: bool = False) -> dict[str, Any]:
+                                  *, defer_until_analysis: bool = False,
+                                  stage_event_id: str = "", stage_generation: int = 0
+                                  ) -> dict[str, Any]:
         tid = int(args["ticket_id"])
         ticket = self._ticket(tid, event, owner)
         kind = str(args.get("kind") or "")
@@ -555,11 +567,15 @@ class AgentTools:
         version = agent.get("version", "discussion")
         if defer_until_analysis:
             key = f"agent_process_v1:{tid}:{kind}:{version}"
-            stage_key = f"agent_reply_stage:{event['id']}:{kind}:{version}"
+            source_revision = int(event["revision"])
+            stage_event_id = stage_event_id or f"in:{event['id']}:{source_revision}"
+            stage_key = (f"agent_reply_stage:{event['id']}:{source_revision}:"
+                         f"{stage_event_id}:{stage_generation}:{kind}:{version}")
             self.store.kv_set(stage_key, {
                 "key": key, "chat_id": int(ticket["chat_id"]),
                 "text": body, "reply_to": args.get("reply_to"),
-                "ticket_id": tid, "purpose": kind,
+                "ticket_id": tid, "purpose": kind, "event_id": stage_event_id,
+                "revision": source_revision, "generation": stage_generation,
             })
             return {"queued": True, "deferred": True, "key": key, "status": "deferred"}
         key = f"agent_process:{tid}:{kind}:{version}"

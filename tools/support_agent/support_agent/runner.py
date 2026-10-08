@@ -230,9 +230,11 @@ class Agent:
                                                    revision=revision)
                                 self.store.kv_set(poll_marker_key, poll_marker)
                             if message["status"] == "transcribing":
+                                linked_topic = self.pipe.agent.dispatcher.find_reply_topic(message)
                                 self.pipe.agent.dispatcher._update_case_card(
                                     message, f"in:{message_id}:{revision}",
-                                    f"topic-{message_id}", False, waiting_for_transcript=True,
+                                    linked_topic or f"topic-{message_id}", False,
+                                    waiting_for_transcript=True,
                                 )
                             elif (message["status"] == "new"
                                   or event.get("realtime_version") == 1):
@@ -294,9 +296,14 @@ class Agent:
                         if not marker:
                             continue
                         if message["status"] == "transcribing":
+                            linked_topic = dispatcher.find_reply_topic(message)
+                            if linked_topic is None:
+                                linked_topic = dispatcher.agent.case_journal.find_message_topic(
+                                    message["id"])
                             dispatcher._update_case_card(
                                 message, f"in:{message['id']}:{revision}",
-                                f"topic-{message['id']}", False, waiting_for_transcript=True,
+                                linked_topic or f"topic-{message['id']}", False,
+                                waiting_for_transcript=True,
                             )
                         else:
                             dispatcher.accept(message)

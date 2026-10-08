@@ -178,6 +178,11 @@ class AgentCoordinator:
         if self.cfg.agent.visible_moderator and source is not None:
             context["defer_reply_until_analysis"] = True
         starting_generation = int(topic.get("generation", 0))
+        if self.cfg.agent.visible_moderator and source is not None:
+            # Deferred replies belong to this exact routed event and turn. Keep
+            # these internal identifiers outside model-controlled arguments.
+            context["realtime_event_id"] = str(event.get("id") or "")
+            context["realtime_generation"] = starting_generation
         model, provider = WMS_MODEL, WMS_PROVIDER
         prompt = json.dumps({
             "event": event, "source_message": dict(source) if source is not None else None,
@@ -364,6 +369,13 @@ class AgentCoordinator:
         promoted = False
         for row in staged:
             item = json.loads(row["value"])
+            if (str(item.get("event_id") or "") != str(event.get("id") or "")
+                    or int(item.get("revision", -1)) != int(source["revision"])
+                    or int(item.get("generation", -1)) != int(topic.get("generation", -2))):
+                # A later edit, follow-up, or cancelled turn superseded this
+                # staged reply. It is never eligible for a future promotion.
+                self.store.execute("DELETE FROM kv WHERE key=?", (row["key"],))
+                continue
             created = self.store.queue_message(
                 key=str(item["key"]), chat_id=int(item["chat_id"]),
                 text=str(item["text"]), reply_to=item.get("reply_to"),
