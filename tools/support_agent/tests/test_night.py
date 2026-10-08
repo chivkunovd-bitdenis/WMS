@@ -909,7 +909,7 @@ def test_contract_rename_chains_and_added_test_paths_run_without_count_floor(
         (root / path).write_text("def test_rule(): assert True\n")
     task = runner._state(tid)["tasks"]["WMS-700"]
     task.update(tests=[old_path, existing], contract_commit="a" * 40,
-                contract_hashes={old_path: "old-digest"})
+                contract_hashes={old_path: "old-digest", existing: "existing-digest"})
     original_git = runner.hotfix.git
 
     def renamed_git(*args: str, cwd: str | Path | None = None) -> str:
@@ -933,7 +933,8 @@ def test_contract_rename_chains_and_added_test_paths_run_without_count_floor(
 
     def fixture_git(*args: str, cwd: str | Path | None = None) -> str:
         if args[:2] == ("diff", "--no-renames"):
-            return f"A\t{fixture_path}\nM\t{existing}\n"
+            return (f"A\t{fixture_path}\nA\t{new_path}\nA\t{added_final}\n"
+                    f"M\t{existing}\n")
         return original_git(*args, cwd=cwd)
 
     runner.hotfix.git = fixture_git  # type: ignore[method-assign]
@@ -946,6 +947,7 @@ def test_contract_rename_chains_and_added_test_paths_run_without_count_floor(
     (root / peer).write_text("def test_peer(): assert True\n")
     (root / new_path).unlink()
     task["tests"] = [new_path, peer]
+    task["contract_hashes"] = {new_path: "new", peer: "peer"}
 
     def consolidated_git(*args: str, cwd: str | Path | None = None) -> str:
         if args[:2] == ("diff", "--no-renames"):
@@ -959,7 +961,7 @@ def test_contract_rename_chains_and_added_test_paths_run_without_count_floor(
 
     def deleted_git(*args: str, cwd: str | Path | None = None) -> str:
         if args[:2] == ("diff", "--no-renames"):
-            return f"D\t{peer}\nA\tbackend/tests/conftest.py\n"
+            return f"D\t{new_path}\nD\t{peer}\nA\tbackend/tests/conftest.py\n"
         return original_git(*args, cwd=cwd)
 
     runner.hotfix.git = deleted_git  # type: ignore[method-assign]
@@ -997,6 +999,39 @@ def test_task_checks_preserves_fixture_change_for_review(env: Any, tmp_path: Pat
 
     saved = runner._state(tid)["tasks"]["WMS-700"]
     assert saved["step"] == "review" and saved["contract_changed"] is True
+
+
+def test_contract_baseline_test_returns_to_run_after_restore(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    removed = "backend/tests/test_removed.py"
+    retained = "backend/tests/test_retained.py"
+    for path in (removed, retained):
+        (root / path).write_text("def test_rule(): assert True\n")
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    task.update(tests=[removed, retained], contract_commit="a" * 40,
+                contract_hashes={removed: "old", retained: "retained"})
+    (root / removed).unlink()
+    original_git = runner.hotfix.git
+
+    def deleted_git(*args: str, cwd: str | Path | None = None) -> str:
+        if args[:2] == ("diff", "--no-renames"):
+            return f"D\t{removed}\n"
+        return original_git(*args, cwd=cwd)
+
+    runner.hotfix.git = deleted_git  # type: ignore[method-assign]
+    runner._refresh_contract_tests(task)
+    assert task["tests"] == [retained]
+
+    (root / removed).write_text("def test_rule(): assert True\n")
+
+    def restored_git(*args: str, cwd: str | Path | None = None) -> str:
+        if args[:2] == ("diff", "--no-renames"):
+            return ""
+        return original_git(*args, cwd=cwd)
+
+    runner.hotfix.git = restored_git  # type: ignore[method-assign]
+    runner._refresh_contract_tests(task)
+    assert set(task["tests"]) == {removed, retained}
 
 
 def test_independent_review_is_prompted_to_check_changed_test_behavior(env: Any, tmp_path: Path) -> None:

@@ -942,7 +942,10 @@ class NightRunner:
             "diff", "--no-renames", "--name-status", contract_commit, "HEAD", "--",
             cwd=task["path"],
         )
-        original = list(dict.fromkeys(str(path) for path in task.get("tests") or []))
+        baseline_paths = task.get("contract_hashes") or {}
+        original = list(dict.fromkeys(
+            str(path) for path in (baseline_paths if baseline_paths else task.get("tests") or [])
+        ))
         deleted: set[str] = set()
         added_or_changed: set[str] = set()
         changed_test_paths = False
