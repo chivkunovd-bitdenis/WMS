@@ -14,12 +14,12 @@ import asyncio
 import gzip
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
 import uuid
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 PROJECT_ID = "c28e681d-4535-4c96-ac97-c7b600a7f8e4"
@@ -34,7 +34,8 @@ EXCLUDED = {
     "alembic_version", "operation_fact_cutover", "marketplace_accounts",
     "seller_marking_credentials", "seller_wildberries_credentials",
     "print_connections", "background_jobs", "notifications", "assistant_messages",
-    "developer_requests", "ff_staff_permissions", "seller_staff_permissions",
+    "developer_requests", "document_event", "document_events", "ff_staff_permissions",
+    "seller_staff_permissions",
     "seller_shop_delegations", "wb_order_price_snapshots", "kiz_reprints",
     "billing_invoice_v2_idempotency",
 }
@@ -254,17 +255,23 @@ def transform(snapshot: dict[str, Any], passwords: dict[str, str], hash_password
                             mapping.setdefault(old, str(uuid.uuid5(target, old)))
                             source_users.setdefault(old, {"id": old, "role": "fulfillment_staff"})
 
-        def rewrite(value: Any) -> Any:
+        def rewrite(
+            value: Any,
+            _mapping: dict[str, str] = mapping,
+            _target: uuid.UUID = target,
+        ) -> Any:
             if isinstance(value, str) and UUID_TEXT.fullmatch(value):
-                return mapping.get(value, value)
+                return _mapping.get(value, str(uuid.uuid5(_target, value)))
             if isinstance(value, str):
                 return EMAIL_TEXT.sub("test-account@example.test", value)
             if isinstance(value, list):
-                return [rewrite(v) for v in value]
+                return [rewrite(v, _mapping, _target) for v in value]
             if isinstance(value, dict):
-                return {k: rewrite(v) for k, v in value.items()
+                return {k: rewrite(v, _mapping, _target) for k, v in value.items()
                         if not SECRET_NAME.search(k)
-                        and k.lower() not in {"cis_code", "kiz", "email", "user_email", "actor_email"}}
+                        and k.lower() not in {
+                            "cis_code", "kiz", "email", "user_email", "actor_email"
+                        }}
             return value
 
         for table, rows in data.items():
@@ -338,7 +345,9 @@ def preflight(schema: dict[str, Any], rows: dict[str, list[dict[str, Any]]]
                 if all(v is not None for v in values):
                     present = True
                     if values not in parent_keys[key]:
-                        raise CloneError(f"Missing FK closure: {table}.{fk['name']} -> {fk['parent']}")
+                        raise CloneError(
+                            f"Missing FK closure: {table}.{fk['name']} -> {fk['parent']}"
+                        )
             if not present:
                 continue
             nullable = [c for c in fk["columns"] if columns[c]["nullable"]]
@@ -373,10 +382,11 @@ def preflight(schema: dict[str, Any], rows: dict[str, list[dict[str, Any]]]
 async def apply_snapshot(envelope: dict[str, Any]) -> None:
     # Run with backend on PYTHONPATH inside the existing staging WMS container.
     from sqlalchemy import text
+
     from app.core.settings import settings
     from app.db.session import engine
-    from app.services.passwords import hash_password
     from app.services.marking_label_artifact_service import build_datamatrix_label_pdf
+    from app.services.passwords import hash_password
 
     if settings.app_env != "staging" or os.environ.get("RAILWAY_PROJECT_ID") != PROJECT_ID:
         raise CloneError("Apply requires the known Railway staging project and APP_ENV=staging")
@@ -408,7 +418,9 @@ async def apply_snapshot(envelope: dict[str, Any]) -> None:
                 rows["marking_pool_products"].append({
                     "id": str(uuid.uuid4()), "tenant_id": tenant["id"],
                     "pool_id": pool_id, "product_id": product["id"],})
-            for _ in range(10):
+            # Enough local codes for repeated daily FBS test batches without
+            # making a scan reuse one serial after its first application.
+            for _ in range(100):
                 serial = "TEST" + uuid.uuid4().hex[:9]
                 cis = "010000000000000021" + serial + "\x1d91TEST\x1d92NOTREAL"
                 pdf = build_datamatrix_label_pdf(cis)
@@ -422,7 +434,6 @@ async def apply_snapshot(envelope: dict[str, Any]) -> None:
     order, deferred = preflight(snapshot["schema"], rows)
     async with engine.begin() as conn:
         await conn.execute(text("SELECT pg_advisory_xact_lock(70520261008)"))
-        await conn.execute(text("SELECT set_config('wms.document_event_writer', 'application', true)"))
         target_schema = (await conn.execute(text(SCHEMA_SQL))).scalar_one()
         source_schema = snapshot["schema"]
         if target_schema["revision"] != source_schema["revision"]:
