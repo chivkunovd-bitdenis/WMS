@@ -548,6 +548,14 @@ def main() -> int:
         return 0
     except CloneError as exc:
         print(str(exc), file=sys.stderr)
+    except ModuleNotFoundError as exc:
+        # The missing module name is useful for deployment diagnostics and
+        # cannot contain database or row values.
+        print(
+            f"Clone failed (module unavailable: {exc.name or 'unknown'}); "
+            "transaction rolled back if uncommitted",
+            file=sys.stderr,
+        )
     except Exception as exc:
         # Suppress all DB/driver exceptions: SQLAlchemy can include bound data.
         print(f"Clone failed ({type(exc).__name__}); transaction rolled back if uncommitted",
