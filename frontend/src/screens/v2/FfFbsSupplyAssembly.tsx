@@ -1,3 +1,4 @@
+import { ensureFbsStickers } from './fbsStickerPrefetch'
 import { FbsPackingScanBar } from './FbsPackingScanBar'
 import type { PackingScanController } from './fbsSequentialPacking'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -225,6 +226,22 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     escapeHandlerRef.current = handler
   }, [])
 
+  const stickerAttempts = useRef(new Set<string>())
+  useEffect(() => { stickerAttempts.current.clear() }, [open, stage])
+  useEffect(() => {
+    if (!open || stage !== 'picking') return
+    for (const snapshot of ordered) {
+      if (snapshot.supply.marketplace !== 'wb' || stickerAttempts.current.has(snapshot.supply.id)
+        || !snapshot.orders.some(order => !order.sticker.code && order.status !== 'cancelled')) continue
+      stickerAttempts.current.add(snapshot.supply.id)
+      void ensureFbsStickers(token, authHeaders, snapshot).then(result => {
+        onFrameWorkspace(result.workspace)
+        if (result.errorMessage) setError(result.errorMessage)
+      })
+        .catch(cause => setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.'))
+    }
+  }, [open, stage, ordered, token, authHeaders, onFrameWorkspace])
+
   // Д14: лист подбора по всей группе — тот же шаблон, что у карточки; строки —
   // суммарный план, в шапке — номера всех поставок группы.
   const printPickingList = async () => {
@@ -237,7 +254,18 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     printWindow.opener = null
     setError(null)
     printWindow.document.write('<title>Лист подбора</title><p style="font:14px Arial,sans-serif">Готовим лист подбора…</p>')
-    let rows = fbsAssemblyPickingRows(ordered)
+    const printable = await Promise.all(ordered.map(async snapshot => {
+      try {
+        const result = await ensureFbsStickers(token, authHeaders, snapshot)
+        if (result.errorMessage) setError(result.errorMessage)
+        return result.workspace
+      }
+      catch (cause) {
+        setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+        return snapshot
+      }
+    }))
+    let rows = fbsAssemblyPickingRows(printable)
     try {
       const optionLists = await Promise.all(ordered.map((one) => getFbsPickOptions(token, authHeaders, one.supply.id)))
       const byProduct = new Map<string, FbsPickOptionProduct[]>()
