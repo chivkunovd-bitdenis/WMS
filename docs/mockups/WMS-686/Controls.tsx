@@ -28,7 +28,7 @@ import { boxedQty, cells, isKizScan, pickSourcesOf, productByBarcode, productByI
 
 // ─── состояние экрана макета (что подсвечено, что раскрыто, журнал демо-печати) ───
 
-type PrintJob = { key: string; kind: 'barcode' | 'kiz'; title: string; productId: string; cis?: string; copy: number; labelSizeId: LabelSizeId }
+type PrintJob = { key: string; kind: 'barcode' | 'kiz' | 'box'; title: string; productId?: string; barcode?: string; cis?: string; copy: number; labelSizeId: LabelSizeId }
 type Ui = {
   newKiz: string | null
   packLastProduct: string | null
@@ -71,6 +71,12 @@ async function api(path: string, init: RequestInit = {}): Promise<{ ok: boolean;
 const changed = () => window.dispatchEvent(new Event('wms686-change'))
 const errorText = (data: Record<string, unknown>) => typeof data.detail === 'string' ? data.detail : 'Не удалось выполнить действие'
 const newKey = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `k${Date.now()}${Math.random()}`)
+
+const escapePrintText = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+function internalBoxLabelSection(barcode: string) {
+  const barcodeDataUrl = renderBarcodeDataUrl(barcode, { variant: 'internalBox' })
+  return `<section class="label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1mm"><strong style="font-size:12pt">Короб отгрузки</strong><img src="${escapePrintText(barcodeDataUrl)}" alt="ШК короба" style="width:100%;height:auto;max-height:24mm;object-fit:contain" /><span style="font-family:monospace;font-size:9pt">${escapePrintText(barcode)}</span></section>`
+}
 
 const kizRowSx = (isNew: boolean) => isNew ? {
   backgroundColor: (theme: { palette: { success: { main: string } } }) => alpha(theme.palette.success.main, 0.16),
@@ -249,14 +255,20 @@ async function sendToWmsPrint(jobs: PrintJob[]): Promise<void> {
       activePrintKeys.add(job.key)
       try {
         const size = resolveLabelSize(job.labelSizeId)
-        const product = productById(job.productId)
-        if (!product) throw new Error('Не найден товар для этикетки.')
-        const imageDataUrl = job.kind === 'barcode'
-          ? await renderLabelSectionPng(buildProductLabelSectionHtml({
+        let imageDataUrl: string
+        if (job.kind === 'box') {
+          if (!job.barcode) throw new Error('Не найден ШК короба для этикетки.')
+          imageDataUrl = await renderLabelSectionPng(internalBoxLabelSection(job.barcode), size)
+        } else if (job.kind === 'barcode') {
+          const product = job.productId ? productById(job.productId) : null
+          if (!product) throw new Error('Не найден товар для этикетки.')
+          imageDataUrl = await renderLabelSectionPng(buildProductLabelSectionHtml({
             product_name: product.name, sku_code: product.sku, wb_vendor_code: product.vendorCode,
             wb_size: product.size, wb_color: product.color, seller_name: 'Демо селлер', barcode: product.barcode,
           }, renderBarcodeDataUrl(product.barcode, { variant: 'thermal58' }), undefined, size), size)
-          : await renderCzLabelPng({ cis: job.cis ?? '' }, size)
+        } else {
+          imageDataUrl = await renderCzLabelPng({ cis: job.cis ?? '' }, size)
+        }
         await dispatchPreparedQrInKiosk({
           imageDataUrl, idempotencyKey: job.key, widthMm: size.widthMm, heightMm: size.heightMm,
         })
@@ -423,11 +435,18 @@ export function FboPackScanBar({ shipmentId, onBoxBarcodeScan }: { shipmentId: s
   }, [])
   const closeCurrent = async () => {
     if (!current) return
-    await api(`${base(shipmentId)}/boxes/${current.id}/close`, { method: 'POST' })
+    const result = await api(`${base(shipmentId)}/boxes/${current.id}/close`, { method: 'POST' })
+    if (!result.ok) { setError(errorText(result.data)); playScanError(); return }
     const next = getFbo().boxes.filter((box) => box.shipmentId === shipmentId && !box.closed).sort((a, b) => a.createdAt - b.createdAt)[0]
     setUi((currentUi) => ({ currentBox: { ...currentUi.currentBox, [shipmentId]: next?.id ?? '' } }))
     setNotice(next ? `Короб ${current.code} закрыт. Текущий — ${next.code}.` : `Короб ${current.code} закрыт. Открытых коробов нет — создайте короб.`)
     changed()
+    if (prefsRef.current.printQr) {
+      await sendToWmsPrint([{
+        key: ['fbo', shipmentId, current.id, 'box-label'].join(':'),
+        kind: 'box', title: `ШК короба ${current.code}`, barcode: current.code, copy: 1, labelSizeId,
+      }]).catch(() => { /* повтор печати доступен с тем же ключом */ })
+    }
   }
   const undo = async () => {
     const last = ui.packUndo.at(-1)
@@ -442,7 +461,7 @@ export function FboPackScanBar({ shipmentId, onBoxBarcodeScan }: { shipmentId: s
     const pending = ui.printError?.jobs ?? []
     const prefsNow = prefsRef.current
     // WMS-643: снятая после сбоя галка больше не печатает.
-    const allowed = pending.filter((job) => (job.kind === 'barcode' ? prefsNow.printQr : (prefsNow.printChz || prefsNow.reprintChz)))
+    const allowed = pending.filter((job) => (job.kind !== 'kiz' ? prefsNow.printQr : (prefsNow.printChz || prefsNow.reprintChz)))
     setUi({ printError: null })
     void sendToWmsPrint(allowed).catch(() => { /* ошибка остаётся в панели */ })
   }
@@ -465,14 +484,14 @@ export function FboPackScanBar({ shipmentId, onBoxBarcodeScan }: { shipmentId: s
         {!current ? <Button size="small" variant="outlined" onClick={() => void createBox()}>Создать короб</Button> : null}
       </Stack>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-        {intake.listening ? 'Сканер активен: ШК товара — +1 в текущий короб; следующий ЧЗ — к этой единице (необязательно); ШК короба — сменить текущий. Отмеченные этикетки печатаются сразу через WMS Print.' : 'Сканер на паузе: открыто окно.'}
+        {intake.listening ? 'Сканер активен: ШК товара — +1 в текущий короб; следующий ЧЗ — к этой единице (необязательно); ШК короба — сменить текущий. «Печатать ШК» печатает товар при скане и короб при закрытии через WMS Print.' : 'Сканер на паузе: открыто окно.'}
       </Typography>
       {notice ? <Alert severity="success" sx={{ mt: 1 }} data-testid="fbo-pack-scan-notice">{notice}</Alert> : null}
       {error ? <Alert severity="error" sx={{ mt: 1 }} data-testid="fbo-pack-scan-error">{error}</Alert> : null}
       {state.printError ? (
         <Alert severity="error" sx={{ mt: 1 }} data-testid="fbo-pack-print-error"
           action={<Button color="inherit" size="small" onClick={retryPrint}>Повторить печать</Button>}>
-          {state.printError.text} Единица остаётся упакованной. Esc — снять задание.
+          {state.printError.text} {state.printError.jobs.some((job) => job.kind === 'box') ? 'Короб остаётся закрытым.' : 'Единица остаётся упакованной.'} Esc — снять задание.
         </Alert>
       ) : null}
       {state.printNotice ? (
@@ -488,8 +507,13 @@ export function FboPackScanBar({ shipmentId, onBoxBarcodeScan }: { shipmentId: s
 function LabelPreviewButton({ job, size }: { job: PrintJob; size: LabelSize }) {
   const [html, setHtml] = useState<string | null>(null)
   const open = async () => {
-    const product = productById(job.productId)!
+    if (job.kind === 'box') {
+      setHtml(`<!doctype html><html><head><meta charset="utf-8"><style>${buildTapePageCss(size)}</style></head><body>${internalBoxLabelSection(job.barcode ?? '')}</body></html>`)
+      return
+    }
     if (job.kind === 'barcode') {
+      const product = job.productId ? productById(job.productId) : null
+      if (!product) return
       setHtml(buildProductThermalLabelDocument({
         product_name: product.name, sku_code: product.sku, wb_vendor_code: product.vendorCode, wb_size: product.size,
         wb_color: product.color, seller_name: 'Демо селлер', barcode: product.barcode,
@@ -506,7 +530,7 @@ function LabelPreviewButton({ job, size }: { job: PrintJob; size: LabelSize }) {
         <DialogTitle>Предпросмотр этикетки · макет</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Предпросмотр уже отправленной этикетки. Печать запускается сразу после скана, если отмечена соответствующая галка.
+            Предпросмотр уже отправленной этикетки. Печать запускается при скане товара или закрытии короба, если отмечена соответствующая галка.
           </Typography>
           {html ? <iframe title="Этикетка" srcDoc={html} style={{ width: `${size.widthMm * 4}px`, height: `${size.heightMm * 4 + 20}px`, border: '1px solid #ccc', background: '#fff' }} /> : null}
         </DialogContent>
