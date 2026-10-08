@@ -81,6 +81,21 @@
         "previous_review_model": "gpt-6-astra",
         "previous_evidence": "docs/evidence/WMS-666/wms666-task-scope-astra-review-20261006.md"
       }
+    },
+    {
+      "contract_commit": "28a7999fefd886de41f6ffda5b05b69cd49aa496",
+      "correction_commit": "ec44815fe063611723c2794781ff8b1a9288bf52",
+      "files": [
+        "frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx",
+        "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts"
+      ],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "report": "docs/evidence/WMS-666/independent-review-1008/renderer-contract-correction-ec44815.md",
+        "report_commit": "0c3d1666fe7c10652da98cb44b14d31041fd7ba3"
+      }
     }
   ]
 }

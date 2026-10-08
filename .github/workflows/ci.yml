@@ -379,7 +379,7 @@ jobs:
           test -n "$WMS_PRINT_CHROMIUM"
           test -x "$WMS_PRINT_CHROMIUM"
           command -v pdfimages
-          npx vitest run --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/frontend-all.json"
+          npx vitest run --maxWorkers=2 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/frontend-all.json"
       - name: WMS-672 frozen cross-realm C5a decode contract
         run: npx vitest run --config tests-e2e/wms672-dom.config.ts -t 'C5a 33 labels' --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/wms672-c5a.json"
       - name: Build
@@ -437,7 +437,7 @@ jobs:
       - name: Install infrastructure test dependencies
         run: python -m pip install pytest pytest-xdist
       - name: Verify whole candidate against the accepted product reference
-        run: python scripts/ci/product_scope.py --root . --trusted-ref b2a03ec118f9b4a184edfc4c2973ff92e044fd6c
+        run: python scripts/ci/product_scope.py --root . --trusted-ref ffb524e2950cfb250993ad4db3b0f394ca55f735
       - name: Infrastructure tests (not business guards)
         run: |
           python -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v
@@ -457,6 +457,7 @@ jobs:
           scripts/ci/tests/test_reviewed_process_upgrade.py
           scripts/ci/tests/test_process_deploy_gate.py
           scripts/ci/tests/test_server_process_gate.py
+          scripts/ci/tests/test_retain_web_assets.py
           --junitxml="$RUNNER_TEMP/ci-shards.xml"
       - name: WMS-687 strict reviewed correction compatibility
         run: python -m pytest -q scripts/ci/test_check_task_documents.py --junitxml="$RUNNER_TEMP/docgate-687.xml"

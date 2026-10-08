@@ -1,15 +1,16 @@
 {
   "version": 1,
   "status": "independently-accepted-final-freeze",
-  "current_reviewed_source": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+  "current_reviewed_source": "ffb524e2950cfb250993ad4db3b0f394ca55f735",
   "accepted_reviewed_sources": [
     "d61805978b3e7878d1056c99b4e6e0823edf49a5",
     "ef154664e365644f4ba002c6e8affc5607fae725",
     "98978e667bbc305cc08a9b541016fef06686388e",
     "10c018092ab6f76928a54115eb824a64adc637be",
-    "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c"
+    "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
+    "ffb524e2950cfb250993ad4db3b0f394ca55f735"
   ],
-  "final_reviewed_source": "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
+  "final_reviewed_source": "ffb524e2950cfb250993ad4db3b0f394ca55f735",
   "self_selecting_references": [
     "HEAD",
     "${GITHUB_SHA}"
@@ -31,9 +32,10 @@
     "unreviewed_candidate_source": "f71b99c0f19bdbf48e8e0b95b62aefe8709307fc"
   },
   "final_binding_rule": "After independent acceptance and freeze, replace final_reviewed_source and the exact workflow pin together; never select HEAD, the current CI SHA, or an unreviewed candidate.",
-  "frozen_source": "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
-  "independent_acceptance_record": "0d8b163dca564e5e80623223f42dc713e47e849f",
-  "independent_review_verdict": "FAIL",
+  "frozen_source": "ffb524e2950cfb250993ad4db3b0f394ca55f735",
+  "independent_acceptance_record": "a9fe9577ba25f5d18f6e96be59574fcf6b6fbbaa",
+  "independent_review_verdict": "ACCEPT",
+  "final_independent_review_report": "docs/evidence/WMS-666/independent-review-1008/final-product-acceptance-ffb524e.md",
   "original_independent_review_commit": "033a5bcedaa6c680947d0c9ff411ec328d9574d1",
   "owner_authorized_targeted_correction": {
     "path": "docs/evidence/WMS-652/batch-receipt-path-correction-20261007/README.md",
