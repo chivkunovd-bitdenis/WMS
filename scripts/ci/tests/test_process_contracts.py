@@ -16,7 +16,8 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROCESS_POLICY = REPO_ROOT / 'guards/PROCESS_CONTRACTS.json'
 WMS666_C13_TEST_FILE = 'frontend/src/screens/v2/wms666ChangeScope.test.ts'
-WMS666_C13_CASES = (
+WMS666_C13_SUITE_NAME = 'WMS-666 C13: narrow UI-only change boundary'
+WMS666_C13_BARE_CASES = (
     'src/screens/v2/wms666ChangeScope.test.ts::rejects migrations, backend entities, stock logic and guard registry changes',
     'src/screens/v2/wms666ChangeScope.test.ts::keeps the actual task diff inside the approved packing UI/test/document boundary',
     'src/screens/v2/wms666ChangeScope.test.ts::accepts exact task proofs and rejects adjacent proof and correction namespaces',
@@ -35,6 +36,10 @@ WMS666_C13_CASES = (
     'src/screens/v2/wms666ChangeScope.test.ts::fails closed when an exact RC7 source commit cannot be resolved',
     'src/screens/v2/wms666ChangeScope.test.ts::rejects future committed, dirty and staged edits of every historical document path',
     'src/screens/v2/wms666ChangeScope.test.ts::fails exact doc-history lookup when immutable objects are absent',
+)
+WMS666_C13_CASES = tuple(
+    f'{case.split("::", 1)[0]}::{WMS666_C13_SUITE_NAME} {case.split("::", 1)[1]}'
+    for case in WMS666_C13_BARE_CASES
 )
 WMS652_C71_CASES = (
     'scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_c71_final_binding_uses_exact_739_and_a_new_saved_acceptance_record',
@@ -138,10 +143,12 @@ class ProcessContractTests(unittest.TestCase):
         source_path = REPO_ROOT / WMS666_C13_TEST_FILE
         source = source_path.read_bytes()
         actual_names = re.findall(r"^\s*it\('([^']+)'", source.decode(), re.MULTILINE)
-        actual_cases = tuple('src/screens/v2/wms666ChangeScope.test.ts::' + name
-                             for name in actual_names)
+        actual_cases = tuple(
+            f'src/screens/v2/wms666ChangeScope.test.ts::{WMS666_C13_SUITE_NAME} {name}'
+            for name in actual_names
+        )
         self.assertEqual(actual_cases, WMS666_C13_CASES,
-                         'the C13 file must retain the exact 18 frozen case names')
+                         'the C13 file must retain the exact 18 frozen Vitest fullName IDs')
 
         self.assertIn(WMS666_C13_TEST_FILE, manifest['files'])
         self.assertEqual(manifest['files'][WMS666_C13_TEST_FILE],
@@ -151,6 +158,8 @@ class ProcessContractTests(unittest.TestCase):
                          {'report': 'frontend-all.json', 'format': 'vitest', 'exact': False})
         self.assertEqual(len(suite['cases']), len(set(suite['cases'])))
         self.assertTrue(set(WMS666_C13_CASES).issubset(suite['cases']))
+        self.assertFalse(set(WMS666_C13_BARE_CASES).intersection(suite['cases']),
+                         'the protected policy must not retain shortened C13 names')
         self.assertEqual(len(manifest['files']), 283)
         self.assertEqual(len(manifest['suites']), 29)
         self.assertEqual(len(suite['cases']), 355)
@@ -170,6 +179,21 @@ class ProcessContractTests(unittest.TestCase):
         report_path.write_text(json.dumps(report))
         self.assertEqual(self.m.verify_reports(policy, self.root),
                          {'frontend-fbs': list(WMS666_C13_CASES)})
+
+        bare_receipt = copy.deepcopy(report)
+        for result in bare_receipt['testResults'][0]['assertionResults']:
+            result['fullName'] = result['fullName'].removeprefix(WMS666_C13_SUITE_NAME + ' ')
+        report_path.write_text(json.dumps(bare_receipt))
+        with self.assertRaisesRegex(ValueError, 'missing required cases'):
+            self.m.verify_reports(policy, self.root)
+
+        missing_group = copy.deepcopy(report)
+        missing_group['testResults'][0]['assertionResults'][0]['fullName'] = \
+            missing_group['testResults'][0]['assertionResults'][0]['fullName'].removeprefix(
+                WMS666_C13_SUITE_NAME + ' ')
+        report_path.write_text(json.dumps(missing_group))
+        with self.assertRaisesRegex(ValueError, 'missing required cases'):
+            self.m.verify_reports(policy, self.root)
 
         mutations = {}
         missing = copy.deepcopy(report)
