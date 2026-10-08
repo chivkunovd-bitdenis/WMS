@@ -36,7 +36,7 @@
   },
   "final_binding_rule": "After independent acceptance and freeze, replace final_reviewed_source and the exact workflow pin together; never select HEAD, the current CI SHA, or an unreviewed candidate.",
   "frozen_source": "739a63343fc38d2a3441d9b613b4652c7f0380e0",
-  "independent_acceptance_record": "c2cbd700fbf7f03fb00465b27ee8214428f9386e",
+  "independent_acceptance_record": "3e6a4557e57eed1034dee228665a6c0d8ee99aaa",
   "independent_review_verdict": "PASS",
   "original_independent_review_commit": "033a5bcedaa6c680947d0c9ff411ec328d9574d1",
   "owner_authorized_targeted_correction": {
