@@ -59,6 +59,7 @@ CASES = (
             "page.on('request'",
             "syncRequestsBeforeToggle.push",
             "await expect(syncRequestsBeforeToggle).toHaveLength(0)",
+            "page.off('request', trackSyncBeforeToggle)",
             "row.getByTestId('fbs-stock-sync-toggle').click()",
             "await expect(row).toContainText('публикация включена')",
             "r.url().includes('/stocks/sync')",
@@ -69,38 +70,35 @@ CASES = (
     CaseContract(
         "E3",
         "frontend/tests-e2e/ff-products.spec.ts",
-        "ff products: catalog separates product fields and hides stock columns",
+        "ff products: catalog shows current fields, stock and seller filters",
         (
-            "await expect(tableHead).toContainText('Название')",
-            "await expect(tableHead).toContainText('Артикул продавца')",
-            "await expect(tableHead).toContainText('SKU')",
-            "await expect(tableHead).toContainText('ШК')",
-            "await expect(tableHead).toContainText('WB/nmId')",
-            "await expect(tableHead).toContainText('Размер')",
-            "await expect(tableHead).toContainText('ТЗ')",  # noqa: RUF001
-            "await expect(tableHead).not.toContainText('Артикул WB')",
-            "await expect(tableHead).not.toContainText('Распределение')",
-            "await expect(tableHead).not.toContainText('Доступно')",
-            "await expect(tableHead).not.toContainText('Сортировка')",
-            "await expect(tableHead).not.toContainText('Не упаковано')",  # noqa: RUF001
-            "await expect(tableHead).not.toContainText('Упаковано')",
-            "await expect(tableHead).not.toContainText('В ячейках')",  # noqa: RUF001
-            "await expect(tableHead).not.toContainText('Технический резерв')",
-            "await expect(page.getByTestId('ff-products-table')).not.toContainText('Сортировка')",
-            "await expect(page.getByTestId('ff-products-table')).not.toContainText('Не упаковано')",  # noqa: RUF001
-            "await expect(page.getByTestId('ff-products-table')).not.toContainText('Упаковано')",
-            "await expect(page.getByTestId('ff-products-table')).not.toContainText('В ячейках')",  # noqa: RUF001
-            (
-                "await expect(page.getByTestId('ff-products-table'))"
-                ".not.toContainText('Технический резерв')"
-            ),
-            "await expect(alphaRow.locator('td').nth(1)).not.toContainText('ART-A')",
-            "await expect(alphaRow.locator('td').nth(1)).not.toContainText('46')",
+            "const headers = (await tableHead.locator('th').allTextContents())",
+            "'Артикул продавца'",
+            "'Селлер'",
+            "'Остаток'",
+            "'ТЗ'",  # noqa: RUF001
+            "'ЧЗ'",
+            "'Резервы'",
+            "expect(headers).not.toContain('WB/nmId')",
             "await expect(alphaRow.locator('td').nth(2)).toContainText('ART-A')",
             "await expect(alphaRow.locator('td').nth(3)).toContainText(skuA)",
             "await expect(alphaRow.locator('td').nth(4)).toContainText(barcodeA)",
-            "await expect(alphaRow).toContainText('46')",
+            "await expect(alphaRow.locator('td').nth(5)).toHaveText('46')",
+            "await expect(alphaRow.locator('td').nth(6)).toHaveText('E2E Seller A')",
+            "await expect(betaRow.locator('td').nth(6)).toHaveText('E2E Seller B')",
+            "await expect(privateRow.locator('td').nth(6)).toHaveText('E2E Seller A')",
             "await expect(page.getByTestId('ff-product-row')).toHaveCount(3)",
+            "ff-catalog-stock-in-storage-${product.id}",
+            "'В ячейках 0'",  # noqa: RUF001
+            "ff-catalog-stock-on-hand-${product.id}",
+            "'На ФФ 0'",  # noqa: RUF001
+            "ff-catalog-stock-free-fbo-${product.id}",
+            "'Свободный FBO 0'",
+            "page.getByTestId('ff-catalog-search')",
+            "await search.fill(skuA)",
+            "page.getByTestId('ff-catalog-seller-filter')",
+            "page.getByRole('option', { name: 'E2E Seller A' }).click()",
+            "page.getByRole('option', { name: 'Все селлеры' }).click()",  # noqa: RUF001
         ),
     ),
     CaseContract(
@@ -112,12 +110,21 @@ CASES = (
             "const cis1 =",
             "const cis2 =",
             "Buffer.from(`cis\\n${cis1}\\n${cis2}`)",
-            "ff-honest-sign-status-${productId}",
+            "row.getByTestId(`ff-honest-sign-status-${productId}`)",
             "await expect(honestSignChip).toHaveCount(1)",
             "await expect(honestSignChip).toBeVisible()",
             "await expect(markingLink).toContainText('2')",
             "await markingLink.click()",
             "ff-honest-sign-product-page",
+            "new URL(page.url()).pathname).toBe(`/app/ff/honest-sign/product/${productId}`)",
+            "ff-honest-sign-product-codes",
+            "await expect(codeRows).toHaveCount(2)",
+            "const cis1Row = codeRows.filter({ hasText: cis1 })",
+            "const cis2Row = codeRows.filter({ hasText: cis2 })",
+            "await expect(cis1Row).toHaveCount(1)",
+            "await expect(cis2Row).toHaveCount(1)",
+            "expect(await cis1Row.getAttribute('data-testid')).not.toBe(",
+            "await cis2Row.getAttribute('data-testid')",
         ),
     ),
     CaseContract(
@@ -125,15 +132,26 @@ CASES = (
         "frontend/tests-e2e/ff-products.spec.ts",
         "ff products: import tz xlsx creates catalog products with packaging",
         (
-            (
-                "await expect(page.getByTestId('ff-tz-import-preview-table'))"
-                ".toContainText('123456789')"
-            ),
+            "ff-tz-import-preview-table')).toContainText('123456789')",
+            "ff-tz-import-preview-table')).toContainText('E2E merged TZ')",
+            "ff-tz-import-preview-table')).toContainText('E2E-ART-48')",
             "await expect(page.getByTestId('ff-products-import-notice')).toContainText(",
+            "page.request.get('/api/products', { headers: h })",
+            "product.seller_id === sellerId && product.sku_code === 'E2E-ART-46'",
+            "product.seller_id === sellerId && product.sku_code === 'E2E-ART-48'",
+            "product46?.wb_nm_id).toBe(123456789)",
+            "product46?.wb_size).toBe('46')",
+            "product46?.wb_barcode).toBe('2039000000001')",
+            "product46?.packaging_instructions).toBe('E2E merged TZ')",
+            "product48?.wb_nm_id).toBe(123456789)",
+            "product48?.wb_size).toBe('48')",
+            "product48?.wb_barcode).toBe('2039000000002')",
+            "product48?.packaging_instructions).toBe('E2E merged TZ')",
             "await expect(page.getByTestId('ff-product-row')).toHaveCount(2)",
-            "await expect(page.getByTestId('ff-products-table')).toContainText('2039000000001')",
-            "page.request.get('/api/products'",
-            "wb_nm_id === 123456789",
+            "await expect(row46.locator('td').nth(4)).toContainText('2039000000001')",
+            "await expect(row48.locator('td').nth(4)).toContainText('2039000000002')",
+            "ff-packaging-edit-${product46?.id}",
+            "ff-packaging-edit-${product48?.id}",
         ),
     ),
     CaseContract(
@@ -158,13 +176,12 @@ CASES = (
         "FF reports: section opens and shows movement summary for a product with intake",
         (
             "fulfillInboundViaBoxScans(page.request, adminHeaders, rid, boxes, seed.sku, [6])",
-            (
-                "const destinationRes = await page.request.post(`"
-                "/api/warehouses/${seed.warehouseId}/locations`"
-            ),
-            "storageLocationId: destinationId",
+            "const destinationRes = await page.request.post("
+            "`/api/warehouses/${seed.warehouseId}/locations`",
+            "const destinationId = String(((await destinationRes.json()) as { id: string }).id)",
             "page.request.patch(`${INBOUND_API}/${rid}/lines/",
             "storage_location_id: destinationId",
+            "expect(locationAssignment.ok()).toBeTruthy()",
             "const movementPath = `${INBOUND_API}/${rid}/movements`",
             "const movementsBeforeVerifyRes = await page.request.get(movementPath",
             "expect(movementsBeforeVerify).toHaveLength(0)",
@@ -174,7 +191,7 @@ CASES = (
             "expect(inboundMovements).toHaveLength(1)",
             "expect(inboundMovements[0]?.quantity_delta).toBe(6)",
             "postState.status).toBe('done')",
-            "postState.lines[0].posted_qty).toBe(6)",
+            "postState.lines[0] && postState.lines[0].posted_qty).toBe(6)",
             "expect(inboundMovementsAfterPost).toHaveLength(1)",
             "expect(inboundMovementsAfterPost[0]?.quantity_delta).toBe(6)",
             "const duplicatePost = await page.request.post(`${INBOUND_API}/${rid}/post`",
@@ -219,6 +236,9 @@ CASES = (
             "getByTestId('ff-access-denied')",
             "нет сессии селлера",
             "Войти как селлер",
+            "if (path === '/seller/products')",
+            "await expect(denial).toContainText('нет сессии селлера')",
+            "await expect(page.getByRole('button', { name: 'Войти как селлер' })).toBeVisible()",
         ),
     ),
     CaseContract(

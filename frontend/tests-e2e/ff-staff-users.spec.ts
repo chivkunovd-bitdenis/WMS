@@ -65,7 +65,13 @@ async function useFulfillmentToken(page: Page, token: string): Promise<void> {
 
 async function expectDenied(page: Page, path: string): Promise<void> {
   await page.goto(path)
-  await expect(page.getByTestId('ff-access-denied')).toContainText('Нет доступа к этому разделу.')
+  const denial = page.getByTestId('ff-access-denied')
+  if (path === '/seller/products') {
+    await expect(denial).toContainText('нет сессии селлера')
+    await expect(page.getByRole('button', { name: 'Войти как селлер' })).toBeVisible()
+    return
+  }
+  await expect(denial).toContainText('Нет доступа к этому разделу.')
 }
 
 async function expectNoPayrollUi(page: Page): Promise<void> {

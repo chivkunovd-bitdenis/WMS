@@ -25,13 +25,82 @@ test('FF reports: section opens and shows movement summary for a product with in
   const { boxes } = await beginInboundReceivingWithBoxes(page.request, adminHeaders, rid, {
     boxCount: 1,
   })
+  const destinationRes = await page.request.post(`/api/warehouses/${seed.warehouseId}/locations`, {
+    headers: adminHeaders,
+    data: { code: `REPORT-${seed.suffix}` },
+  })
+  expect(destinationRes.ok()).toBeTruthy()
+  const destinationId = String(((await destinationRes.json()) as { id: string }).id)
+  const inboundRes = await page.request.get(`${INBOUND_API}/${rid}`, { headers: adminHeaders })
+  expect(inboundRes.ok()).toBeTruthy()
+  const inboundState = (await inboundRes.json()) as {
+    lines: { id: string; product_id: string }[]
+  }
+  const lineId = inboundState.lines.find((line) => line.product_id === seed.productId)?.id
+  expect(lineId).toBeTruthy()
+  const locationAssignment = await page.request.patch(`${INBOUND_API}/${rid}/lines/${lineId}`, {
+    headers: adminHeaders,
+    data: { storage_location_id: destinationId },
+  })
+  expect(locationAssignment.ok()).toBeTruthy()
+
   await fulfillInboundViaBoxScans(page.request, adminHeaders, rid, boxes, seed.sku, [6])
+  const movementPath = `${INBOUND_API}/${rid}/movements`
+  const movementsBeforeVerifyRes = await page.request.get(movementPath, { headers: adminHeaders })
+  expect(movementsBeforeVerifyRes.ok()).toBeTruthy()
+  const movementsBeforeVerify = (await movementsBeforeVerifyRes.json()) as {
+    movement_type: string
+    quantity_delta: number
+  }[]
+  expect(movementsBeforeVerify).toHaveLength(0)
+
   const verify = await page.request.post(`${INBOUND_API}/${rid}/verify`, {
     headers: adminHeaders,
   })
   expect(verify.ok()).toBeTruthy()
+  const movementsAfterVerifyRes = await page.request.get(movementPath, { headers: adminHeaders })
+  expect(movementsAfterVerifyRes.ok()).toBeTruthy()
+  const movementsAfterVerify = (await movementsAfterVerifyRes.json()) as {
+    movement_type: string
+    quantity_delta: number
+  }[]
+  const inboundMovements = movementsAfterVerify.filter(
+    (movement) => movement.movement_type === 'inbound_intake',
+  )
+  expect(inboundMovements).toHaveLength(1)
+  expect(inboundMovements[0]?.quantity_delta).toBe(6)
+
   const post = await page.request.post(`${INBOUND_API}/${rid}/post`, { headers: adminHeaders })
   expect(post.ok()).toBeTruthy()
+  const postStateRes = await page.request.get(`${INBOUND_API}/${rid}`, { headers: adminHeaders })
+  expect(postStateRes.ok()).toBeTruthy()
+  const postState = (await postStateRes.json()) as {
+    status: string
+    lines: { posted_qty: number }[]
+  }
+  expect(postState.status).toBe('done')
+  expect(postState.lines[0] && postState.lines[0].posted_qty).toBe(6)
+  const movementsAfterPostRes = await page.request.get(movementPath, { headers: adminHeaders })
+  expect(movementsAfterPostRes.ok()).toBeTruthy()
+  const inboundMovementsAfterPost = (
+    (await movementsAfterPostRes.json()) as { movement_type: string; quantity_delta: number }[]
+  ).filter((movement) => movement.movement_type === 'inbound_intake')
+  expect(inboundMovementsAfterPost).toHaveLength(1)
+  expect(inboundMovementsAfterPost[0]?.quantity_delta).toBe(6)
+
+  const duplicatePost = await page.request.post(`${INBOUND_API}/${rid}/post`, {
+    headers: adminHeaders,
+  })
+  expect(duplicatePost.status()).toBe(409)
+  const duplicatePostBody = (await duplicatePost.json()) as { detail: string }
+  expect(duplicatePostBody.detail).toBe('already_posted')
+  const movementsAfterRetryRes = await page.request.get(movementPath, { headers: adminHeaders })
+  expect(movementsAfterRetryRes.ok()).toBeTruthy()
+  const inboundMovementsAfterRetry = (
+    (await movementsAfterRetryRes.json()) as { movement_type: string; quantity_delta: number }[]
+  ).filter((movement) => movement.movement_type === 'inbound_intake')
+  expect(inboundMovementsAfterRetry).toHaveLength(1)
+  expect(inboundMovementsAfterRetry[0]?.quantity_delta).toBe(6)
 
   await page.getByTestId('nav-ff-reports').click()
   await expect(page.getByTestId('ff-reports-page')).toBeVisible()

@@ -3,11 +3,10 @@ import { expect, test } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
 
-// TC-CAT-01 — каталог FF показывает карточки товаров, а не складские остатки.
+// TC-CAT-01 — каталог FF показывает товарные поля, продавца и фактические остатки.
 // Given: FF admin и товары разных селлеров; When: открывает «Каталог»;
-// Then: название, артикул селлера, SKU, ШК и размер разнесены по отдельным колонкам;
-// negative: нет колонок остатков, распределения и технических стадий склада.
-test('ff products: catalog separates product fields and hides stock columns', async ({ page }) => {
+// Then: действующие поля, seller binding, нулевые остатки и поиск/фильтр отражены верно.
+test('ff products: catalog shows current fields, stock and seller filters', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const email = `e2e-ff-products-${Date.now()}@example.com`
   const password = 'password123'
@@ -49,37 +48,43 @@ test('ff products: catalog separates product fields and hides stock columns', as
   const skuPrivate = 'SKU-CAT-PRIVATE'
   const barcodeA = '2031111111177'
   const barcodeB = '2031111111188'
-  await apiPost('/products', {
-    name: 'Alpha product',
-    sku_code: skuA,
-    length_mm: 1,
-    width_mm: 1,
-    height_mm: 1,
-    seller_id: sellerA.id,
-    wb_vendor_code: 'ART-A',
-    wb_barcode: barcodeA,
-    wb_size: '46',
-    packaging_instructions: 'Пакет + стикер',
-  })
-  await apiPost('/products', {
-    name: 'Beta product',
-    sku_code: skuB,
-    length_mm: 1,
-    width_mm: 1,
-    height_mm: 1,
-    seller_id: sellerB.id,
-    wb_vendor_code: 'ART-B',
-    wb_barcode: barcodeB,
-    wb_size: '48',
-  })
-  await apiPost('/products', {
-    name: 'Private only product',
-    sku_code: skuPrivate,
-    length_mm: 1,
-    width_mm: 1,
-    height_mm: 1,
-    seller_id: sellerA.id,
-  })
+  const productA = (await (
+    await apiPost('/products', {
+      name: 'Alpha product',
+      sku_code: skuA,
+      length_mm: 1,
+      width_mm: 1,
+      height_mm: 1,
+      seller_id: sellerA.id,
+      wb_vendor_code: 'ART-A',
+      wb_barcode: barcodeA,
+      wb_size: '46',
+      packaging_instructions: 'Пакет + стикер',
+    })
+  ).json()) as { id: string }
+  const productB = (await (
+    await apiPost('/products', {
+      name: 'Beta product',
+      sku_code: skuB,
+      length_mm: 1,
+      width_mm: 1,
+      height_mm: 1,
+      seller_id: sellerB.id,
+      wb_vendor_code: 'ART-B',
+      wb_barcode: barcodeB,
+      wb_size: '48',
+    })
+  ).json()) as { id: string }
+  const privateProduct = (await (
+    await apiPost('/products', {
+      name: 'Private only product',
+      sku_code: skuPrivate,
+      length_mm: 1,
+      width_mm: 1,
+      height_mm: 1,
+      seller_id: sellerA.id,
+    })
+  ).json()) as { id: string }
 
   // Reload so App re-fetches sellers list for the catalog dialogs.
   await page.reload()
@@ -90,31 +95,23 @@ test('ff products: catalog separates product fields and hides stock columns', as
   await expect(page.getByTestId('ff-products-list')).toBeVisible()
   await expect(page.getByTestId('ff-products-table')).toBeVisible()
   const tableHead = page.getByTestId('ff-products-table').locator('thead')
-  await expect(tableHead).toContainText('Название')
-  await expect(tableHead).toContainText('Артикул селлера')
-  await expect(tableHead).toContainText('SKU')
-  await expect(tableHead).toContainText('ШК')
-  await expect(tableHead).toContainText('WB/nmId')
-  await expect(tableHead).toContainText('Размер')
-  await expect(tableHead).toContainText('ТЗ')
-  await expect(tableHead).not.toContainText('Артикул WB')
-  await expect(tableHead).not.toContainText('Распределение')
-  await expect(tableHead).not.toContainText('Доступно')
-  await expect(tableHead).not.toContainText('Сортировка')
-  await expect(tableHead).not.toContainText('Не упаковано')
-  await expect(tableHead).not.toContainText('Упаковано')
-  await expect(tableHead).not.toContainText('В ячейках')
-  await expect(tableHead).not.toContainText('Технический резерв')
-  await expect(page.getByTestId('ff-products-table')).not.toContainText('Сортировка')
-  await expect(page.getByTestId('ff-products-table')).not.toContainText('Не упаковано')
-  await expect(page.getByTestId('ff-products-table')).not.toContainText('Упаковано')
-  await expect(page.getByTestId('ff-products-table')).not.toContainText('В ячейках')
-  await expect(page.getByTestId('ff-products-table')).not.toContainText('Технический резерв')
-  await expect(page.getByTestId('ff-products-available-formula')).toHaveCount(0)
-  await expect(page.getByTestId('ff-products-seller-filter')).toHaveCount(0)
-  await expect(page.getByTestId('ff-products-search')).toHaveCount(0)
-  await expect(page.getByTestId('ff-products-sort-name')).toHaveCount(0)
-  await expect(page.getByText('Вручную', { exact: true })).toHaveCount(0)
+  const headers = (await tableHead.locator('th').allTextContents()).map((text) => text.trim())
+  expect(headers).toEqual([
+    'Фото',
+    'Название',
+    'Артикул продавца',
+    'SKU',
+    'ШК',
+    'Размер',
+    'Селлер',
+    'Остаток',
+    'ТЗ',
+    'ЧЗ',
+    'Резервы',
+    '',
+  ])
+  expect(headers).not.toContain('WB/nmId')
+  expect(headers).not.toContain('Артикул WB')
   await expect(page.getByTestId('ff-product-row')).toHaveCount(3)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuA)
   await expect(page.getByTestId('ff-products-table')).toContainText(skuB)
@@ -122,15 +119,44 @@ test('ff products: catalog separates product fields and hides stock columns', as
 
   const alphaRow = page.getByTestId('ff-product-row').filter({ hasText: skuA })
   await expect(alphaRow.locator('td').nth(1)).toContainText('Alpha product')
-  await expect(alphaRow.locator('td').nth(1)).not.toContainText('ART-A')
-  await expect(alphaRow.locator('td').nth(1)).not.toContainText('46')
   await expect(alphaRow.locator('td').nth(2)).toContainText('ART-A')
   await expect(alphaRow.locator('td').nth(3)).toContainText(skuA)
   await expect(alphaRow.locator('td').nth(4)).toContainText(barcodeA)
-  // Размер ищем по строке, а не по номеру колонки: порядок колонок каталога
-  // меняется (WB/nmId уехал в конец, чтобы липкая колонка действий не перекрывала
-  // соседнюю), и позиционная проверка ломается при каждой перестановке.
-  await expect(alphaRow).toContainText('46')
+  await expect(alphaRow.locator('td').nth(5)).toHaveText('46')
+  await expect(alphaRow.locator('td').nth(6)).toHaveText('E2E Seller A')
+  const betaRow = page.getByTestId('ff-product-row').filter({ hasText: skuB })
+  const privateRow = page.getByTestId('ff-product-row').filter({ hasText: skuPrivate })
+  await expect(betaRow.locator('td').nth(6)).toHaveText('E2E Seller B')
+  await expect(privateRow.locator('td').nth(6)).toHaveText('E2E Seller A')
+
+  for (const product of [productA, productB, privateProduct]) {
+    await expect(page.getByTestId(`ff-catalog-stock-in-storage-${product.id}`)).toHaveText(
+      'В ячейках 0',
+    )
+    await expect(page.getByTestId(`ff-catalog-stock-on-hand-${product.id}`)).toHaveText('На ФФ 0')
+    await expect(page.getByTestId(`ff-catalog-stock-free-fbo-${product.id}`)).toHaveText(
+      'Свободный FBO 0',
+    )
+  }
+
+  const search = page.getByTestId('ff-catalog-search')
+  await search.fill(skuA)
+  await expect(page.getByTestId('ff-product-row')).toHaveCount(1)
+  await expect(alphaRow).toBeVisible()
+  await expect(betaRow).toHaveCount(0)
+  await search.fill('')
+  await expect(page.getByTestId('ff-product-row')).toHaveCount(3)
+
+  const sellerFilter = page.getByTestId('ff-catalog-seller-filter')
+  await sellerFilter.click()
+  await page.getByRole('option', { name: 'E2E Seller A' }).click()
+  await expect(page.getByTestId('ff-product-row')).toHaveCount(2)
+  await expect(alphaRow).toBeVisible()
+  await expect(privateRow).toBeVisible()
+  await expect(betaRow).toHaveCount(0)
+  await sellerFilter.click()
+  await page.getByRole('option', { name: 'Все селлеры' }).click()
+  await expect(page.getByTestId('ff-product-row')).toHaveCount(3)
 
   // Photo cell exists even if WB photo is missing in mocks.
   await expect(page.getByTestId('ff-product-row').first().locator('td').nth(0)).toBeVisible()
@@ -203,13 +229,24 @@ test('ff products: marking icon shows count and opens honest sign product card',
   await expect(page.getByTestId('ff-products-list')).toBeVisible()
   const row = page.getByTestId('ff-product-row').filter({ hasText: sku })
   await expect(row).toBeVisible()
-  await expect(row.getByText('ЧЗ', { exact: true })).toHaveCount(0)
+  const honestSignChip = row.getByTestId(`ff-honest-sign-status-${productId}`)
+  await expect(honestSignChip).toHaveCount(1)
+  await expect(honestSignChip).toBeVisible()
   const markingLink = page.getByTestId(`ff-catalog-marking-link-${productId}`)
   await expect(markingLink).toBeVisible()
   await expect(markingLink).toContainText('2')
   await markingLink.click()
-  await expect(page).toHaveURL(new RegExp(`/app/ff/honest-sign/product/${productId}`))
+  expect(new URL(page.url()).pathname).toBe(`/app/ff/honest-sign/product/${productId}`)
   await expect(page.getByTestId('ff-honest-sign-product-page')).toBeVisible()
+  const codeRows = page.getByTestId('ff-honest-sign-product-codes').locator('tbody tr')
+  await expect(codeRows).toHaveCount(2)
+  const cis1Row = codeRows.filter({ hasText: cis1 })
+  const cis2Row = codeRows.filter({ hasText: cis2 })
+  await expect(cis1Row).toHaveCount(1)
+  await expect(cis2Row).toHaveCount(1)
+  expect(await cis1Row.getAttribute('data-testid')).not.toBe(
+    await cis2Row.getAttribute('data-testid'),
+  )
 })
 
 // TC-CAT-04 — FF создаёт один товар вручную как вспомогательный путь каталога.
@@ -288,7 +325,12 @@ test('ff products: import tz xlsx creates catalog products with packaging', asyn
 
   const regToken = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
   const h = { Authorization: `Bearer ${regToken}` }
-  await page.request.post('/api/sellers', { headers: h, data: { name: 'TZ Seller' } })
+  const sellerRes = await page.request.post('/api/sellers', {
+    headers: h,
+    data: { name: 'TZ Seller' },
+  })
+  expect(sellerRes.ok()).toBeTruthy()
+  const sellerId = String(((await sellerRes.json()) as { id: string }).id)
 
   // Build minimal xlsx in browser via API seed is easier: use backend fixture through request
   // with a tiny zip-based xlsx generated by Node Buffer — use page.evaluate + fetch to apply
@@ -340,6 +382,10 @@ bad.save(${JSON.stringify(badXlsxPath)})
   await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('E2E-ART')
   await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('E2E-ART-46')
   await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('123456789')
+  await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('E2E-ART-48')
+  await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('2039000000001')
+  await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('2039000000002')
+  await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('E2E merged TZ')
   await expect(page.getByTestId('ff-tz-import-preview-table')).toContainText('создать')
 
   let releaseApply!: () => void
@@ -374,11 +420,56 @@ bad.save(${JSON.stringify(badXlsxPath)})
   await expect(page.getByTestId('ff-products-import-notice')).toContainText(
     'Создано: 2, обновлено: 0, пропущено: 0',
   )
+  const importedProductsRes = await page.request.get('/api/products', { headers: h })
+  expect(importedProductsRes.ok()).toBeTruthy()
+  const importedProducts = (await importedProductsRes.json()) as {
+    id: string
+    seller_id: string | null
+    sku_code: string
+    wb_nm_id: number | null
+    wb_size: string | null
+    wb_barcode: string | null
+    packaging_instructions: string | null
+  }[]
+  const products46 = importedProducts.filter(
+    (product) => product.seller_id === sellerId && product.sku_code === 'E2E-ART-46',
+  )
+  const products48 = importedProducts.filter(
+    (product) => product.seller_id === sellerId && product.sku_code === 'E2E-ART-48',
+  )
+  expect(products46).toHaveLength(1)
+  expect(products48).toHaveLength(1)
+  const product46 = products46[0]
+  const product48 = products48[0]
+  expect(product46).toBeDefined()
+  expect(product48).toBeDefined()
+  expect(product46?.wb_nm_id).toBe(123456789)
+  expect(product46?.wb_size).toBe('46')
+  expect(product46?.wb_barcode).toBe('2039000000001')
+  expect(product46?.packaging_instructions).toBe('E2E merged TZ')
+  expect(product48?.wb_nm_id).toBe(123456789)
+  expect(product48?.wb_size).toBe('48')
+  expect(product48?.wb_barcode).toBe('2039000000002')
+  expect(product48?.packaging_instructions).toBe('E2E merged TZ')
   await expect(page.getByTestId('ff-products-table')).toContainText('E2E Clean Title')
   await expect(page.getByTestId('ff-products-table')).toContainText('E2E-ART')
-  await expect(page.getByTestId('ff-products-table')).toContainText('123456789')
   await expect(page.getByTestId('ff-product-row')).toHaveCount(2)
-  await expect(page.getByTestId('ff-products-table')).toContainText('2039000000001')
+  const row46 = page.getByTestId('ff-product-row').filter({ hasText: 'E2E-ART-46' })
+  const row48 = page.getByTestId('ff-product-row').filter({ hasText: 'E2E-ART-48' })
+  await expect(row46).toHaveCount(1)
+  await expect(row48).toHaveCount(1)
+  await expect(row46.locator('td').nth(4)).toContainText('2039000000001')
+  await expect(row46.locator('td').nth(5)).toHaveText('46')
+  await expect(row48.locator('td').nth(4)).toContainText('2039000000002')
+  await expect(row48.locator('td').nth(5)).toHaveText('48')
+  await expect(row46.getByTestId(`ff-packaging-edit-${product46?.id}`)).toHaveAttribute(
+    'aria-label',
+    'Редактировать ТЗ',
+  )
+  await expect(row48.getByTestId(`ff-packaging-edit-${product48?.id}`)).toHaveAttribute(
+    'aria-label',
+    'Редактировать ТЗ',
+  )
 
   await page.getByTestId('ff-products-import-tz').click()
   await page.getByTestId('ff-tz-import-seller').click()

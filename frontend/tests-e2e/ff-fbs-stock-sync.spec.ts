@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Request } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk, waitForPutOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
@@ -62,6 +62,14 @@ test('fbs seller warehouses: row binding, manual sync, status panel', async ({ p
   await expect(row).toContainText('WB ID 501001')
   await expect(page.getByTestId('fbs-stock-add-binding')).toHaveCount(0)
 
+  const syncRequestsBeforeToggle: string[] = []
+  const trackSyncBeforeToggle = (request: Request) => {
+    if (request.method() === 'POST' && request.url().includes('/stocks/sync')) {
+      syncRequestsBeforeToggle.push(request.url())
+    }
+  }
+  page.on('request', trackSyncBeforeToggle)
+
   await row.getByTestId('fbs-stock-row-wms-select').click()
   await Promise.all([
     waitForPutOk(page, '/warehouse-bindings/501001'),
@@ -69,7 +77,9 @@ test('fbs seller warehouses: row binding, manual sync, status panel', async ({ p
     page.getByRole('option', { name: new RegExp(wh.name) }).click(),
   ])
 
-  await expect(row).toContainText('готов к публикации')
+  await expect(row).toContainText('публикация выключена')
+  await expect(syncRequestsBeforeToggle).toHaveLength(0)
+  page.off('request', trackSyncBeforeToggle)
   await Promise.all([
     waitForPutOk(page, '/warehouse-bindings/501001'),
     waitForGetOk(page, '/warehouse-bindings'),
