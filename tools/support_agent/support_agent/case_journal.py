@@ -286,17 +286,30 @@ class CaseJournal:
         header += f"\nСтатус: {'🟡' if status in {'working', 'owner_needed'} else '🟢'} {_LABELS[status]}\n"
         if card.get('task_url'):
             header += shorten(card['task_url'], 300) + '\n'
-        detail_lines = [shorten(detail, 280) for detail in facts.get('details', [])]
+        raw_details = list(facts.get('details', []))
+        detail_limit = 280
+        detail_lines = [shorten(detail, detail_limit) for detail in raw_details]
         details = ('Данные по обращению:\n' + '\n'.join(detail_lines) + '\n') if detail_lines else ''
         entries = [f"{datetime.fromtimestamp(e['ts']).strftime('%d.%m %H:%M')} — {shorten(e['text'], 1400)}"
                    for e in card.get('events', [])]
         # Telegram counts UTF-16 units, not Python Unicode code points.
         def fits(text: str) -> bool:
             return len(text.encode('utf-16-le')) // 2 <= 4096
-        def body() -> str:
+        def body(timeline: list[str] | None = None) -> str:
             text = header + details
-            return text + ('\nХод обращения\n' + '\n'.join(entries) if entries else '')
+            visible_entries = entries if timeline is None else timeline
+            return text + ('\nХод обращения\n' + '\n'.join(visible_entries)
+                           if visible_entries else '')
 
+        # Compact long fact lines first, preserving the latest timeline event whenever
+        # it fits under Telegram's limit with the card heading and current status.
+        while detail_lines and not fits(body()) and detail_limit > 24:
+            detail_limit = max(24, int(detail_limit * 0.6))
+            detail_lines = [shorten(detail, detail_limit) for detail in raw_details]
+            details = ('Данные по обращению:\n' + '\n'.join(detail_lines) + '\n') if detail_lines else ''
+        while entries and detail_lines and not fits(body(entries[-1:])):
+            detail_lines.pop(0)
+            details = ('Данные по обращению:\n' + '\n'.join(detail_lines) + '\n') if detail_lines else ''
         while entries and not fits(body()):
             entries.pop(0)
         while detail_lines and not fits(body()):
@@ -348,16 +361,21 @@ class CaseJournal:
                 current_status = active_statuses[-1]
                 card['statuses'] = {key: key == current_status for key in _LABELS}
                 card['current_status'] = current_status
-            snapshot = {k: card[k] for k in ('number', 'topic_id', 'chat_id', 'title', 'summary',
-                                              'chat_title', 'statuses', 'task_url') if k in card}
-            snapshot_key = hashlib.sha256(json.dumps(snapshot, ensure_ascii=False,
-                                                       sort_keys=True).encode()).hexdigest()
             event_ts: float | None = None
             if event:
                 event_key = event_key or hashlib.sha256(event.encode()).hexdigest()
                 if not any(e['key'] == event_key for e in card['events']):
                     event_ts = time.time()
                     card['events'].append({'key': event_key, 'ts': event_ts, 'text': event})
+                    terminal_statuses = {'analysis_done', 'answer_sent', 'task_created'}
+                    if (not active_statuses
+                            and self._current_status(card) in terminal_statuses):
+                        card['statuses'] = {key: key == 'working' for key in _LABELS}
+                        card['current_status'] = 'working'
+            snapshot = {k: card[k] for k in ('number', 'topic_id', 'chat_id', 'title', 'summary',
+                                              'chat_title', 'statuses', 'task_url') if k in card}
+            snapshot_key = hashlib.sha256(json.dumps(snapshot, ensure_ascii=False,
+                                                       sort_keys=True).encode()).hexdigest()
             # The current card and its event are durable before any file or Telegram work.
             self.store.kv_set(key, card)
             self.record(chat_id, 'case_snapshot', str(card.get('summary') or card.get('title') or ''),

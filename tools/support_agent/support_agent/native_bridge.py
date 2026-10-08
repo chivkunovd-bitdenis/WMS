@@ -120,7 +120,7 @@ class NativeBridge:
              topic_id: str | int | None = None,
              message_kind: str = "answer") -> dict[str, Any]:
         agent = self._delivery()
-        from .telegram import flush_outbox
+        from .telegram import flush_outbox, reconcile_case_delivery
         if chat_id != self.cfg.telegram.owner_chat_id and self.store.binding(chat_id) is None:
             raise ValueError("unknown connected chat")
         stable_key = "native-send:" + key
@@ -148,10 +148,25 @@ class NativeBridge:
         row = self.store.outbox_by_key(stable_key)
         if row is None:
             raise RuntimeError("native send intent was not persisted")
+        if row["status"] == "sending":
+            # A prior process may have stopped after claiming the row. Its Telegram
+            # outcome is unknowable, so mark it and never make a blind second call.
+            self.store.execute(
+                "UPDATE outbox SET status='unknown' WHERE id=? AND status='sending'",
+                (row["id"],),
+            )
+            result = self.store.outbox_by_key(stable_key)
+            self.journal.sync_chat(chat_id)
+            return {"key": key, "status": result["status"], "message_id": result["tg_message_id"]}
         flush_outbox(agent.store, agent.bots, self.cfg, only_ids={int(row["id"])},
                      explicit_native_action=True)
         result = self.store.outbox_by_key(stable_key)
         self.journal.sync_chat(chat_id)
+        if result["status"] == "sent":
+            # Also repairs a crash after Telegram confirmed the send but before its
+            # linked card event was committed. The stable delivered key deduplicates it.
+            reconcile_case_delivery(self.journal, self.store, agent.bots.owner,
+                                    self.cfg.telegram.owner_chat_id, result)
         return {"key": key, "status": result["status"], "message_id": result["tg_message_id"]}
 
     def context(self, thread_id: str) -> dict[str, Any]:

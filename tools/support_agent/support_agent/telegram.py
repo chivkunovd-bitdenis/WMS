@@ -302,6 +302,32 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
     )
 
 
+def reconcile_case_delivery(journal: CaseJournal, store: Store, owner_bot: Any,
+                            owner_chat_id: int, item: Any) -> None:
+    """Project a confirmed outbox result to its card; the delivery key makes retries safe."""
+    linked = store.kv_get(f"reply_case:{item['key']}", {})
+    if not linked:
+        return
+    delivered_key = f"delivered:{item['id']}"
+    card = store.kv_get(f"case_card:{linked['topic_id']}", {})
+    if any(event.get('key') == delivered_key for event in card.get('events', [])):
+        return
+    kind = linked.get('kind', 'answer')
+    if kind == 'owner_question':
+        event = 'Вопрос владельцу отправлен: ' + item['text']
+        statuses = {'owner_needed': True}
+    elif kind == 'question':
+        event = 'Уточнение отправлено клиенту: ' + item['text']
+        statuses = {}
+    else:
+        event = 'Ответ отправлен клиенту: ' + item['text']
+        statuses = {'answer_sent': True}
+    journal.update_card(
+        owner_bot, owner_chat_id, linked['topic_id'], linked['chat_id'],
+        statuses=statuses, event=event, event_key=delivered_key,
+    )
+
+
 def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | None = None,
                  explicit_native_action: bool = False) -> int:
     """Отправляет намерения. Клиенту при неизвестном исходе НЕ повторяем (R35).
@@ -359,22 +385,7 @@ def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | Non
             journal = CaseJournal(store, getattr(cfg.agent, 'history_dir', '')
                                   or Path(cfg.repo) / 'var/support-conversations')
             journal.sync_chat(int(item['chat_id']))
-            linked = store.kv_get(f"reply_case:{item['key']}", {})
-            if linked:
-                kind = linked.get('kind', 'answer')
-                if kind == 'owner_question':
-                    event = 'Вопрос владельцу отправлен: ' + item['text']
-                    statuses = {'owner_needed': True}
-                elif kind == 'question':
-                    event = 'Уточнение отправлено клиенту: ' + item['text']
-                    statuses = {}
-                else:
-                    event = 'Ответ отправлен клиенту: ' + item['text']
-                    statuses = {'answer_sent': True}
-                journal.update_card(
-                    bots.owner, cfg.telegram.owner_chat_id, linked['topic_id'], linked['chat_id'],
-                    statuses=statuses, event=event, event_key=f"delivered:{item['id']}",
-                )
+            reconcile_case_delivery(journal, store, bots.owner, cfg.telegram.owner_chat_id, item)
         sent += 1
     return sent
 
