@@ -1,0 +1,248 @@
+commit a19d02d31ba57763ce93a29005a95cc3f473e005
+Author:     Denis Civkunov <denischivkunov@icloud.com>
+AuthorDate: Thu Oct 8 10:44:57 2026 +0400
+Commit:     Denis Civkunov <denischivkunov@icloud.com>
+CommitDate: Thu Oct 8 10:44:57 2026 +0400
+
+    WMS-666: restore missing WB sticker requests [skip ci]
+
+diff --git a/backend/app/services/fbs_supply_service.py b/backend/app/services/fbs_supply_service.py
+index 44884d3cc..09f2e4e40 100644
+--- a/backend/app/services/fbs_supply_service.py
++++ b/backend/app/services/fbs_supply_service.py
+@@ -595,6 +595,46 @@ async def create_supply_from_orders(
+     http_client: httpx.AsyncClient,
+     ozon_provider: OzonMarketplaceProvider | None = None,
+     created_by_user_id: uuid.UUID | None = None,
++) -> dict[str, Any]:
++    # WMS-666: creation must return usable stickers before any tab is opened.
++    workspace = await _create_supply_from_orders(
++        session,
++        tenant_id,
++        name=name,
++        order_ids=order_ids,
++        planned_delivery_type=planned_delivery_type,
++        planned_destination=planned_destination,
++        idempotency_key=idempotency_key,
++        http_client=http_client,
++        ozon_provider=ozon_provider,
++        created_by_user_id=created_by_user_id,
++    )
++    if workspace["supply"].get("marketplace", "wb") != "wb":
++        return workspace
++    supply_id = uuid.UUID(str(workspace["supply"]["id"]))
++    # A sticker outage must not roll back an already confirmed WB supply.
++    await session.commit()
++    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
++    if supply is not None:
++        await _request_order_stickers_for_picking(session, tenant_id, supply, http_client)
++        refreshed = await get_supply_workspace(session, tenant_id, supply_id)
++        refreshed["partial_rejection"] = workspace.get("partial_rejection")
++        workspace = refreshed
++    return workspace
++
++
++async def _create_supply_from_orders(
++    session: AsyncSession,
++    tenant_id: uuid.UUID,
++    *,
++    name: str,
++    order_ids: list[uuid.UUID],
++    planned_delivery_type: str,
++    planned_destination: dict[str, Any] | None,
++    idempotency_key: str,
++    http_client: httpx.AsyncClient,
++    ozon_provider: OzonMarketplaceProvider | None = None,
++    created_by_user_id: uuid.UUID | None = None,
+ ) -> dict[str, Any]:
+     if not idempotency_key.strip():
+         raise FbsSupplyError("missing_idempotency_key", http_status=400)
+@@ -1274,7 +1314,11 @@ async def _request_order_stickers_for_picking(
+     orders: list[FbsOrder] | None = None,
+ ) -> None:
+     target_orders = supply.orders if orders is None else orders
+-    missing = [order.id for order in target_orders if not order.sticker_code]
++    missing = [
++        order.id
++        for order in target_orders
++        if not order.sticker_code and order.status != FBS_ORDER_STATUS_CANCELLED
++    ]
+     if not missing:
+         return
+     try:
+diff --git a/frontend/src/screens/v2/FfFbsSupplyAssembly.tsx b/frontend/src/screens/v2/FfFbsSupplyAssembly.tsx
+index e2f5d09c9..a326ee96c 100644
+--- a/frontend/src/screens/v2/FfFbsSupplyAssembly.tsx
++++ b/frontend/src/screens/v2/FfFbsSupplyAssembly.tsx
+@@ -1,3 +1,4 @@
++import { ensureFbsStickers } from './fbsStickerPrefetch'
+ import { FbsPackingScanBar } from './FbsPackingScanBar'
+ import type { PackingScanController } from './fbsSequentialPacking'
+ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+@@ -225,6 +226,22 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
+     escapeHandlerRef.current = handler
+   }, [])
+
++  const stickerAttempts = useRef(new Set<string>())
++  useEffect(() => { stickerAttempts.current.clear() }, [open, stage])
++  useEffect(() => {
++    if (!open || stage !== 'picking') return
++    for (const snapshot of ordered) {
++      if (snapshot.supply.marketplace !== 'wb' || stickerAttempts.current.has(snapshot.supply.id)
++        || !snapshot.orders.some(order => !order.sticker.code && order.status !== 'cancelled')) continue
++      stickerAttempts.current.add(snapshot.supply.id)
++      void ensureFbsStickers(token, authHeaders, snapshot).then(result => {
++        onFrameWorkspace(result.workspace)
++        if (result.errorMessage) setError(result.errorMessage)
++      })
++        .catch(cause => setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.'))
++    }
++  }, [open, stage, ordered, token, authHeaders, onFrameWorkspace])
++
+   // Д14: лист подбора по всей группе — тот же шаблон, что у карточки; строки —
+   // суммарный план, в шапке — номера всех поставок группы.
+   const printPickingList = async () => {
+@@ -237,7 +254,18 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
+     printWindow.opener = null
+     setError(null)
+     printWindow.document.write('<title>Лист подбора</title><p style="font:14px Arial,sans-serif">Готовим лист подбора…</p>')
+-    let rows = fbsAssemblyPickingRows(ordered)
++    const printable = await Promise.all(ordered.map(async snapshot => {
++      try {
++        const result = await ensureFbsStickers(token, authHeaders, snapshot)
++        if (result.errorMessage) setError(result.errorMessage)
++        return result.workspace
++      }
++      catch (cause) {
++        setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
++        return snapshot
++      }
++    }))
++    let rows = fbsAssemblyPickingRows(printable)
+     try {
+       const optionLists = await Promise.all(ordered.map((one) => getFbsPickOptions(token, authHeaders, one.supply.id)))
+       const byProduct = new Map<string, FbsPickOptionProduct[]>()
+diff --git a/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx b/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
+index b7d96ea01..6f93f1ddd 100644
+--- a/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
++++ b/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
+@@ -1,3 +1,4 @@
++import { ensureFbsStickers } from './fbsStickerPrefetch'
+ import { OzonDocumentsAbsence } from './OzonDocumentsAbsence'
+ import { createPortal } from 'react-dom'
+ import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
+@@ -836,7 +837,7 @@ export function FfFbsSupplyWorkspace({
+   useEffect(() => {
+     unifiedStickerAttempts.current.clear()
+     ordinaryPreparationAttempt.current = false
+-  }, [open, supplyId])
++  }, [open, supplyId, stage])
+   useEffect(() => {
+     if (!supplyId || !registerSequentialScanner || !sequentialScanner) return
+     registerSequentialScanner(supplyId, sequentialScanner)
+@@ -1185,28 +1186,26 @@ export function FfFbsSupplyWorkspace({
+     }
+   }
+
+-  // Both packing entry points have no per-supply Start button. Fetch missing
+-  // WB stickers on entry, without waiting for a scan or sending them to print.
++  // WMS-666: prepare missing WB stickers on picking and packing entry.
++  // Packaging preparation remains exclusive to the ordinary packing tab.
+   useEffect(() => {
+-    if (!open || stage !== 'packing' || !workspace || isOzonSupply) return
++    if (!open || (stage !== 'picking' && stage !== 'packing') || !workspace || isOzonSupply) return
+     if (assemblyFrame && (!assemblyFrame.visible || !registerSequentialScanner)) return
+-    const missing = workspace.orders.filter((order) => !order.sticker.code && !unifiedStickerAttempts.current.has(order.id))
++    const missing = workspace.orders.filter((order) => !order.sticker.code && order.status !== 'cancelled' && !unifiedStickerAttempts.current.has(order.id))
+     // Manual printing needs the task formerly created by the removed Start button.
+-    const prepare = !assemblyFrame && !workspace.supply.packaging_task_id
++    const prepare = stage === 'packing' && !assemblyFrame && !workspace.supply.packaging_task_id
+       && !ordinaryPreparationAttempt.current && workspace.orders.length > 0
+       && workspace.supply.status !== 'done' && workspace.supply.status !== 'cancelled'
+     if (!missing.length && !prepare) return
+     if (prepare) ordinaryPreparationAttempt.current = true
+     for (const order of missing) unifiedStickerAttempts.current.add(order.id)
+     const write = beginWorkspaceWrite()
+-    const requested = missing.length ? fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
+-      kind: 'order_sticker', order_ids: missing.map((order) => order.id), retry_missing: true,
+-    }) : Promise.resolve(null)
+-    void requested.then(async (batch) => {
++    const requested = ensureFbsStickers(token, authHeaders, workspace)
++    void requested.then(async (result) => {
+       if (!write.isCurrent()) return
+       if (prepare) await run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), '')
+       else void load(true)
+-      if (write.isCurrent() && batch?.order_errors.length) setError(batch.order_errors.map((item) => item.message).join(' '))
++      if (write.isCurrent() && result.errorMessage) setError(result.errorMessage)
+     }).catch((cause: unknown) => {
+       if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+     })
+@@ -3095,19 +3094,27 @@ export function FfFbsSupplyWorkspace({
+     printWindow.document.write('<title>Лист подбора</title><p style="font:14px Arial,sans-serif">Готовим лист подбора…</p>')
+     // WMS-528: где брать — ячейки и тара по убыванию остатка, ровно на покрытие подбора.
+     // Без ответа сервера лист печатается с прежними ячейками, печать не блокируется.
+-    let rows: typeof pickingRows = pickingRows
++    let printableRows = pickingRows
++    try {
++      const result = await ensureFbsStickers(token, authHeaders, workspace)
++      printableRows = fbsBuildPickingRows(result.workspace.orders, isOzonSupply).rows
++      if (result.errorMessage) setError(result.errorMessage)
++    } catch (cause) {
++      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
++    }
++    let rows: typeof pickingRows = printableRows
+     try {
+       // Подобранное берём из того же свежего ответа, что и места: экран мог не перечитаться после подбора.
+       const options = new Map((await getFbsPickOptions(token, authHeaders, workspace.supply.id))
+         .map((option) => [option.product_id, option]))
+-      rows = pickingRows.map((row) => {
++      rows = printableRows.map((row) => {
+         const option = options.get(row.key)
+         if (!option) return row
+         const picked = Math.min(option.picked_qty, row.required)
+         return { ...row, picked, locations: fbsPickSourceLabels(option.locations, row.required - picked) }
+       })
+     } catch {
+-      rows = pickingRows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
++      rows = printableRows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
+       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
+     }
+     try {
+diff --git a/frontend/src/screens/v2/fbsStickerPrefetch.ts b/frontend/src/screens/v2/fbsStickerPrefetch.ts
+new file mode 100644
+index 000000000..d99ff5186
+--- /dev/null
++++ b/frontend/src/screens/v2/fbsStickerPrefetch.ts
+@@ -0,0 +1,32 @@
++import { fetchFbsPrintBatch, fetchFbsWorkspace, type FbsWorkspace } from './fbsApi'
++
++export type FbsStickerPrefetchResult = {
++  workspace: FbsWorkspace
++  errorMessage: string | null
++}
++
++// Share an in-flight request between tab entry and an immediate print click.
++const pending = new Map<string, Promise<FbsStickerPrefetchResult>>()
++export function ensureFbsStickers(
++  token: string, authHeaders: (token: string) => Record<string, string>, snapshot: FbsWorkspace,
++): Promise<FbsStickerPrefetchResult> {
++  if (snapshot.supply.marketplace !== 'wb') return Promise.resolve({ workspace: snapshot, errorMessage: null })
++  const key = `${token}:${snapshot.supply.id}`
++  const active = pending.get(key)
++  if (active) return active
++  const missing = snapshot.orders.filter(order => !order.sticker.code && order.status !== 'cancelled')
++  if (!missing.length) return Promise.resolve({ workspace: snapshot, errorMessage: null })
++  const request = (async () => {
++    const batch = await fetchFbsPrintBatch(token, authHeaders, snapshot.supply.id, {
++      kind: 'order_sticker', order_ids: missing.map(order => order.id), retry_missing: true,
++    })
++    const workspace = await fetchFbsWorkspace(token, authHeaders, snapshot.supply.id)
++    return {
++      workspace,
++      errorMessage: batch.order_errors.length ? batch.order_errors.map(item => item.message).join(' ') : null,
++    }
++  })()
++  pending.set(key, request)
++  void request.finally(() => { if (pending.get(key) === request) pending.delete(key) }).catch(() => undefined)
++  return request
++}

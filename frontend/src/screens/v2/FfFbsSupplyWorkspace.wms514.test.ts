@@ -130,7 +130,7 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
 
   it('WMS-666 prepares a bare WB assembly group before the first scan and uses product KIZ requirements', () => {
     const preparation = source.slice(
-      source.indexOf('// Both packing entry points have no per-supply Start button.'),
+      source.indexOf('// WMS-666: prepare missing WB stickers on picking and packing entry.'),
       source.indexOf('const openAddOrders = async () =>'),
     )
     expect(preparation).toContain('assemblyFrame?.visible')
@@ -141,14 +141,25 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
 
   it('WMS-666 offers an explicit same-workspace retry after prepare sticker request failure', () => {
     const preparation = source.slice(
-      source.indexOf('// Both packing entry points have no per-supply Start button.'),
+      source.indexOf('// WMS-666: prepare missing WB stickers on picking and packing entry.'),
       source.indexOf('const openAddOrders = async () =>'),
     )
-    expect(preparation).toContain('fetchFbsPrintBatch(token, authHeaders, workspace.supply.id')
+    expect(preparation).toContain('ensureFbsStickers(token, authHeaders, workspace, missing.map((order) => order.id))')
     expect(preparation).toContain('setRetryAction(() => () =>')
     expect(preparation).toContain('if (write.isCurrent()) void run(retryOperation, \'\', undefined, onRetrySuccess)')
     expect(preparation).toContain('const current = await fetchFbsWorkspace(token, authHeaders, supplyIdAtStart)')
-    expect(preparation).toContain('.filter((order) => !order.sticker.code)')
+    expect(preparation).toContain('.filter((order) => !order.sticker.code && order.status !== \'cancelled\')')
+  })
+
+  it('WMS-666 includes refreshed sticker codes in an ordinary picking-list print when available', () => {
+    const print = source.slice(source.indexOf('const printPickingList = async () =>'), source.indexOf('const packLineByProduct = useMemo'))
+    expect(print).toContain('ensureFbsStickers(token, authHeaders, workspace)')
+    expect(print).toContain('printWorkspace = result.workspace')
+    expect(print).toContain('fbsBuildPickingRows(\n      printWorkspace.orders')
+    expect(print).toContain('historicalReadOnly')
+    expect(print).toContain('const write = beginWorkspaceWrite()')
+    expect(print).toContain('!isCurrentPrint()')
+    expect(print).toContain('write.matchesShownSupply(result.workspace)')
   })
 
   it('finishes a cancelled product reprint attempt before clearing the active target', () => {

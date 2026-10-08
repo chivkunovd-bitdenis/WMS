@@ -31,27 +31,37 @@ async def main() -> None:
     async with SessionLocal() as session:
         balances = (
             await session.scalars(
-                select(InventoryBalance).where(InventoryBalance.tenant_id == tenant)
+                select(InventoryBalance)
+                .where(InventoryBalance.tenant_id == tenant)
+                .order_by(InventoryBalance.id)
             )
         ).all()
         picks = (
-            await session.scalars(select(FbsOrderPick).where(FbsOrderPick.tenant_id == tenant))
+            await session.scalars(
+                select(FbsOrderPick)
+                .where(FbsOrderPick.tenant_id == tenant)
+                .order_by(FbsOrderPick.id)
+            )
         ).all()
         ozon = (
             await session.scalars(
-                select(FbsOrderProductPick).where(FbsOrderProductPick.tenant_id == tenant)
+                select(FbsOrderProductPick)
+                .where(FbsOrderProductPick.tenant_id == tenant)
+                .order_by(FbsOrderProductPick.id)
             )
         ).all()
         reserves = (
             await session.scalars(
-                select(FbsOrderReservation).where(FbsOrderReservation.tenant_id == tenant)
+                select(FbsOrderReservation)
+                .where(FbsOrderReservation.tenant_id == tenant)
+                .order_by(FbsOrderReservation.id)
             )
         ).all()
         position_reserves = (
             await session.scalars(
                 select(FbsOrderProductReservation).where(
                     FbsOrderProductReservation.tenant_id == tenant
-                )
+                ).order_by(FbsOrderProductReservation.id)
             )
         ).all()
         positions = (
@@ -59,13 +69,20 @@ async def main() -> None:
                 select(FbsOrderProduct, FbsOrder)
                 .join(FbsOrder, FbsOrder.id == FbsOrderProduct.order_id)
                 .where(FbsOrder.tenant_id == tenant)
+                .order_by(FbsOrderProduct.id, FbsOrder.id)
             )
         ).all()
         supplies = (
-            await session.scalars(select(FbsSupply).where(FbsSupply.tenant_id == tenant))
+            await session.scalars(
+                select(FbsSupply).where(FbsSupply.tenant_id == tenant).order_by(FbsSupply.id)
+            )
         ).all()
         operations = (
-            await session.scalars(select(FbsWbOperation).where(FbsWbOperation.tenant_id == tenant))
+            await session.scalars(
+                select(FbsWbOperation)
+                .where(FbsWbOperation.tenant_id == tenant)
+                .order_by(FbsWbOperation.id)
+            )
         ).all()
         stock = {}
         for b in balances:
