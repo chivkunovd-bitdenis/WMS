@@ -280,7 +280,9 @@ export async function registerExtended(h) {
     await source(page,f,0)
     const selected=table.locator(`[data-row-key="cell:${f.sources[0].location_id}"]`);assert((await selected.evaluate(row=>getComputedStyle(row).boxShadow)).includes('inset'),'Selected source branch is visibly marked')
     await scan(page,f.products[0].sku);await state('tree-first-source-after-scan',f,1)
-    await expect(qty(page,f).locator('xpath=ancestor::tr').locator('td').nth(3)).toHaveText('29')
+    const inBoxColumn=await table.locator('thead th').evaluateAll(ths=>ths.findIndex(th=>/Остаток\s*в\s*коробе/.test(th.textContent)))
+    assert(inBoxColumn>=0,'Column «Остаток в коробе» is found by its header')
+    await expect(qty(page,f).locator('xpath=ancestor::tr').locator('td').nth(inBoxColumn)).toHaveText('29')
   })
   for(const name of ['load-detail-error','load-options-error','catalog-error'])await run(name,async(page,f)=>{
     const pattern=name==='load-detail-error'?new RegExp(`/fbs-supplies/${f.supplies[0]}(?:\\?.*)?$`):name==='load-options-error'?'**/pick-options':'**/products/linked-wb-catalog*'
