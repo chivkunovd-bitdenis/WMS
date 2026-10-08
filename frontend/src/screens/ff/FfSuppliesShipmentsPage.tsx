@@ -1585,7 +1585,6 @@ export function FfSuppliesShipmentsPage({
     const boxBarcode = box.internal_barcode?.trim()
     const boxLabel = `Короб ${boxOrdinal}`
     const hasLines = box.lines.length > 0
-    const boxUnits = box.lines.reduce((sum, ln) => sum + ln.quantity, 0)
     const isCurrent = box.id === currentBoxId
     const isExpanded = expandedBoxIds.has(box.id)
 
@@ -1630,11 +1629,13 @@ export function FfSuppliesShipmentsPage({
               <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
                 {boxLabel}
               </Typography>
-              {/* WMS-686: размер короба («60×40×40 см») с экрана убран; вместо него —
-                  сколько штук в коробе, чтобы свёрнутый короб читался без раскрытия. */}
-              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
-                {hasLines ? `${boxUnits} шт` : 'готов к наполнению'}
-              </Typography>
+              {/* WMS-686: размер короба («60×40×40 см») с экрана убран, ничего вместо него
+                  не показывается; остаётся прежняя пометка пустого короба. */}
+              {!hasLines ? (
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
+                  готов к наполнению
+                </Typography>
+              ) : null}
               {boxBarcode ? (
                 <Typography
                   variant="caption"
