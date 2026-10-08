@@ -550,6 +550,7 @@ jobs:
           scripts/ci/tests/test_backend_shard_failclosed.py
           scripts/ci/tests/test_ci_release_additions.py
           scripts/ci/tests/test_backend_shard_redis_setup.py
+          scripts/ci/tests/test_ci_scope.py
           scripts/ci/tests/test_promote_guards.py
           scripts/ci/tests/test_process_contracts.py
           scripts/ci/tests/test_reviewed_process_upgrade.py
