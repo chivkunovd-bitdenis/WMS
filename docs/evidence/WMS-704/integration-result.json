@@ -1,0 +1,26 @@
+{
+  "runtime_backend_sha": "a19d02d31ba57763ce93a29005a95cc3f473e005",
+  "scenario_sha256": "a0eae4aac6b64f47dea97becfe2f7e77b7d1880514856e8a79ba7cc1a03e240b",
+  "command": "PYTHONDONTWRITEBYTECODE=1 /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -m pytest -q tests/test_rurua_recovery_readiness.py",
+  "cwd": "/Users/deniscivkunov/Projects/WMS/.worktrees/rurua-runtime-validation/backend",
+  "result": "1 passed, 6 deprecation warnings in 4.73s",
+  "ruff": "PASS; format already formatted",
+  "independent_executor": "/root/rurua_recovery_path",
+  "checks": [
+    "3 real pick API calls",
+    "3 real packing API calls",
+    "complete task API: done / packed",
+    "create and assign 3 boxes",
+    "retry each QR twice; 6 readback GET only; recovered_from_readback",
+    "3 labels ready",
+    "stock total remains48; no shipment ledger",
+    "real preflight_delivery can_deliver true",
+    "supply QR before handover fails expected supply_bad_status"
+  ],
+  "isolation": "SQLite synthetic exact-status fixtures; fake Ozon; no production state writes from tests",
+  "production_result": "One work supply exists; 3 real Ozon PDFs saved and checked; blockers[]; stock unchanged",
+  "limitations": [
+    "Authenticated browser interaction not performed",
+    "Physical packing/printing/marketplace handover not performed"
+  ]
+}
