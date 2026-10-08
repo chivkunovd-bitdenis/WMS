@@ -24,6 +24,7 @@ class CaseContract:
     title: str
     required: tuple[str, ...]
     file_required: tuple[str, ...] = ()
+    forbidden: tuple[str, ...] = ()
 
 
 CASES = (
@@ -226,27 +227,84 @@ CASES = (
         "seller products table and next MP picker show current stock after MP plan",
         (
             "await expect(tableHead).toContainText('Артикул продавца')",
-            "await expect(row.getByTestId('seller-stock-on-hand')).toHaveText('На ФФ 10')",  # noqa: RUF001
-            "await expect(row.getByTestId('seller-stock-in-storage')).toHaveText('В ячейках 10')",  # noqa: RUF001
-            "await expect(distribution).toContainText('FBS 0 шт')",
+            "const productsRes = await page.request.get(`${e2eApi}/products`",
+            "productsRes.ok()",
+            "products.find((product) => product.id === productId)",
+            "linkedProduct?.wb_nm_id).toBe(424242)",
+            "seller-catalog-stock-on-hand-${productId}",
+            "'На ФФ 10'",   # noqa: RUF001
+            "seller-catalog-stock-in-storage-${productId}",
+            "'В ячейках 10'",   # noqa: RUF001
+            "seller-catalog-stock-free-fbo-${productId}",
+            "'Свободный FBO 10'",
             "await expect(pickerRow.locator('td').nth(6)).toHaveText('6')",
         ),
     ),
     CaseContract(
         "E10",
         "frontend/tests-e2e/seller-stock-directions.spec.ts",
-        "seller creates, edits and deletes stock directions with compact FBS publication controls",
+        "FF user creates, edits and deletes reserve directions in FF catalog",
         (
-            "await expect(tableHead).toContainText('Артикул продавца')",
-            "r.status() === 422",
-            "'Нельзя распределить больше, чем есть на ФФ'",
+            "await page.goto('/app/ff/products')",
+            "await expect(page.getByTestId('ff-products-table')).toBeVisible()",
+            "ff-catalog-stock-in-storage-${productId}",
+            "'В ячейках 10'",  # noqa: RUF001
+            "ff-catalog-stock-on-hand-${productId}",
+            "'На ФФ 10'",  # noqa: RUF001
+            "ff-catalog-stock-free-fbo-${productId}",
+            "'Свободный FBO 10'",
+            "ff-catalog-reserves-${productId}",
+            "ff-stock-directions-panel-${productId}",
+            "ff-stock-direction-name-${productId}",
+            "ff-stock-direction-quantity-${productId}",
+            "ff-stock-direction-comment-${productId}",
+            "ff-stock-direction-submit-${productId}",
+            "ff-stock-direction-row-${firstDirectionId}",
+            "ff-stock-direction-edit-${reserveDirectionId}",
+            "ff-stock-direction-delete-${firstDirectionId}",
+            "ff-stock-direction-confirm-delete",
+            "Резерв/набор · 3 шт",
+            "Резерв/набор · 4 шт",
+            "const reserveSummary = panel.locator('.MuiTypography-caption')",
+            "await expect(reserveSummary).toHaveCount(1)",
+            "await expect(freeFboSummary).toHaveCount(1)",
+            "await expect(reserveSummary.locator('..')).toContainText",
+            "await expect(freeFboSummary.locator('..')).toContainText",
+            "expectReserveTotals(3, 7)",
+            "expectReserveTotals(5, 5)",
+            "expectReserveTotals(7, 3)",
+            "expectReserveTotals(4, 6)",
+            "firstCreateReq.postDataJSON() as { is_fbs: boolean }).is_fbs).toBe(false)",
+            "reservePatchReq.postDataJSON() as { is_fbs: boolean; quantity: number }))",
+            "is_fbs: false",
+            "response.request().method() === 'POST'",
+            "response.status() === 422",
+            "getByTestId('ff-products-error')",
+            "Нельзя распределить больше, чем есть на ФФ",
             "expect(deleteRequests).toBe(0)",
             "expect(deleteRequests).toBe(1)",
-            (
-                "await expect(row.getByTestId(`seller-stock-distribution-${productId}`))"
-                ".toContainText("
-            ),
-            "await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('Свободный FBO 6')",
+            "loginAsSeller(page, sellerEmail, password, { firstTime: true })",
+            "nav-seller-products",
+            "seller-products-table",
+            "seller-catalog-stock-free-fbo-${productId}",
+            "seller-catalog-reserves-${productId}",
+            "seller-reserves-panel-${productId}",
+            "seller-reserve-direction-row-${reserveDirectionId}",
+            "const sellerReserveSummary = sellerPanel",
+            "await expect(sellerReserveSummary).toHaveCount(1)",
+            "await expect(sellerFreeFboSummary).toHaveCount(1)",
+            "sellerReserveSummary.locator('..')).toContainText('4 шт')",
+            "sellerFreeFboSummary.locator('..')).toContainText('6 шт')",
+            "Редактировать' })).toHaveCount(0)",
+            "Удалить' })).toHaveCount(0)",
+            "seller-reserves-close",
+            "getByRole('button')).toHaveCount(1)",
+        ),
+        forbidden=(
+            "seller-stock-",
+            "seller-fbs-",
+            "ff-stock-direction-fbs-",
+            "'/seller/products'",
         ),
     ),
 )
@@ -304,6 +362,9 @@ def audit_contract(overrides: Mapping[str, str] | None = None) -> list[str]:
         for fragment in case.file_required:
             if fragment not in source:
                 errors.append(f"{case.case_id}: missing access-control assertion {fragment!r}")
+        for fragment in case.forbidden:
+            if fragment in block:
+                errors.append(f"{case.case_id}: unsupported UI assertion {fragment!r}")
     return errors
 
 
@@ -437,5 +498,32 @@ def test_guard_rejects_runtime_skips_inside_target_cases(case: CaseContract) -> 
     errors = audit_contract({case.path: mutated})
     assert any(
         f"{case.case_id}: target test contains a runtime skip/fixme" in error
+        for error in errors
+    )
+
+
+@pytest.mark.parametrize(
+    ("case", "fragment"),
+    [
+        (case, fragment)
+        for case in CASES
+        for fragment in case.forbidden
+    ],
+    ids=[
+        f"{case.case_id}-forbidden-{index}"
+        for case in CASES
+        for index, _fragment in enumerate(case.forbidden)
+    ],
+)
+def test_guard_rejects_unsupported_ui_assertions(
+    case: CaseContract, fragment: str
+) -> None:
+    source = _source(case.path, {})
+    block, error = _test_block(source, case.title)
+    assert error is None
+    mutated = source.replace(block, f"{block}\n{fragment}", 1)
+    errors = audit_contract({case.path: mutated})
+    assert any(
+        f"{case.case_id}: unsupported UI assertion {fragment!r}" in error
         for error in errors
     )
