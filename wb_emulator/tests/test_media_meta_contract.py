@@ -208,6 +208,38 @@ def test_delete_order_meta_rejects_unknown_kind(client: TestClient) -> None:
     assert response.json() == {"detail": "invalid_meta_kind"}
 
 
+def test_batch_meta_readback_preserves_stored_meta_details(client: TestClient) -> None:
+    kiz = "010460000000000021N4N57TEST0006"
+    rejected_uin = "ERR-UIN-TEST-0006"
+    assert client.put(
+        "/api/v3/orders/555006/meta/sgtin",
+        headers=AUTH_HEADERS,
+        json={"sgtins": [kiz]},
+    ).status_code == 200
+    assert client.put(
+        "/api/v3/orders/555006/meta/uin",
+        headers=AUTH_HEADERS,
+        json={"uins": [rejected_uin]},
+    ).status_code == 200
+
+    response = client.post(
+        "/api/marketplace/v3/orders/meta",
+        headers=AUTH_HEADERS,
+        json={"orders": [555006]},
+    )
+
+    assert response.status_code == 200
+    order = response.json()["orders"][0]
+    assert order["meta"] == {
+        "sgtins": [{"value": kiz, "checkStatus": "ok"}],
+        "uins": [{"value": rejected_uin, "checkStatus": "error"}],
+    }
+    assert order["metaDetails"] == [
+        {"key": "sgtin", "value": kiz, "decision": "accepted"},
+        {"key": "uin", "value": rejected_uin, "decision": "rejected"},
+    ]
+
+
 def test_media_meta_routes_require_auth(client: TestClient) -> None:
     response = client.post(
         "/api/v3/orders/stickers",
