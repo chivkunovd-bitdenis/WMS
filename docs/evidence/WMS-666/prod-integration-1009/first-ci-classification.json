@@ -1,0 +1,31 @@
+{
+  "first_ci_run": 37856202750,
+  "tested_sha": "9625259fab37601dcce138a33268f9839778e1a2",
+  "runtime_correction": "a32306cfe8a37e063711fd77ab1246b9ade836ee",
+  "reviewer": "Astra high (cloud reviewer unavailable)",
+  "targeted_pass": {
+    "workspace_load": 14,
+    "wb_controls": 37,
+    "picking_caller_contract": 20,
+    "change_scope": 10,
+    "thermal_and_pdf_inputs": 17
+  },
+  "local_dom_limit": "Node24 ESM module loading, confirmed by inspector before React scenario; final Linux CI required",
+  "real_failure": "C19 failed request was repeated on tab changes; fixed reset lifetime, expected one POST retained",
+  "ci_job_summaries": {
+    "frontend": [
+      "2026-10-08T22:59:23.7175135Z ⎯⎯⎯⎯⎯⎯ Failed Tests 39 ⎯⎯⎯⎯⎯⎯⎯",
+      "2026-10-08T22:59:24.0383385Z  Test Files  9 failed | 191 passed (200)",
+      "2026-10-08T22:59:24.0383978Z       Tests  39 failed | 1649 passed | 3 skipped (1691)",
+      "2026-10-08T22:59:36.1800806Z  Test Files  1 passed (1)",
+      "2026-10-08T22:59:36.1802303Z       Tests  1 passed | 6 skipped (7)"
+    ],
+    "guard": [
+      "2026-10-08T22:53:55.7847753Z =========================== short test summary info ============================",
+      "2026-10-08T22:53:55.7849389Z FAILED tools/support_agent/tests/test_night.py::test_checks_merge_fresh_etalon_before_review_and_refresh_control_hashes - subprocess.CalledProcessError: Command '['git', 'commit', '-qm', 'WMS-700: реализация']' returned non-zero exit status 128.",
+      "2026-10-08T22:53:55.7851812Z FAILED tools/support_agent/tests/test_night.py::test_checks_recover_saved_etalon_merge_intent_after_interruption - subprocess.CalledProcessError: Command '['git', 'commit', '-qm', 'WMS-700: реализация']' returned non-zero exit status 128.",
+      "2026-10-08T22:53:55.7852993Z 2 failed, 52 passed in 1.53s"
+    ],
+    "print": []
+  }
+}
