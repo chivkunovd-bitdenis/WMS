@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import shutil
 import subprocess
+import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -86,6 +89,17 @@ _TEST_RUN_ID = "_".join(
 )
 _TEST_DB_PATH = Path(__file__).resolve().parent / f"wms_pytest_{_TEST_RUN_ID}.sqlite"
 _TEST_DATA_DIR = Path(__file__).resolve().parent / f"wms_pytest_data_{_TEST_RUN_ID}"
+_TEST_DB_SIDECARS = ("", "-wal", "-shm", "-journal")
+_AUTO_TEST_DB_CLEANUP = "WMS_TEST_DATABASE_URL" not in os.environ and not any(
+    Path(f"{_TEST_DB_PATH}{suffix}").exists()
+    or Path(f"{_TEST_DB_PATH}{suffix}").is_symlink()
+    for suffix in _TEST_DB_SIDECARS
+)
+_AUTO_TEST_DATA_CLEANUP = (
+    "WMS_TEST_DATA_DIR" not in os.environ
+    and not _TEST_DATA_DIR.exists()
+    and not _TEST_DATA_DIR.is_symlink()
+)
 if explicit_test_url := os.environ.get("WMS_TEST_DATABASE_URL"):
     test_url = make_url(explicit_test_url)
     if test_url.get_backend_name() == "postgresql" and (
@@ -106,6 +120,54 @@ from app.services.fbs_stock_publish_service import drain_background_stock_publis
 from app.services.fbs_stock_sync_service import drain_zero_publish_background_tasks
 
 _SCHEMA_READY = False
+
+
+def _cleanup_generated_test_artifacts() -> None:
+    if not (_AUTO_TEST_DB_CLEANUP or _AUTO_TEST_DATA_CLEANUP):
+        return
+
+    try:
+        asyncio.run(engine.dispose())
+    except Exception as exc:
+        print(
+            f"pytest artifact cleanup skipped: could not dispose database engine: {exc}",
+            file=sys.stderr,
+        )
+        return
+
+    if _AUTO_TEST_DB_CLEANUP:
+        for suffix in _TEST_DB_SIDECARS:
+            path = Path(f"{_TEST_DB_PATH}{suffix}")
+            try:
+                if path.is_symlink():
+                    print(f"pytest artifact cleanup skipped symlink: {path}", file=sys.stderr)
+                elif path.is_file():
+                    path.unlink()
+                elif path.exists():
+                    print(f"pytest artifact cleanup skipped non-file: {path}", file=sys.stderr)
+            except OSError as exc:
+                print(f"pytest artifact cleanup could not remove {path}: {exc}", file=sys.stderr)
+
+    if _AUTO_TEST_DATA_CLEANUP:
+        try:
+            if _TEST_DATA_DIR.is_symlink():
+                print(f"pytest artifact cleanup skipped symlink: {_TEST_DATA_DIR}", file=sys.stderr)
+            elif _TEST_DATA_DIR.is_dir():
+                shutil.rmtree(_TEST_DATA_DIR)
+            elif _TEST_DATA_DIR.exists():
+                print(
+                    f"pytest artifact cleanup skipped non-directory: {_TEST_DATA_DIR}",
+                    file=sys.stderr,
+                )
+        except OSError as exc:
+            print(
+                f"pytest artifact cleanup could not remove {_TEST_DATA_DIR}: {exc}",
+                file=sys.stderr,
+            )
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    _cleanup_generated_test_artifacts()
 
 
 async def _rebuild_schema() -> None:
