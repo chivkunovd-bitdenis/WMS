@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Лист подбора — Observed handoff</title>
+    <style>
+      @page { size: A4 landscape; margin: 10mm; }
+      * { box-sizing: border-box; }
+      body { margin: 0; color: #172033; font: 12px/1.35 Arial, sans-serif; }
+      @media screen { body { max-width: 277mm; margin: 12px auto; } }
+      h1 { margin: 0 0 4px; font-size: 22px; }
+      .subtitle { margin-bottom: 14px; color: #5c6475; }
+      .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+      .meta div { border: 1px solid #d9dce5; border-radius: 6px; padding: 7px 9px; }
+      .meta span { display: block; color: #687083; font-size: 10px; }
+      .meta strong { display: block; margin-top: 2px; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      th, td { border: 1px solid #cfd3df; padding: 6px; text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
+      th { background: #f1eefb; font-size: 10px; text-transform: uppercase; }
+      tr { break-inside: avoid; }
+      .number { width: 28px; text-align: center; }
+      .image { width: 54px; text-align: center; }
+      .image img { display: block; width: 42px; height: 42px; margin: auto; object-fit: contain; }
+      .size { text-align: center; }
+      td.size { font-size: 20px; font-weight: 700; }
+      .quantity { text-align: center; font-weight: 700; }
+      .sticker { width: 116px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+      .muted { margin-top: 3px; color: #687083; font-size: 10px; }
+      .orders { font-size: 10px; white-space: nowrap; }
+      th.quantity { font-size: 9px; white-space: nowrap; }
+      .sources { font-size: 10px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
+      .source-group + .source-group { margin-top: 1.4em; }
+      .source-group > strong { display: block; }
+      .footer { margin-top: 8px; color: #687083; font-size: 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>Лист подбора FBS</h1>
+    <div class="subtitle">Observed handoff · № WB WB-GI-662</div>
+    <div class="meta">
+      <div><span>Селлер</span><strong>WMS662 seller</strong></div>
+      <div><span>Склад WMS</span><strong>WMS662 warehouse</strong></div>
+      <div><span>Маршрут</span><strong>Склад / СЦ</strong></div>
+      <div><span>Сдать до</span><strong>{deadline}</strong></div>
+    </div>
+    <table>
+      <colgroup><col style="width:2.6745%" /><col style="width:5.1579%" /><col style="width:19.0379%" /><col style="width:6.7148%" /><col style="width:3.5018%" /><col style="width:4.6931%" /><col style="width:21.3999%" /><col style="width:6.4982%" /><col style="width:11.0800%" /><col style="width:4.0794%" /><col style="width:6.4982%" /><col style="width:8.6643%" /></colgroup>
+      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар</th><th>Артикул</th><th>Цвет</th><th class="size">Размер</th><th>Поставка / ячейка / короб</th><th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="number">1–2</td>
+        <td class="image"><span>—</span></td>
+        <td>
+          <strong>SKU 0</strong>
+          <div class="muted"></div>
+        </td>
+        <td>WB 3000</td>
+        <td>—</td>
+        <td class="size">—</td>
+        <td class="sources"><div class="source-group"><strong>П: 96</strong><div>Россыпью: 2 шт.</div></div></td>
+        <td class="orders">№662000<br />№662001</td>
+        <td class="sticker">S <strong>TK-2</strong><br />S <strong>TK-1</strong></td>
+        <td class="quantity">2</td>
+        <td class="quantity">2 / 2</td>
+        <td>Не требуется</td>
+      </tr></tbody>
+    </table>
+    <div class="footer">Сформировано WMS: {printed} · Актуальное серверное состояние на момент печати.</div>
+    <script>
+      const images = Array.from(document.images);
+      const ready = images.map((image) => image.complete ? Promise.resolve() : new Promise((resolve) => {
+        image.addEventListener('load', resolve, { once: true });
+        image.addEventListener('error', resolve, { once: true });
+      }));
+      Promise.all(ready).then(() => { window.focus(); window.print(); });
+    </script>
+  </body>
+</html>
