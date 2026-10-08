@@ -539,8 +539,9 @@ async def test_repeat_add_then_start_work_then_more_orders_only_request_missing(
         order_ids: list[uuid.UUID] | None,
         retry_missing: bool,
         http_client: httpx.AsyncClient,
+        _wb_sticker_fetch: print_assets.OrderLabelFetch | None = None,
     ) -> None:
-        del session, tenant_id, supply_id, kind, retry_missing, http_client
+        del session, tenant_id, supply_id, kind, retry_missing, http_client, _wb_sticker_fetch
         create_prefetch_order_ids.append(order_ids)
 
     monkeypatch.setattr(print_assets, "request_supply_print_batch", miss_create_prefetch)
