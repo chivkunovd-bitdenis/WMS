@@ -673,6 +673,8 @@ async def test_taskless_printed_current_kiz_can_be_applied_without_creating_task
             ).order_by(MarkingCode.cis_code)
         )).all())
         assert len(initial_pool) == 2
+        initial_pool_ids = {code.id for code in initial_pool}
+        await session.commit()
     sent_values = _patch_wb_acceptance(monkeypatch)
     monkeypatch.setattr(
         tape.marking_svc, "require_marketplace_token", AsyncMock(return_value="test"),
@@ -760,7 +762,7 @@ async def test_taskless_printed_current_kiz_can_be_applied_without_creating_task
             )
         )).all())
         assert len(available_after) == 1
-        assert available_after[0].id in {item.id for item in initial_pool}
+        assert available_after[0].id in initial_pool_ids
         assert available_after[0].id != code_id
     assert await stock_snapshot() == before_stock
 
@@ -809,7 +811,10 @@ async def test_taskless_manual_pool_binding_applies_without_packaging_task(
             ).order_by(MarkingCode.cis_code)
         )).all())
         assert len(available_before) == 2
-    cis_code = available_before[0].cis_code
+        available_before_ids = [code.id for code in available_before]
+        available_before_values = [code.cis_code for code in available_before]
+        await session.commit()
+    cis_code = available_before_values[0]
     validation = await async_client.post(
         "/operations/fbs-orders/kiz/validate",
         headers=headers,
@@ -879,7 +884,7 @@ async def test_taskless_manual_pool_binding_applies_without_packaging_task(
             )
         )).all())
         assert len(available_after) == 1
-        assert available_after[0].id == available_before[1].id
+        assert available_after[0].id == available_before_ids[1]
     assert await stock_snapshot() == before_stock
 
 
