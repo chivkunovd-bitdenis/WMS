@@ -1,0 +1,662 @@
+[
+  {
+    "name": "S1-six-tabs-and-exact-membership",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=delivery",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=delivery",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=done",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=done",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=expired",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=cancelled",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S2-marketplace-seller-search-empty",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=ozon&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=wb&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-sellers/5f4c1eb8-133f-42cc-99f7-a5e73d6389f8/warehouses",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&seller_id=5f4c1eb8-133f-42cc-99f7-a5e73d6389f8&marketplace=wb&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=wb&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=wb&status_group=new&search=880000001",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=wb&status_group=new&search=ABSENT-FBS-MAIN-ORDER",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S3-ozon-position-fields",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S2-two-wb-warehouses-exact-membership",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=wb&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=wb&status_group=new&wb_warehouse_id=501002",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=wb&status_group=new&wb_warehouse_id=501001",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=ozon&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S4-hidden-selection-and-loaded-select-all",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new&search=MAIN-ozon_new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=ozon&status_group=new&search=MAIN-ozon_new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S4-not-published-selectable",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S4-selected-dialog-remove-and-clear",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S2-S4-selection-resets-and-warehouse-reset",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-sellers/5f4c1eb8-133f-42cc-99f7-a5e73d6389f8/warehouses",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&seller_id=5f4c1eb8-133f-42cc-99f7-a5e73d6389f8&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new&wb_warehouse_id=501001",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S4-last-row-remains-clickable-under-selection-panel",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S4-operator-role",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S5-real-preflight-single-wb",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/preflight",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S6-no-compatible-ozon-supply",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&seller_id=2f9eb18e-dc56-4b26-b3ee-a366efd8c524&status_group=active",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S7-supply-columns-document-url-reload",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/36a46bb1-c56a-4ed8-a59d-5b9877e9b827/workspace",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/36a46bb1-c56a-4ed8-a59d-5b9877e9b827/workspace",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S8-missing-upstream-qr-does-not-open-document",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/f2139151-7f3e-4ec3-8c28-1c586be8972f/sync-tracking",
+        "status": 502
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/f2139151-7f3e-4ec3-8c28-1c586be8972f/cargo-places",
+        "status": 502
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S9-ozon-cancel-confirmation-only",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S10-cancelled-wb-entry-marketplace",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=cancelled",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=ozon&status_group=cancelled",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S12-independent-metric-seller-and-refresh",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-sellers/5f4c1eb8-133f-42cc-99f7-a5e73d6389f8/warehouses",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&seller_id=5f4c1eb8-133f-42cc-99f7-a5e73d6389f8&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&seller_id=5f4c1eb8-133f-42cc-99f7-a5e73d6389f8&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S12-valid-custom-dates-and-month",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S11-export-hidden-selected-wb",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new&search=MAIN-ozon_new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S11-export-ozon-positions-known-defect",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&marketplace=ozon&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S1-S12-arriving-order-refresh-and-no-sync-duplicate",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S5-S6-real-create-and-add-existing-wb",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/preflight",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/from-orders",
+        "status": 201
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&seller_id=2f9eb18e-dc56-4b26-b3ee-a366efd8c524&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/5a1a7f6a-3994-4cc1-9db2-56e8796bcefb/orders/batch",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S8-ready-wb-cargo-qr-preview-and-copies",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/5a1a7f6a-3994-4cc1-9db2-56e8796bcefb/sync-tracking",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/5a1a7f6a-3994-4cc1-9db2-56e8796bcefb/cargo-places",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-print-assets/a5df0b65-0f82-4935-a30b-c91c18f6323a/content",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "name": "S5-S7-two-sellers-two-wb-warehouses-common-assembly",
+    "status": "passed",
+    "responses": [
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/preflight",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/preflight",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/from-orders",
+        "status": 201
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/from-orders",
+        "status": 201
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 201
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=new",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/1b07fb90-1306-45f4-8d75-a6dcbec9b507/workspace",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/9f656ccf-b483-41b9-8e7c-8f943e0f91b1/workspace",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-supplies/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:25173/api/operations/fbs-assembly-tasks",
+        "status": 200
+      }
+    ]
+  }
+]

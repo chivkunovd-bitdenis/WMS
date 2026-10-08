@@ -1,0 +1,13 @@
+{
+  "workflow_sha": "6b3fc59bf9e58fae8c008ad3b8ec838c9c4d300f",
+  "workflow_ref": "refs/heads/codex/wms666-print-renderer-ci",
+  "application_input_ref": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "application_checkout_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "source_sha256": {
+    "scripts/ci/run_release_print.sh": "f7bb1499bc36b25c2d7f1efb234392e6cd7dc32c55035567f8829f8a147a6cd7",
+    "scripts/ci/wms-print-contract-probe.mjs": "775a1f107bb6883aad8fe29d210b0abca6f9313580c479c6c41f1e7ad0ef861d",
+    "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts": "cb6e63279e64ff3764660a38c2d27661c81241e680fe00a21d9eaa500626d096",
+    "frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx": "b9dcf7e92f14e191724b9c256a686c2a07ced27a8d55cfc393f0f50fe2278fa1",
+    "frontend/src/screens/v2/fbsPickingColor.wms673.pdf.test.ts": "821c3be70d00edfb19a69a3d85bb044b241af13cd2afeba34a3c3aca86d40f7e"
+  }
+}

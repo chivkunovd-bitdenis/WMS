@@ -1,0 +1,5007 @@
+{
+  "suite": "base",
+  "expected_cases": [
+    "sources",
+    "auto",
+    "ambiguous",
+    "wrong",
+    "change",
+    "burst",
+    "number-scan",
+    "layout",
+    "manual",
+    "early-exit",
+    "replay",
+    "lost",
+    "get-failure",
+    "network",
+    "last-unit",
+    "manual-conflict",
+    "print",
+    "tabs",
+    "group",
+    "ozon",
+    "ozon-group",
+    "empty",
+    "no-stock",
+    "partial",
+    "suffix",
+    "focus",
+    "group-sellers",
+    "ozon-null",
+    "packing-flag"
+  ],
+  "test_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "app_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "counts": {
+    "executed": 29,
+    "passed": 29,
+    "failed": 0,
+    "blocked": 0
+  },
+  "cases": [
+    {
+      "name": "packing-flag",
+      "checkpoints": [
+        {
+          "name": "packing-flag",
+          "expected_count": 1,
+          "product": "559371d7-207c-462f-827c-cb86017ed6a8",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/581bf488-e9fe-49f2-95c4-d566021447c2/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-28-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "d4bae066-8257-4e3f-b853-d572d6ed50d0",
+            "location_code": "A-28-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/581bf488-e9fe-49f2-95c4-d566021447c2/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-28-00\",\"product_id\":\"559371d7-207c-462f-827c-cb86017ed6a8\",\"storage_location_id\":\"d4bae066-8257-4e3f-b853-d572d6ed50d0\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "d4bae066-8257-4e3f-b853-d572d6ed50d0",
+            "location_code": "A-28-1",
+            "product_id": "559371d7-207c-462f-827c-cb86017ed6a8",
+            "sku_code": "PICK-28-00",
+            "product_name": "Browser picking packing-flag product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "559371d7-207c-462f-827c-cb86017ed6a8",
+            "location": "d4bae066-8257-4e3f-b853-d572d6ed50d0",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 0,
+            "packed": 29
+          },
+          {
+            "product": "559371d7-207c-462f-827c-cb86017ed6a8",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "db6de6c1-ae5c-4e16-9d9e-86b74dba03df",
+            "supply": "581bf488-e9fe-49f2-95c4-d566021447c2",
+            "product": "559371d7-207c-462f-827c-cb86017ed6a8",
+            "order": "2d4184b3-319f-49fd-870b-ccddfbf7e56e",
+            "position": null,
+            "location": "d4bae066-8257-4e3f-b853-d572d6ed50d0",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "75ec105f-52db-48c6-9be8-8d52ba206a3c",
+            "active": true,
+            "movement": "9a0f6898-eefc-4052-91d4-3af8ca306158"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "2d4184b3-319f-49fd-870b-ccddfbf7e56e",
+            "product": "559371d7-207c-462f-827c-cb86017ed6a8",
+            "quantity": 1
+          },
+          {
+            "order": "65185861-b075-45ed-b98b-4326e112954f",
+            "product": "559371d7-207c-462f-827c-cb86017ed6a8",
+            "quantity": 1
+          },
+          {
+            "order": "5c28335b-08ac-4586-9f5d-cad7d6044767",
+            "product": "559371d7-207c-462f-827c-cb86017ed6a8",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "sources",
+      "checkpoints": [
+        {
+          "name": "sources-selected-only",
+          "expected_count": 0,
+          "product": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+          "status": "verified",
+          "actual_count": 0
+        },
+        {
+          "name": "sources",
+          "expected_count": 1,
+          "product": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/7eba1e2e-ef77-405f-ac81-27dafc024f71/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"BOX-0-0\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "container",
+            "storage_location_id": "ad7c957b-638c-4316-af2d-01902ae62c3e",
+            "location_code": "A-00-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": "box",
+            "container_id": "90015285-4797-4190-9177-17a2c234cc38",
+            "container_code": "BOX-0-0"
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/7eba1e2e-ef77-405f-ac81-27dafc024f71/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000000000\",\"product_id\":\"9559bae5-f7c3-47e8-959a-37ad70d8edc4\",\"storage_location_id\":\"ad7c957b-638c-4316-af2d-01902ae62c3e\",\"container_kind\":\"box\",\"container_id\":\"90015285-4797-4190-9177-17a2c234cc38\"}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "ad7c957b-638c-4316-af2d-01902ae62c3e",
+            "location_code": "A-00-1",
+            "product_id": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+            "sku_code": "PICK-00-00",
+            "product_name": "Browser picking sources product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": "box",
+            "container_id": "90015285-4797-4190-9177-17a2c234cc38",
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+            "location": "ad7c957b-638c-4316-af2d-01902ae62c3e",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+            "location": "79f9f4a1-9fda-4e12-8938-bfd05e100e6a",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+            "location": "ad7c957b-638c-4316-af2d-01902ae62c3e",
+            "container": "6686532d-f8f5-4382-a581-d3fe329bfe97",
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+            "location": "ad7c957b-638c-4316-af2d-01902ae62c3e",
+            "container": "90015285-4797-4190-9177-17a2c234cc38",
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "261e4c0f-1aae-46cd-a978-bb0b67f4f26a",
+            "supply": "7eba1e2e-ef77-405f-ac81-27dafc024f71",
+            "product": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+            "order": "877aafeb-d332-464b-aaf4-5cf1051a2363",
+            "position": null,
+            "location": "ad7c957b-638c-4316-af2d-01902ae62c3e",
+            "container": "90015285-4797-4190-9177-17a2c234cc38",
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "341dcdbd-e577-4b30-bbfc-9a3313f9a20b",
+            "active": true,
+            "movement": "4fbaf7d1-244b-41a3-aed4-efb0e518bdcc"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "d8ec22d6-dc44-4515-a725-3f76f60b2e0e",
+            "product": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+            "quantity": 1
+          },
+          {
+            "order": "877aafeb-d332-464b-aaf4-5cf1051a2363",
+            "product": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+            "quantity": 1
+          },
+          {
+            "order": "c82b60a1-8b02-42df-9157-efa459921268",
+            "product": "9559bae5-f7c3-47e8-959a-37ad70d8edc4",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "auto",
+      "checkpoints": [
+        {
+          "name": "auto",
+          "expected_count": 1,
+          "product": "c7c4b3b8-246d-466d-97fe-b02d9c9dc8f0",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/6d1975a8-9b3f-4eb5-a865-544bdc5af101/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-01-00\",\"product_id\":\"c7c4b3b8-246d-466d-97fe-b02d9c9dc8f0\",\"storage_location_id\":\"83261d59-1e0a-4e81-b33d-93847b9fd22e\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "83261d59-1e0a-4e81-b33d-93847b9fd22e",
+            "location_code": "A-01-1",
+            "product_id": "c7c4b3b8-246d-466d-97fe-b02d9c9dc8f0",
+            "sku_code": "PICK-01-00",
+            "product_name": "Browser picking auto product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "c7c4b3b8-246d-466d-97fe-b02d9c9dc8f0",
+            "location": "83261d59-1e0a-4e81-b33d-93847b9fd22e",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "c7c4b3b8-246d-466d-97fe-b02d9c9dc8f0",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "80290acd-ba0f-4b36-af07-98a84b970dd9",
+            "supply": "6d1975a8-9b3f-4eb5-a865-544bdc5af101",
+            "product": "c7c4b3b8-246d-466d-97fe-b02d9c9dc8f0",
+            "order": "1b755396-e95c-44da-8550-e957285bbcee",
+            "position": null,
+            "location": "83261d59-1e0a-4e81-b33d-93847b9fd22e",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "717570f9-f768-4b75-89ba-d322fc7242d8",
+            "active": true,
+            "movement": "15522af3-5e07-4b99-b464-0d7a2df60eaf"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "4142cd82-1dd6-4c2c-bb7f-c94a7f2c9743",
+            "product": "c7c4b3b8-246d-466d-97fe-b02d9c9dc8f0",
+            "quantity": 1
+          },
+          {
+            "order": "1b755396-e95c-44da-8550-e957285bbcee",
+            "product": "c7c4b3b8-246d-466d-97fe-b02d9c9dc8f0",
+            "quantity": 1
+          },
+          {
+            "order": "c45508bf-5493-487d-b1b9-89278aeb2fd7",
+            "product": "c7c4b3b8-246d-466d-97fe-b02d9c9dc8f0",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "ambiguous",
+      "checkpoints": [
+        {
+          "name": "ambiguous",
+          "expected_count": 0,
+          "product": "f589881b-352b-4bf2-91d8-b2b8d294137e",
+          "status": "verified",
+          "actual_count": 0
+        }
+      ],
+      "status": "passed",
+      "responses": [],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "f589881b-352b-4bf2-91d8-b2b8d294137e",
+            "location": "52d727bb-348c-4a71-864a-c0539f1a7c36",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "f589881b-352b-4bf2-91d8-b2b8d294137e",
+            "location": "169a4ddf-9b8d-4fb5-b2ce-033e95482b7e",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          }
+        ],
+        "picks": [],
+        "reserves": [
+          {
+            "order": "5655834f-450f-4a04-a1bf-8be9488fa21f",
+            "product": "f589881b-352b-4bf2-91d8-b2b8d294137e",
+            "quantity": 1
+          },
+          {
+            "order": "d6921868-ece7-4ba7-aa87-c35571df09f4",
+            "product": "f589881b-352b-4bf2-91d8-b2b8d294137e",
+            "quantity": 1
+          },
+          {
+            "order": "93e0c395-68c9-4e7d-a28d-7d3c6f377d91",
+            "product": "f589881b-352b-4bf2-91d8-b2b8d294137e",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "wrong",
+      "checkpoints": [
+        {
+          "name": "wrong-source",
+          "expected_count": 0,
+          "product": "88ee76ad-5cf9-4cef-b553-302b490f77ff",
+          "status": "verified",
+          "actual_count": 0
+        },
+        {
+          "name": "wrong-queue-recovery",
+          "expected_count": 1,
+          "product": "dfb00a59-6cff-4233-98ba-5ebb4e1381ea",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/ddd17cc8-7259-45f5-af54-077fe6006acf/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-03-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "ccd9d1dd-b4fe-48ed-94c9-f2d176f3edf0",
+            "location_code": "A-03-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/ddd17cc8-7259-45f5-af54-077fe6006acf/pick/scan",
+          "status": 409,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-03-01\",\"product_id\":\"88ee76ad-5cf9-4cef-b553-302b490f77ff\",\"storage_location_id\":\"ccd9d1dd-b4fe-48ed-94c9-f2d176f3edf0\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "detail": {
+              "code": "insufficient_unpacked",
+              "message": "Недостаточно товара в выбранном месте подбора.",
+              "context": {
+                "order_id": "79f399e0-63e0-4f6b-bf39-0feea1678b51",
+                "product_id": "88ee76ad-5cf9-4cef-b553-302b490f77ff",
+                "location_id": "ccd9d1dd-b4fe-48ed-94c9-f2d176f3edf0",
+                "location_code": "A-03-1",
+                "requested": 1,
+                "available": 0,
+                "recommended_action": "Выберите другую ячейку или тару с доступным остатком."
+              },
+              "retryable": false
+            }
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/ddd17cc8-7259-45f5-af54-077fe6006acf/pick/scan",
+          "status": 409,
+          "method": "POST",
+          "request": "{\"barcode\":\"ABSENT-PICK-PRODUCT\",\"storage_location_id\":\"ccd9d1dd-b4fe-48ed-94c9-f2d176f3edf0\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "detail": {
+              "code": "wrong_product",
+              "message": "Товар не найден по штрихкоду в этой поставке.",
+              "context": {},
+              "retryable": false
+            }
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/ddd17cc8-7259-45f5-af54-077fe6006acf/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-03-00\",\"product_id\":\"dfb00a59-6cff-4233-98ba-5ebb4e1381ea\",\"storage_location_id\":\"ccd9d1dd-b4fe-48ed-94c9-f2d176f3edf0\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "ccd9d1dd-b4fe-48ed-94c9-f2d176f3edf0",
+            "location_code": "A-03-1",
+            "product_id": "dfb00a59-6cff-4233-98ba-5ebb4e1381ea",
+            "sku_code": "PICK-03-00",
+            "product_name": "Browser picking wrong product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "88ee76ad-5cf9-4cef-b553-302b490f77ff",
+            "location": "ccd9d1dd-b4fe-48ed-94c9-f2d176f3edf0",
+            "container": null,
+            "quantity": 0,
+            "unpacked": 0,
+            "packed": 0
+          },
+          {
+            "product": "dfb00a59-6cff-4233-98ba-5ebb4e1381ea",
+            "location": "93a71be1-5238-450d-a721-5fc717e1a6aa",
+            "container": null,
+            "quantity": 0,
+            "unpacked": 0,
+            "packed": 0
+          },
+          {
+            "product": "88ee76ad-5cf9-4cef-b553-302b490f77ff",
+            "location": "93a71be1-5238-450d-a721-5fc717e1a6aa",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "dfb00a59-6cff-4233-98ba-5ebb4e1381ea",
+            "location": "ccd9d1dd-b4fe-48ed-94c9-f2d176f3edf0",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "dfb00a59-6cff-4233-98ba-5ebb4e1381ea",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "d106aea3-2263-4670-9db7-ceb07a47f4b9",
+            "supply": "ddd17cc8-7259-45f5-af54-077fe6006acf",
+            "product": "dfb00a59-6cff-4233-98ba-5ebb4e1381ea",
+            "order": "1b69d553-6e5a-4f80-8535-b20330ab65ea",
+            "position": null,
+            "location": "ccd9d1dd-b4fe-48ed-94c9-f2d176f3edf0",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "1e5cd544-03e9-4dc9-bab3-2d90d95cc18b",
+            "active": true,
+            "movement": "17037dfd-7354-4ac3-9942-dfd490f82cf6"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "1b69d553-6e5a-4f80-8535-b20330ab65ea",
+            "product": "dfb00a59-6cff-4233-98ba-5ebb4e1381ea",
+            "quantity": 1
+          },
+          {
+            "order": "d6cd0a30-b2d3-400a-84ea-96d9a2dc70b0",
+            "product": "dfb00a59-6cff-4233-98ba-5ebb4e1381ea",
+            "quantity": 1
+          },
+          {
+            "order": "ee1b77c4-3d1b-441c-852f-1185c58d8aee",
+            "product": "dfb00a59-6cff-4233-98ba-5ebb4e1381ea",
+            "quantity": 1
+          },
+          {
+            "order": "79f399e0-63e0-4f6b-bf39-0feea1678b51",
+            "product": "88ee76ad-5cf9-4cef-b553-302b490f77ff",
+            "quantity": 1
+          },
+          {
+            "order": "a0b2040f-ceae-47a9-ad7a-8c3a090429d8",
+            "product": "88ee76ad-5cf9-4cef-b553-302b490f77ff",
+            "quantity": 1
+          },
+          {
+            "order": "b73b5660-5871-47fb-af71-3c1d42e60006",
+            "product": "88ee76ad-5cf9-4cef-b553-302b490f77ff",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "change",
+      "checkpoints": [
+        {
+          "name": "change",
+          "expected_count": 1,
+          "product": "06bdbbc2-387d-44c5-b378-21a157b27422",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "change-clear",
+          "expected_count": 1,
+          "product": "06bdbbc2-387d-44c5-b378-21a157b27422",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/ad42e2f6-6582-4b09-a046-beb606192256/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-04-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "894f270a-ea9b-4593-b666-3fa892942e5a",
+            "location_code": "A-04-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/ad42e2f6-6582-4b09-a046-beb606192256/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-04-2\",\"storage_location_id\":\"894f270a-ea9b-4593-b666-3fa892942e5a\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "7871441b-102b-4396-aba4-500e37beba6d",
+            "location_code": "A-04-2",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/ad42e2f6-6582-4b09-a046-beb606192256/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-04-00\",\"product_id\":\"06bdbbc2-387d-44c5-b378-21a157b27422\",\"storage_location_id\":\"7871441b-102b-4396-aba4-500e37beba6d\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "7871441b-102b-4396-aba4-500e37beba6d",
+            "location_code": "A-04-2",
+            "product_id": "06bdbbc2-387d-44c5-b378-21a157b27422",
+            "sku_code": "PICK-04-00",
+            "product_name": "Browser picking change product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "06bdbbc2-387d-44c5-b378-21a157b27422",
+            "location": "894f270a-ea9b-4593-b666-3fa892942e5a",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "06bdbbc2-387d-44c5-b378-21a157b27422",
+            "location": "7871441b-102b-4396-aba4-500e37beba6d",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "06bdbbc2-387d-44c5-b378-21a157b27422",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "51a2c106-3206-48df-89ee-28c47b14a8a0",
+            "supply": "ad42e2f6-6582-4b09-a046-beb606192256",
+            "product": "06bdbbc2-387d-44c5-b378-21a157b27422",
+            "order": "3896e9dc-0e8b-4b8c-9548-5c89a3287d90",
+            "position": null,
+            "location": "7871441b-102b-4396-aba4-500e37beba6d",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "7bc9393a-f1bd-4298-a429-5d438a05fe88",
+            "active": true,
+            "movement": "40eee9da-06bc-4ff9-800f-d5bfb069558c"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "3896e9dc-0e8b-4b8c-9548-5c89a3287d90",
+            "product": "06bdbbc2-387d-44c5-b378-21a157b27422",
+            "quantity": 1
+          },
+          {
+            "order": "f1e94d2a-c49c-4ec0-955d-8f5ebd8c0c38",
+            "product": "06bdbbc2-387d-44c5-b378-21a157b27422",
+            "quantity": 1
+          },
+          {
+            "order": "c46c175e-c07b-42bc-8510-8ceaa041ab38",
+            "product": "06bdbbc2-387d-44c5-b378-21a157b27422",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "burst",
+      "checkpoints": [
+        {
+          "name": "burst",
+          "expected_count": 5,
+          "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+          "status": "verified",
+          "actual_count": 5
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9b3e3e00-94d2-4bea-8474-90c1d83fa103/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-05-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "location_code": "A-05-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9b3e3e00-94d2-4bea-8474-90c1d83fa103/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000000500\",\"product_id\":\"6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784\",\"storage_location_id\":\"c44705de-eb41-4ea2-8517-9d3d3980282f\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "location_code": "A-05-1",
+            "product_id": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "sku_code": "PICK-05-00",
+            "product_name": "Browser picking burst product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9b3e3e00-94d2-4bea-8474-90c1d83fa103/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000000500\",\"product_id\":\"6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784\",\"storage_location_id\":\"c44705de-eb41-4ea2-8517-9d3d3980282f\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "location_code": "A-05-1",
+            "product_id": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "sku_code": "PICK-05-00",
+            "product_name": "Browser picking burst product 0",
+            "picked_qty": 2,
+            "allocation_quantity": 2,
+            "source_picked_qty": 2,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9b3e3e00-94d2-4bea-8474-90c1d83fa103/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000000500\",\"product_id\":\"6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784\",\"storage_location_id\":\"c44705de-eb41-4ea2-8517-9d3d3980282f\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "location_code": "A-05-1",
+            "product_id": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "sku_code": "PICK-05-00",
+            "product_name": "Browser picking burst product 0",
+            "picked_qty": 3,
+            "allocation_quantity": 3,
+            "source_picked_qty": 3,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9b3e3e00-94d2-4bea-8474-90c1d83fa103/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000000500\",\"product_id\":\"6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784\",\"storage_location_id\":\"c44705de-eb41-4ea2-8517-9d3d3980282f\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "location_code": "A-05-1",
+            "product_id": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "sku_code": "PICK-05-00",
+            "product_name": "Browser picking burst product 0",
+            "picked_qty": 4,
+            "allocation_quantity": 4,
+            "source_picked_qty": 4,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9b3e3e00-94d2-4bea-8474-90c1d83fa103/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000000500\",\"product_id\":\"6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784\",\"storage_location_id\":\"c44705de-eb41-4ea2-8517-9d3d3980282f\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "location_code": "A-05-1",
+            "product_id": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "sku_code": "PICK-05-00",
+            "product_name": "Browser picking burst product 0",
+            "picked_qty": 5,
+            "allocation_quantity": 5,
+            "source_picked_qty": 5,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "2e11c1b1-677d-4584-bb48-05ac17298b84",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "7ebd61b6-9f2c-4aa0-bf04-de71059a826c",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "7f2158c1-7a23-4d2f-896d-cc618dfe76dd",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "f193c5c2-75d7-4dc8-8629-59c366cde1e2",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "fe281915-8014-4449-83aa-26fe7a27bf50",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "a412dc3e-83b8-4004-a826-6af33f9422da",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "8ab04b63-243e-470a-bb16-96a15a93073c",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "9692c12e-f138-45fb-bd60-074f523ab106",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "64aaa8c8-eed6-4ec8-a538-b509595668d9",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "030a8bd7-a2cc-47fb-91d1-d92cb41b431c",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "cfe79b77-d9e3-4e84-b77a-b5f248903276",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "3ee72348-443a-4e17-ba81-132748610722",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "29ba4f38-3f3d-40ce-92b6-21b7ffa19db9",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "92b41c22-4282-4920-939a-e2ff2459e7b4",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "91d7bd69-519d-4ff0-a29f-3dba6dd1da3e",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          },
+          {
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "quantity": 25,
+            "unpacked": 25,
+            "packed": 0
+          },
+          {
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 5,
+            "unpacked": 5,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "9d73af9e-25e1-471e-9a4b-c1e9b1638e43",
+            "supply": "9b3e3e00-94d2-4bea-8474-90c1d83fa103",
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "order": "2e560cec-8cc8-4cc2-a413-b3cc20d8781e",
+            "position": null,
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "50a93b28-17bc-4797-9722-c46d0b4ff00f",
+            "active": true,
+            "movement": "3c1e5026-3168-419b-950f-2509372fb441"
+          },
+          {
+            "id": "e3b085cf-acba-4ad6-b906-94df77119e7a",
+            "supply": "9b3e3e00-94d2-4bea-8474-90c1d83fa103",
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "order": "6463b179-6d62-48f2-901d-2bfd118250b5",
+            "position": null,
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "07522115-ed5e-449b-bbc3-1b006003f9ec",
+            "active": true,
+            "movement": "aef74eed-4427-4cb5-a48b-39ced0578fba"
+          },
+          {
+            "id": "527e526c-a771-4a25-a5f8-25f827a086e0",
+            "supply": "9b3e3e00-94d2-4bea-8474-90c1d83fa103",
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "order": "70600372-bbb0-4891-bfdc-d9e1f158b2e0",
+            "position": null,
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "c0dfb33d-c699-4c43-bd7e-9891946ebacc",
+            "active": true,
+            "movement": "6cfc60eb-1a54-4ede-9806-cab3cbc18d7b"
+          },
+          {
+            "id": "1bcf16f1-19eb-484f-9941-943b1875a164",
+            "supply": "9b3e3e00-94d2-4bea-8474-90c1d83fa103",
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "order": "7478594b-e700-4f9f-88e6-017e99b0a009",
+            "position": null,
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "60e42eb2-f9eb-43e6-9cb8-9e7dd6002099",
+            "active": true,
+            "movement": "a7618bd5-9f69-4a24-9c9e-565b3387e6a6"
+          },
+          {
+            "id": "c6c6873d-75ab-4dcf-844f-206b7ee3e3dc",
+            "supply": "9b3e3e00-94d2-4bea-8474-90c1d83fa103",
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "order": "b530e72b-d5c7-412e-a10f-5e39fd3ccc35",
+            "position": null,
+            "location": "c44705de-eb41-4ea2-8517-9d3d3980282f",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "55c8913e-9312-4d3b-82c9-fcea20fbc187",
+            "active": true,
+            "movement": "a60e99c5-22a2-44bf-88d9-f19110183b19"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "d5ed46fe-a7de-4b61-a0da-87e8f627d087",
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "quantity": 1
+          },
+          {
+            "order": "7478594b-e700-4f9f-88e6-017e99b0a009",
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "quantity": 1
+          },
+          {
+            "order": "b530e72b-d5c7-412e-a10f-5e39fd3ccc35",
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "quantity": 1
+          },
+          {
+            "order": "2e560cec-8cc8-4cc2-a413-b3cc20d8781e",
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "quantity": 1
+          },
+          {
+            "order": "70600372-bbb0-4891-bfdc-d9e1f158b2e0",
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "quantity": 1
+          },
+          {
+            "order": "6463b179-6d62-48f2-901d-2bfd118250b5",
+            "product": "6ec6fdbd-2e44-4d21-8018-2f5d8c5aa784",
+            "quantity": 1
+          },
+          {
+            "order": "db24c7d4-eff4-462b-a725-b3aeeadb2393",
+            "product": "2e11c1b1-677d-4584-bb48-05ac17298b84",
+            "quantity": 1
+          },
+          {
+            "order": "a4f0515b-5cb1-40ac-b993-f6ffc337c203",
+            "product": "2e11c1b1-677d-4584-bb48-05ac17298b84",
+            "quantity": 1
+          },
+          {
+            "order": "c6fc9f04-9789-4539-92bc-bdb821182d51",
+            "product": "2e11c1b1-677d-4584-bb48-05ac17298b84",
+            "quantity": 1
+          },
+          {
+            "order": "efedb9f0-c64e-485c-ac2b-9ad1663b1a9d",
+            "product": "7ebd61b6-9f2c-4aa0-bf04-de71059a826c",
+            "quantity": 1
+          },
+          {
+            "order": "44c60b1d-9d03-4055-bfd8-8ae96cbfa242",
+            "product": "7ebd61b6-9f2c-4aa0-bf04-de71059a826c",
+            "quantity": 1
+          },
+          {
+            "order": "95da2c66-5864-44c1-a3d4-e5ef144f12d1",
+            "product": "7ebd61b6-9f2c-4aa0-bf04-de71059a826c",
+            "quantity": 1
+          },
+          {
+            "order": "1b4f6155-8b25-40ca-bac2-a33ca99590a3",
+            "product": "7f2158c1-7a23-4d2f-896d-cc618dfe76dd",
+            "quantity": 1
+          },
+          {
+            "order": "409d82c5-d75b-42eb-acd9-0192c114524d",
+            "product": "7f2158c1-7a23-4d2f-896d-cc618dfe76dd",
+            "quantity": 1
+          },
+          {
+            "order": "b6781e28-bfc6-4b9f-8b54-9a4e9fcbc3fc",
+            "product": "7f2158c1-7a23-4d2f-896d-cc618dfe76dd",
+            "quantity": 1
+          },
+          {
+            "order": "6044c5c6-c269-4afa-8e1d-74b48ec51bbe",
+            "product": "f193c5c2-75d7-4dc8-8629-59c366cde1e2",
+            "quantity": 1
+          },
+          {
+            "order": "5028f40f-31f5-44eb-adde-fd54d59d33c2",
+            "product": "f193c5c2-75d7-4dc8-8629-59c366cde1e2",
+            "quantity": 1
+          },
+          {
+            "order": "df24d85e-c6d8-43fb-a0d8-1d9b29292cb1",
+            "product": "f193c5c2-75d7-4dc8-8629-59c366cde1e2",
+            "quantity": 1
+          },
+          {
+            "order": "bea9720e-7c98-4092-8c04-de8c989900ed",
+            "product": "fe281915-8014-4449-83aa-26fe7a27bf50",
+            "quantity": 1
+          },
+          {
+            "order": "64ec95fb-1fa5-4a47-bd66-e87717581ce1",
+            "product": "fe281915-8014-4449-83aa-26fe7a27bf50",
+            "quantity": 1
+          },
+          {
+            "order": "c77a4f42-7f9e-4144-881f-89132e9bc6a3",
+            "product": "fe281915-8014-4449-83aa-26fe7a27bf50",
+            "quantity": 1
+          },
+          {
+            "order": "02a8f0ac-d68b-48a1-9ac0-bc7a012278b7",
+            "product": "a412dc3e-83b8-4004-a826-6af33f9422da",
+            "quantity": 1
+          },
+          {
+            "order": "9a1e6532-221c-443a-9d6c-01fe89d5451d",
+            "product": "a412dc3e-83b8-4004-a826-6af33f9422da",
+            "quantity": 1
+          },
+          {
+            "order": "ac07d854-2184-46ba-b334-8ca5144c73d1",
+            "product": "a412dc3e-83b8-4004-a826-6af33f9422da",
+            "quantity": 1
+          },
+          {
+            "order": "1107c8f5-cb93-4e2d-8bd5-f7a3c571172f",
+            "product": "8ab04b63-243e-470a-bb16-96a15a93073c",
+            "quantity": 1
+          },
+          {
+            "order": "a24698da-5b47-4051-a557-33d7f1805fd1",
+            "product": "8ab04b63-243e-470a-bb16-96a15a93073c",
+            "quantity": 1
+          },
+          {
+            "order": "cfc4b491-5809-4f3b-acaf-6dfa0fd9717a",
+            "product": "8ab04b63-243e-470a-bb16-96a15a93073c",
+            "quantity": 1
+          },
+          {
+            "order": "ec0792ea-a799-4ad7-97b1-4b27ac582232",
+            "product": "9692c12e-f138-45fb-bd60-074f523ab106",
+            "quantity": 1
+          },
+          {
+            "order": "959c7ba9-63e8-4075-a116-ffbfd2a1af06",
+            "product": "9692c12e-f138-45fb-bd60-074f523ab106",
+            "quantity": 1
+          },
+          {
+            "order": "1deb8f30-4745-4756-bc42-7c5f5ef759f1",
+            "product": "9692c12e-f138-45fb-bd60-074f523ab106",
+            "quantity": 1
+          },
+          {
+            "order": "cd43b8ef-e97d-44bf-9214-a27a676d0564",
+            "product": "64aaa8c8-eed6-4ec8-a538-b509595668d9",
+            "quantity": 1
+          },
+          {
+            "order": "12a12f6d-2a9f-4460-b3cd-9b2d6ad59b73",
+            "product": "64aaa8c8-eed6-4ec8-a538-b509595668d9",
+            "quantity": 1
+          },
+          {
+            "order": "fb46cef5-a553-4def-bf37-73357f4b67c1",
+            "product": "64aaa8c8-eed6-4ec8-a538-b509595668d9",
+            "quantity": 1
+          },
+          {
+            "order": "e616f250-6739-4b54-90f4-66d1f53ee812",
+            "product": "030a8bd7-a2cc-47fb-91d1-d92cb41b431c",
+            "quantity": 1
+          },
+          {
+            "order": "976867e2-b214-43e0-9c32-408ea2c25684",
+            "product": "030a8bd7-a2cc-47fb-91d1-d92cb41b431c",
+            "quantity": 1
+          },
+          {
+            "order": "56a280ca-a9bb-4bf9-8acf-22acd6756811",
+            "product": "030a8bd7-a2cc-47fb-91d1-d92cb41b431c",
+            "quantity": 1
+          },
+          {
+            "order": "dea7e6be-d779-49d6-88d4-0f512b1e83bd",
+            "product": "cfe79b77-d9e3-4e84-b77a-b5f248903276",
+            "quantity": 1
+          },
+          {
+            "order": "305ad80e-227a-44c4-867e-1baf064ec941",
+            "product": "cfe79b77-d9e3-4e84-b77a-b5f248903276",
+            "quantity": 1
+          },
+          {
+            "order": "3f3d4e7e-1e01-4d73-8003-34f6b4435976",
+            "product": "cfe79b77-d9e3-4e84-b77a-b5f248903276",
+            "quantity": 1
+          },
+          {
+            "order": "7f1ef62f-506a-4832-8223-3c2249f16856",
+            "product": "3ee72348-443a-4e17-ba81-132748610722",
+            "quantity": 1
+          },
+          {
+            "order": "025603dc-f84e-4669-b214-d028a381a877",
+            "product": "3ee72348-443a-4e17-ba81-132748610722",
+            "quantity": 1
+          },
+          {
+            "order": "16e151b9-2175-4bbf-8f05-16b1dfebe806",
+            "product": "3ee72348-443a-4e17-ba81-132748610722",
+            "quantity": 1
+          },
+          {
+            "order": "27b46b69-dd00-46b9-bfe2-0921bb129539",
+            "product": "29ba4f38-3f3d-40ce-92b6-21b7ffa19db9",
+            "quantity": 1
+          },
+          {
+            "order": "60df44f0-0a10-48ed-93eb-ee9331aaf133",
+            "product": "29ba4f38-3f3d-40ce-92b6-21b7ffa19db9",
+            "quantity": 1
+          },
+          {
+            "order": "daa1b36d-edec-48f9-a584-a655a4652552",
+            "product": "29ba4f38-3f3d-40ce-92b6-21b7ffa19db9",
+            "quantity": 1
+          },
+          {
+            "order": "fb3357a3-544d-4dbc-ba48-ad8d014de373",
+            "product": "92b41c22-4282-4920-939a-e2ff2459e7b4",
+            "quantity": 1
+          },
+          {
+            "order": "1c681044-85ca-4500-9054-92970ab439c4",
+            "product": "92b41c22-4282-4920-939a-e2ff2459e7b4",
+            "quantity": 1
+          },
+          {
+            "order": "de9ea14a-a171-49ef-9260-07ab52e3161f",
+            "product": "92b41c22-4282-4920-939a-e2ff2459e7b4",
+            "quantity": 1
+          },
+          {
+            "order": "42b7aa51-1e3b-4599-9437-354ef7057a89",
+            "product": "91d7bd69-519d-4ff0-a29f-3dba6dd1da3e",
+            "quantity": 1
+          },
+          {
+            "order": "b2257fba-cfc9-4850-977b-b8284aa71afe",
+            "product": "91d7bd69-519d-4ff0-a29f-3dba6dd1da3e",
+            "quantity": 1
+          },
+          {
+            "order": "a9227b6c-9a66-4906-8c18-0db9613d7b08",
+            "product": "91d7bd69-519d-4ff0-a29f-3dba6dd1da3e",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "number-scan",
+      "checkpoints": [
+        {
+          "name": "number-scan",
+          "expected_count": 1,
+          "product": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "number-scan-no-late-manual",
+          "expected_count": 1,
+          "product": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/327a91d5-d99d-4a8c-ab3e-7bf69552a703/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-06-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "3b760312-a538-4f28-a408-646dffcafef6",
+            "location_code": "A-06-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/327a91d5-d99d-4a8c-ab3e-7bf69552a703/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000000600\",\"product_id\":\"cb543434-c82a-4170-8ef9-5a7eebeb13a8\",\"storage_location_id\":\"3b760312-a538-4f28-a408-646dffcafef6\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "3b760312-a538-4f28-a408-646dffcafef6",
+            "location_code": "A-06-1",
+            "product_id": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+            "sku_code": "PICK-06-00",
+            "product_name": "Browser picking number-scan product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+            "location": "3b760312-a538-4f28-a408-646dffcafef6",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "f352e6dd-2d61-4c46-815f-35f039499549",
+            "supply": "327a91d5-d99d-4a8c-ab3e-7bf69552a703",
+            "product": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+            "order": "23efa9f5-a4da-4062-a731-a64703dcd5eb",
+            "position": null,
+            "location": "3b760312-a538-4f28-a408-646dffcafef6",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "ac269000-e643-4511-bfec-8c48041fa665",
+            "active": true,
+            "movement": "c57408d3-f864-451a-8fa5-81b8eaa3419d"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "b597258c-3459-4fe9-a330-c32747e95d7b",
+            "product": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+            "quantity": 1
+          },
+          {
+            "order": "75592fb5-1775-4c3a-a0a9-0dffe4a2431d",
+            "product": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+            "quantity": 1
+          },
+          {
+            "order": "23efa9f5-a4da-4062-a731-a64703dcd5eb",
+            "product": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+            "quantity": 1
+          },
+          {
+            "order": "d9b745f7-6818-4848-9ace-da7de907178f",
+            "product": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+            "quantity": 1
+          },
+          {
+            "order": "32807375-379f-477d-828d-20077aa0d8db",
+            "product": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+            "quantity": 1
+          },
+          {
+            "order": "f069c4a1-4c0f-470a-b178-a31ba577a86c",
+            "product": "cb543434-c82a-4170-8ef9-5a7eebeb13a8",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "layout",
+      "checkpoints": [
+        {
+          "name": "layout-ru",
+          "expected_count": 1,
+          "product": "44d287d9-1b9e-4329-ac27-b3c6eba84e5c",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "layout-additional-ean",
+          "expected_count": 2,
+          "product": "44d287d9-1b9e-4329-ac27-b3c6eba84e5c",
+          "status": "verified",
+          "actual_count": 2
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/786ca152-fcbb-466e-aae6-88649fbf2b8a/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-07-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "2f01e49d-d037-4303-a339-2825ab2c9596",
+            "location_code": "A-07-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/786ca152-fcbb-466e-aae6-88649fbf2b8a/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-07-00\",\"product_id\":\"44d287d9-1b9e-4329-ac27-b3c6eba84e5c\",\"storage_location_id\":\"2f01e49d-d037-4303-a339-2825ab2c9596\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "2f01e49d-d037-4303-a339-2825ab2c9596",
+            "location_code": "A-07-1",
+            "product_id": "44d287d9-1b9e-4329-ac27-b3c6eba84e5c",
+            "sku_code": "PICK-07-00",
+            "product_name": "Browser picking layout product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/786ca152-fcbb-466e-aae6-88649fbf2b8a/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"3900000000700\",\"product_id\":\"44d287d9-1b9e-4329-ac27-b3c6eba84e5c\",\"storage_location_id\":\"2f01e49d-d037-4303-a339-2825ab2c9596\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "2f01e49d-d037-4303-a339-2825ab2c9596",
+            "location_code": "A-07-1",
+            "product_id": "44d287d9-1b9e-4329-ac27-b3c6eba84e5c",
+            "sku_code": "PICK-07-00",
+            "product_name": "Browser picking layout product 0",
+            "picked_qty": 2,
+            "allocation_quantity": 2,
+            "source_picked_qty": 2,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "44d287d9-1b9e-4329-ac27-b3c6eba84e5c",
+            "location": "2f01e49d-d037-4303-a339-2825ab2c9596",
+            "container": null,
+            "quantity": 28,
+            "unpacked": 28,
+            "packed": 0
+          },
+          {
+            "product": "44d287d9-1b9e-4329-ac27-b3c6eba84e5c",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 2,
+            "unpacked": 2,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "5e6ba977-a488-4b57-8376-04f1868cf9a1",
+            "supply": "786ca152-fcbb-466e-aae6-88649fbf2b8a",
+            "product": "44d287d9-1b9e-4329-ac27-b3c6eba84e5c",
+            "order": "086752cd-42cd-4307-8938-8ed6718d4054",
+            "position": null,
+            "location": "2f01e49d-d037-4303-a339-2825ab2c9596",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "93e4f180-60c5-469d-9654-89b615b8e253",
+            "active": true,
+            "movement": "adf7ebf1-b020-4fad-8d0d-f28c036edb7f"
+          },
+          {
+            "id": "24b4311d-08bb-49fe-a5ea-7169c7829e48",
+            "supply": "786ca152-fcbb-466e-aae6-88649fbf2b8a",
+            "product": "44d287d9-1b9e-4329-ac27-b3c6eba84e5c",
+            "order": "259a7866-6d54-4fbc-960d-cb42c8b549e8",
+            "position": null,
+            "location": "2f01e49d-d037-4303-a339-2825ab2c9596",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "6c899653-408d-43af-9226-2abcb5d9fc8f",
+            "active": true,
+            "movement": "b6c884da-e601-4ea0-a2c0-5621ba9c5703"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "7a3cd40e-57f7-40b2-8c4d-e667a0c88b21",
+            "product": "44d287d9-1b9e-4329-ac27-b3c6eba84e5c",
+            "quantity": 1
+          },
+          {
+            "order": "086752cd-42cd-4307-8938-8ed6718d4054",
+            "product": "44d287d9-1b9e-4329-ac27-b3c6eba84e5c",
+            "quantity": 1
+          },
+          {
+            "order": "259a7866-6d54-4fbc-960d-cb42c8b549e8",
+            "product": "44d287d9-1b9e-4329-ac27-b3c6eba84e5c",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "manual",
+      "checkpoints": [
+        {
+          "name": "manual-12",
+          "expected_count": 12,
+          "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+          "status": "verified",
+          "actual_count": 12
+        },
+        {
+          "name": "manual-reduce",
+          "expected_count": 10,
+          "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+          "status": "verified",
+          "actual_count": 10
+        },
+        {
+          "name": "manual-increase",
+          "expected_count": 11,
+          "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+          "status": "verified",
+          "actual_count": 11
+        },
+        {
+          "name": "manual-undo",
+          "expected_count": 10,
+          "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+          "status": "verified",
+          "actual_count": 10
+        },
+        {
+          "name": "manual-zero",
+          "expected_count": 0,
+          "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+          "status": "verified",
+          "actual_count": 0
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/29caeb4e-d044-4c89-8bac-61cf3f304d81/pick/set",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"product_id\":\"d965e2e1-8847-458a-9e3a-304ad7b0e47e\",\"storage_location_id\":\"37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb\",\"quantity\":12,\"expected_quantity\":0,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "id": "92b7514e-3dd9-5fc8-88c2-282d267e3c85",
+            "product_id": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "sku_code": "PICK-08-00",
+            "product_name": "Browser picking manual product 0",
+            "storage_location_id": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "location_code": "A-08-1",
+            "quantity": 12
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/29caeb4e-d044-4c89-8bac-61cf3f304d81/pick/set",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"product_id\":\"d965e2e1-8847-458a-9e3a-304ad7b0e47e\",\"storage_location_id\":\"37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb\",\"quantity\":10,\"expected_quantity\":12,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "id": "92b7514e-3dd9-5fc8-88c2-282d267e3c85",
+            "product_id": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "sku_code": "PICK-08-00",
+            "product_name": "Browser picking manual product 0",
+            "storage_location_id": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "location_code": "A-08-1",
+            "quantity": 10
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/29caeb4e-d044-4c89-8bac-61cf3f304d81/pick/set",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"product_id\":\"d965e2e1-8847-458a-9e3a-304ad7b0e47e\",\"storage_location_id\":\"37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb\",\"quantity\":11,\"expected_quantity\":10,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "id": "92b7514e-3dd9-5fc8-88c2-282d267e3c85",
+            "product_id": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "sku_code": "PICK-08-00",
+            "product_name": "Browser picking manual product 0",
+            "storage_location_id": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "location_code": "A-08-1",
+            "quantity": 11
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/29caeb4e-d044-4c89-8bac-61cf3f304d81/pick/set",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"product_id\":\"d965e2e1-8847-458a-9e3a-304ad7b0e47e\",\"storage_location_id\":\"37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb\",\"quantity\":10,\"expected_quantity\":11,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "id": "92b7514e-3dd9-5fc8-88c2-282d267e3c85",
+            "product_id": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "sku_code": "PICK-08-00",
+            "product_name": "Browser picking manual product 0",
+            "storage_location_id": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "location_code": "A-08-1",
+            "quantity": 10
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/29caeb4e-d044-4c89-8bac-61cf3f304d81/pick/set",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"product_id\":\"d965e2e1-8847-458a-9e3a-304ad7b0e47e\",\"storage_location_id\":\"37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb\",\"quantity\":0,\"expected_quantity\":10,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "id": "92b7514e-3dd9-5fc8-88c2-282d267e3c85",
+            "product_id": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "sku_code": "PICK-08-00",
+            "product_name": "Browser picking manual product 0",
+            "storage_location_id": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "location_code": "A-08-1",
+            "quantity": 0
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 0,
+            "unpacked": 0,
+            "packed": 0
+          },
+          {
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "1c816077-ec72-4e99-93b9-7bdb26e329a1",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "0fcca04d-1488-449a-9a26-26feff4ddda7",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "e4f0f285-aa8f-5bc4-be37-85fc04c785c1",
+            "active": false,
+            "movement": "8c56bda7-1d4d-4240-b037-2f20b9ca6a60"
+          },
+          {
+            "id": "ebc3d0e7-a8a1-4d45-9002-cb0dd84add1d",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "04eb64d9-ee40-41d2-8f14-c9a7ca097743",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "e49bbd1e-8abb-54d4-a887-cce75baee200",
+            "active": false,
+            "movement": "873a2753-830e-4040-9816-0cc2acc4b2ee"
+          },
+          {
+            "id": "60ebba98-34cc-40db-a9f3-2e31735dfc52",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "45292ed5-47ea-4a72-b79b-1fea36d62d71",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "0555dd5b-3db3-5323-8b35-d6d304eb23b1",
+            "active": false,
+            "movement": "59c9f56d-227e-48a7-882b-08c0662b5674"
+          },
+          {
+            "id": "725c8aa2-622e-4e97-960d-aaffedd728c8",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "7aa81bbf-8258-4bee-af4f-21f7bf199965",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "ad084427-3724-51b6-880d-c5134a3abc31",
+            "active": false,
+            "movement": "ea1ee46d-5a5e-4860-bed8-0729d1e5f1fd"
+          },
+          {
+            "id": "9141b989-e888-49f3-ad70-eec448f19d86",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "f9f918c9-3198-4d96-a5a1-bb80407c7cf2",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "33bd9e76-ab88-5f3a-870b-b37101d49665",
+            "active": false,
+            "movement": "d3511de3-ecbe-4bbc-9e41-ae5b43e49b6b"
+          },
+          {
+            "id": "9d175891-fa4b-44f0-99db-835c0704464d",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "57193830-2524-44c4-b1c3-4c30e19810a4",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "44481919-49e0-52b5-85ca-0408edf831d0",
+            "active": false,
+            "movement": "87a49506-adff-4bf3-8b27-eddb6045dd38"
+          },
+          {
+            "id": "a2099e35-a59c-4233-bd04-9e2ce212569a",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "7969d7ac-d023-4f10-bd0f-d8c0602bca18",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "72c1fc61-7bf6-511b-bd46-60035760d5bf",
+            "active": false,
+            "movement": "6c4cb1b7-0c39-4303-9f34-c4e0982bb001"
+          },
+          {
+            "id": "c1800bcc-5a07-4fc2-90d5-4c721496cc49",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "f54b2774-03b3-424a-8cd2-16a1120a0c5d",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "0f6320a0-c396-5c2d-9aac-96c0c5022dd5",
+            "active": false,
+            "movement": "9773af67-80d4-4448-a83a-cad461b4529a"
+          },
+          {
+            "id": "ca5d5782-85ac-4261-a995-69ff82e0692a",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "c640b5d4-d737-46d4-8ab1-35ed29f97673",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "8d2e1f28-5eef-57da-832b-b46aa80c6948",
+            "active": false,
+            "movement": "aefc32d5-8f48-4913-b3bc-fd87b60ab11b"
+          },
+          {
+            "id": "d1c72099-986f-432c-b0fd-83d70ee2f4e1",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "d8b1b276-8606-4f9c-86df-8948a56cf088",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "a7d1b8fa-a89e-55db-8f24-13cd074a4695",
+            "active": false,
+            "movement": "0b343cfb-15a3-4acb-9445-66e45485cf73"
+          },
+          {
+            "id": "88ffda6c-91df-4abb-81b8-64e08a664035",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "5186d482-fc1e-4b81-be6c-b2fd127fd6ea",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "656b4721-eabe-5c54-bb02-7001ee0d301f",
+            "active": false,
+            "movement": "105a98da-202d-4b2c-9b5e-51b30f6336dc"
+          },
+          {
+            "id": "576126b8-cef2-49ad-ba19-583e9041ef2a",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "818b93a1-75a1-4a42-b056-766f21ee8186",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "bd600eb9-8449-5106-ad7b-47b05f162953",
+            "active": false,
+            "movement": "a50aff60-f659-454b-b3cd-64b5b4d34af2"
+          },
+          {
+            "id": "369a85b6-702a-4085-a498-d42b05c4542a",
+            "supply": "29caeb4e-d044-4c89-8bac-61cf3f304d81",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "order": "dd141a1a-3177-4eb9-bfdf-d7f5cb147511",
+            "position": null,
+            "location": "37b6d4f3-8dc2-4d49-bfc8-1a0e251770cb",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "b4da0ec8-2364-5f45-86f6-0de4b89f0616",
+            "active": false,
+            "movement": "3bafd0ed-6e64-4b26-81c6-35e205966278"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "dd141a1a-3177-4eb9-bfdf-d7f5cb147511",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "818b93a1-75a1-4a42-b056-766f21ee8186",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "5186d482-fc1e-4b81-be6c-b2fd127fd6ea",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "d8b1b276-8606-4f9c-86df-8948a56cf088",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "c640b5d4-d737-46d4-8ab1-35ed29f97673",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "f54b2774-03b3-424a-8cd2-16a1120a0c5d",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "7969d7ac-d023-4f10-bd0f-d8c0602bca18",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "57193830-2524-44c4-b1c3-4c30e19810a4",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "f9f918c9-3198-4d96-a5a1-bb80407c7cf2",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "7aa81bbf-8258-4bee-af4f-21f7bf199965",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "04eb64d9-ee40-41d2-8f14-c9a7ca097743",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "0fcca04d-1488-449a-9a26-26feff4ddda7",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "45292ed5-47ea-4a72-b79b-1fea36d62d71",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          },
+          {
+            "order": "bf6c025f-3a6b-4c85-b029-23661b3875da",
+            "product": "d965e2e1-8847-458a-9e3a-304ad7b0e47e",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "early-exit",
+      "checkpoints": [
+        {
+          "name": "early-exit",
+          "expected_count": 12,
+          "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+          "status": "verified",
+          "actual_count": 12
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/a9e8018e-3656-48d9-a574-fc5e9263d245/pick/set",
+          "method": "POST",
+          "status": "network-failed",
+          "request": "{\"product_id\":\"a934fe79-816c-4574-99b5-26a248ab10f4\",\"storage_location_id\":\"a0bcf901-2b97-4967-ba8f-f0e48d3a692a\",\"quantity\":12,\"expected_quantity\":0,\"container_kind\":null,\"container_id\":null}",
+          "failure": {
+            "errorText": "net::ERR_ABORTED"
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "quantity": 18,
+            "unpacked": 18,
+            "packed": 0
+          },
+          {
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 12,
+            "unpacked": 12,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "262db9e8-5d7d-4e56-b25e-5b0e9410a674",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "c835a76d-2ca3-42de-8f6c-dbb613988cd5",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "00cb42f2-65a1-51d0-8372-2bace9733a97",
+            "active": true,
+            "movement": "3c994934-e25d-47dd-b900-4d2ecd524149"
+          },
+          {
+            "id": "081136c8-7e8f-4138-8287-57fd86e090a3",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "8f404b82-57c7-4f56-b7b5-6276f1c5a3a0",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "4a7f8867-1709-55f6-8e6d-0fd023372af0",
+            "active": true,
+            "movement": "799b8aa8-29eb-4867-9ce0-f84f9b02a523"
+          },
+          {
+            "id": "b28db886-7071-4327-b87d-fcdda0c78046",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "36a967ee-85ee-4e3e-8d3e-118993ad3566",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "bb709c7d-a41f-5805-9a3a-6b79bc227bd1",
+            "active": true,
+            "movement": "ce3d6b57-cf73-486e-87a8-0f046503e175"
+          },
+          {
+            "id": "75bfbb06-d915-40eb-af01-be6b2a3fabff",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "c0dd2f88-81a8-481a-8904-08b59fd96a1a",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "ad07743c-63ff-5bec-9f0b-90b89bc85ec2",
+            "active": true,
+            "movement": "27a34d81-4ced-4d63-8219-1b7e216acacb"
+          },
+          {
+            "id": "97870aa8-0d5a-4d28-96eb-123d348e5a31",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "33e9e442-6fe7-49e9-9bc9-4b8ef723661b",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "10a183cc-3708-55c9-8953-84ce9a8bfdba",
+            "active": true,
+            "movement": "d77541de-30d2-4ced-883d-c2c348ce2245"
+          },
+          {
+            "id": "5c9189d4-049a-46c0-90e1-a7ab53a5dd78",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "926e928b-dd8d-43ef-8725-5ad9a6b1acc2",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "e6181a4f-50f1-5abf-a5eb-8646bea4707f",
+            "active": true,
+            "movement": "0a6124d5-f317-4b9b-be33-b535ca55f811"
+          },
+          {
+            "id": "18b7632d-01c5-41c7-be81-2c1f1336f454",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "8af375e4-37dc-494c-b013-14fb7a44be16",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "caf3bd76-3361-533b-bd98-27dc0b484879",
+            "active": true,
+            "movement": "58e16dc7-43d2-4b2b-b4fc-253ac4845928"
+          },
+          {
+            "id": "47f4a7cf-cf17-4859-a692-284bf69345c5",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "890502eb-91a7-47de-afa9-2cf7b58881c3",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "5441f316-a652-5ba5-a96f-609cce8ae36c",
+            "active": true,
+            "movement": "ecd9c92b-e25b-4293-94c7-c18517198a41"
+          },
+          {
+            "id": "0a7ca7e6-551f-4d0c-bb62-1667d5b90a8f",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "c4cb58f8-1229-4076-88ee-459cd084c60d",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "562dede5-3be6-5773-bbb3-639a73217f8b",
+            "active": true,
+            "movement": "a71ab902-dd8a-45a9-ac1d-9a488082cd59"
+          },
+          {
+            "id": "c572c038-e56c-451e-9ddd-29141dcf8a7b",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "6ed24810-6b76-43fa-b767-cf406e171371",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "04307e61-8125-545e-aba3-3f4298038123",
+            "active": true,
+            "movement": "8457831d-5d1f-44b6-9534-2a2114947d4c"
+          },
+          {
+            "id": "9edf8e7c-9a1e-4109-b747-5992bae3e749",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "63e49b8d-c98b-4b46-9d95-13d007b6731b",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "a0dab372-6040-5f99-80ff-b74014ef69a7",
+            "active": true,
+            "movement": "91e4d8ec-78b7-44cc-900b-0cfd45734503"
+          },
+          {
+            "id": "4f20bacd-3803-4dca-a0df-1e0989fd8348",
+            "supply": "a9e8018e-3656-48d9-a574-fc5e9263d245",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "order": "801bc2c8-4c58-48d1-b3f8-cc90e5c9216e",
+            "position": null,
+            "location": "a0bcf901-2b97-4967-ba8f-f0e48d3a692a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "05413a16-1133-57b8-8e06-635e51ba2dc4",
+            "active": true,
+            "movement": "77fdb2f7-87b6-4994-a7a2-25321862a8d7"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "c835a76d-2ca3-42de-8f6c-dbb613988cd5",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "8f404b82-57c7-4f56-b7b5-6276f1c5a3a0",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "36a967ee-85ee-4e3e-8d3e-118993ad3566",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "c0dd2f88-81a8-481a-8904-08b59fd96a1a",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "33e9e442-6fe7-49e9-9bc9-4b8ef723661b",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "926e928b-dd8d-43ef-8725-5ad9a6b1acc2",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "8af375e4-37dc-494c-b013-14fb7a44be16",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "890502eb-91a7-47de-afa9-2cf7b58881c3",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "c4cb58f8-1229-4076-88ee-459cd084c60d",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "6ed24810-6b76-43fa-b767-cf406e171371",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "63e49b8d-c98b-4b46-9d95-13d007b6731b",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "801bc2c8-4c58-48d1-b3f8-cc90e5c9216e",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "44bbb214-9e3d-468e-9678-94fcdc1e44d5",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          },
+          {
+            "order": "141f531a-409f-4f35-a0a8-9b862f5aa336",
+            "product": "a934fe79-816c-4574-99b5-26a248ab10f4",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "replay",
+      "checkpoints": [
+        {
+          "name": "replay-initial",
+          "expected_count": 1,
+          "product": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "replay-same-operation",
+          "expected_count": 1,
+          "product": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "replay-second-physical",
+          "expected_count": 2,
+          "product": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+          "status": "verified",
+          "actual_count": 2
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/8bfe30de-66de-4876-a16b-90e71a43c4c4/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-10-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "bdea33f1-d2cd-4ecd-98bb-46887d904f63",
+            "location_code": "A-10-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/8bfe30de-66de-4876-a16b-90e71a43c4c4/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-10-00\",\"product_id\":\"2f429ad8-fac1-4aa9-8f61-93312c639fd9\",\"storage_location_id\":\"bdea33f1-d2cd-4ecd-98bb-46887d904f63\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "bdea33f1-d2cd-4ecd-98bb-46887d904f63",
+            "location_code": "A-10-1",
+            "product_id": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+            "sku_code": "PICK-10-00",
+            "product_name": "Browser picking replay product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/8bfe30de-66de-4876-a16b-90e71a43c4c4/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-10-00\",\"product_id\":\"2f429ad8-fac1-4aa9-8f61-93312c639fd9\",\"storage_location_id\":\"bdea33f1-d2cd-4ecd-98bb-46887d904f63\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "bdea33f1-d2cd-4ecd-98bb-46887d904f63",
+            "location_code": "A-10-1",
+            "product_id": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+            "sku_code": "PICK-10-00",
+            "product_name": "Browser picking replay product 0",
+            "picked_qty": 2,
+            "allocation_quantity": 2,
+            "source_picked_qty": 2,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+            "location": "bdea33f1-d2cd-4ecd-98bb-46887d904f63",
+            "container": null,
+            "quantity": 28,
+            "unpacked": 28,
+            "packed": 0
+          },
+          {
+            "product": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 2,
+            "unpacked": 2,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "50983f36-e25c-4314-8a64-344d7cd81841",
+            "supply": "8bfe30de-66de-4876-a16b-90e71a43c4c4",
+            "product": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+            "order": "4e4db4f4-c635-46f3-89b5-d6a782f66f20",
+            "position": null,
+            "location": "bdea33f1-d2cd-4ecd-98bb-46887d904f63",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "browser-one-physical-action-replay",
+            "active": true,
+            "movement": "77380981-f177-41fd-8835-670d767fb744"
+          },
+          {
+            "id": "94ab0069-f690-4312-aff7-0e1879f43c19",
+            "supply": "8bfe30de-66de-4876-a16b-90e71a43c4c4",
+            "product": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+            "order": "865b00ea-04fb-440f-b51d-9d4f59edc1e3",
+            "position": null,
+            "location": "bdea33f1-d2cd-4ecd-98bb-46887d904f63",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "d11ecb74-4e6d-4dea-9dd1-f5ab1f6838ac",
+            "active": true,
+            "movement": "ebb4e5cd-daf6-4550-bdea-c9113c62ff7d"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "4e4db4f4-c635-46f3-89b5-d6a782f66f20",
+            "product": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+            "quantity": 1
+          },
+          {
+            "order": "ce1eb632-9c32-4b53-94cf-1b8f8dc7c13f",
+            "product": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+            "quantity": 1
+          },
+          {
+            "order": "865b00ea-04fb-440f-b51d-9d4f59edc1e3",
+            "product": "2f429ad8-fac1-4aa9-8f61-93312c639fd9",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "lost",
+      "checkpoints": [
+        {
+          "name": "lost-committed-before-abort",
+          "expected_count": 1,
+          "product": "038427a4-7965-480b-a3ca-260fe5525a65",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "lost-after-reload",
+          "expected_count": 1,
+          "product": "038427a4-7965-480b-a3ca-260fe5525a65",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/c3226aee-5443-4055-a93a-77412d79eddc/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-11-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "99ff2025-00e5-4fc6-9655-20e765b521c9",
+            "location_code": "A-11-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/c3226aee-5443-4055-a93a-77412d79eddc/pick/scan",
+          "method": "POST",
+          "status": "network-failed",
+          "request": "{\"barcode\":\"PICK-11-00\",\"product_id\":\"038427a4-7965-480b-a3ca-260fe5525a65\",\"storage_location_id\":\"99ff2025-00e5-4fc6-9655-20e765b521c9\",\"container_kind\":null,\"container_id\":null}",
+          "failure": {
+            "errorText": "net::ERR_FAILED"
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "038427a4-7965-480b-a3ca-260fe5525a65",
+            "location": "99ff2025-00e5-4fc6-9655-20e765b521c9",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "038427a4-7965-480b-a3ca-260fe5525a65",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "8d89ada8-0499-4835-96fe-099ef4dc590c",
+            "supply": "c3226aee-5443-4055-a93a-77412d79eddc",
+            "product": "038427a4-7965-480b-a3ca-260fe5525a65",
+            "order": "57df15d2-12fc-460e-b2b9-e297b41779a0",
+            "position": null,
+            "location": "99ff2025-00e5-4fc6-9655-20e765b521c9",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "e07970ca-1d04-4a48-b042-a2929e411e0e",
+            "active": true,
+            "movement": "ac8daef5-ae6d-4766-9e0d-197c19fdec7e"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "8cb57dbd-2636-430a-a797-5809e4d47bcc",
+            "product": "038427a4-7965-480b-a3ca-260fe5525a65",
+            "quantity": 1
+          },
+          {
+            "order": "57df15d2-12fc-460e-b2b9-e297b41779a0",
+            "product": "038427a4-7965-480b-a3ca-260fe5525a65",
+            "quantity": 1
+          },
+          {
+            "order": "e2803f98-4ff0-41b5-863b-0880090b5609",
+            "product": "038427a4-7965-480b-a3ca-260fe5525a65",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "get-failure",
+      "checkpoints": [
+        {
+          "name": "get-failure-committed",
+          "expected_count": 1,
+          "product": "e5c5ce8a-f9a0-4bc4-bc89-3622c70d2c70",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "get-failure-reloaded-no-duplicate",
+          "expected_count": 1,
+          "product": "e5c5ce8a-f9a0-4bc4-bc89-3622c70d2c70",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9a6abd14-5c21-4d0f-be20-43eb998607d0/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-12-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "ac2704c0-2c97-4ef8-9c79-f759c3728395",
+            "location_code": "A-12-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9a6abd14-5c21-4d0f-be20-43eb998607d0/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-12-00\",\"product_id\":\"e5c5ce8a-f9a0-4bc4-bc89-3622c70d2c70\",\"storage_location_id\":\"ac2704c0-2c97-4ef8-9c79-f759c3728395\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "ac2704c0-2c97-4ef8-9c79-f759c3728395",
+            "location_code": "A-12-1",
+            "product_id": "e5c5ce8a-f9a0-4bc4-bc89-3622c70d2c70",
+            "sku_code": "PICK-12-00",
+            "product_name": "Browser picking get-failure product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9a6abd14-5c21-4d0f-be20-43eb998607d0/pick-options",
+          "method": "GET",
+          "status": "network-failed",
+          "request": null,
+          "failure": {
+            "errorText": "net::ERR_FAILED"
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "e5c5ce8a-f9a0-4bc4-bc89-3622c70d2c70",
+            "location": "ac2704c0-2c97-4ef8-9c79-f759c3728395",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "e5c5ce8a-f9a0-4bc4-bc89-3622c70d2c70",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "5cf37ec5-869a-4f15-a4fe-0c4810879352",
+            "supply": "9a6abd14-5c21-4d0f-be20-43eb998607d0",
+            "product": "e5c5ce8a-f9a0-4bc4-bc89-3622c70d2c70",
+            "order": "940509fd-74f3-4e70-809d-4f3d1d8c28d5",
+            "position": null,
+            "location": "ac2704c0-2c97-4ef8-9c79-f759c3728395",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "bd62188a-d08c-4ea7-b0ec-2970b7d3a50a",
+            "active": true,
+            "movement": "4015cb72-0a3f-4685-9d05-c321661552c7"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "db680bb0-45d5-4bf6-8de4-3975ed2a023d",
+            "product": "e5c5ce8a-f9a0-4bc4-bc89-3622c70d2c70",
+            "quantity": 1
+          },
+          {
+            "order": "bf1a7d6a-8c63-46a5-9ef5-92f395bd40f0",
+            "product": "e5c5ce8a-f9a0-4bc4-bc89-3622c70d2c70",
+            "quantity": 1
+          },
+          {
+            "order": "940509fd-74f3-4e70-809d-4f3d1d8c28d5",
+            "product": "e5c5ce8a-f9a0-4bc4-bc89-3622c70d2c70",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "network",
+      "checkpoints": [
+        {
+          "name": "network-before-server",
+          "expected_count": 0,
+          "product": "d08238cc-221b-4eb7-8d96-70f8f33becfb",
+          "status": "verified",
+          "actual_count": 0
+        },
+        {
+          "name": "network-recovery",
+          "expected_count": 1,
+          "product": "d08238cc-221b-4eb7-8d96-70f8f33becfb",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/79f75e9b-ffd8-4a03-a104-c8360675f74d/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-13-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "6986a2ca-795b-418c-8451-9cb7a7d2bf16",
+            "location_code": "A-13-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/79f75e9b-ffd8-4a03-a104-c8360675f74d/pick/scan",
+          "method": "POST",
+          "status": "network-failed",
+          "request": "{\"barcode\":\"PICK-13-00\",\"product_id\":\"d08238cc-221b-4eb7-8d96-70f8f33becfb\",\"storage_location_id\":\"6986a2ca-795b-418c-8451-9cb7a7d2bf16\",\"container_kind\":null,\"container_id\":null}",
+          "failure": {
+            "errorText": "net::ERR_FAILED"
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/79f75e9b-ffd8-4a03-a104-c8360675f74d/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-13-00\",\"product_id\":\"d08238cc-221b-4eb7-8d96-70f8f33becfb\",\"storage_location_id\":\"6986a2ca-795b-418c-8451-9cb7a7d2bf16\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "6986a2ca-795b-418c-8451-9cb7a7d2bf16",
+            "location_code": "A-13-1",
+            "product_id": "d08238cc-221b-4eb7-8d96-70f8f33becfb",
+            "sku_code": "PICK-13-00",
+            "product_name": "Browser picking network product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "d08238cc-221b-4eb7-8d96-70f8f33becfb",
+            "location": "6986a2ca-795b-418c-8451-9cb7a7d2bf16",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "d08238cc-221b-4eb7-8d96-70f8f33becfb",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "db61930f-af78-4466-88fa-23050fb474bf",
+            "supply": "79f75e9b-ffd8-4a03-a104-c8360675f74d",
+            "product": "d08238cc-221b-4eb7-8d96-70f8f33becfb",
+            "order": "2f33cb85-da99-494a-ba5a-b7a1d9cfe69d",
+            "position": null,
+            "location": "6986a2ca-795b-418c-8451-9cb7a7d2bf16",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "b879e628-5f3f-4834-b946-ece5c44f544d",
+            "active": true,
+            "movement": "cca7864b-4657-4d4c-825f-a2e36d3cdc60"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "2f33cb85-da99-494a-ba5a-b7a1d9cfe69d",
+            "product": "d08238cc-221b-4eb7-8d96-70f8f33becfb",
+            "quantity": 1
+          },
+          {
+            "order": "3eb813dd-fa0a-4d97-be7a-3ed459349da0",
+            "product": "d08238cc-221b-4eb7-8d96-70f8f33becfb",
+            "quantity": 1
+          },
+          {
+            "order": "696f7831-c88f-474c-bb61-299521c7bf98",
+            "product": "d08238cc-221b-4eb7-8d96-70f8f33becfb",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "last-unit",
+      "checkpoints": [
+        {
+          "name": "last-unit",
+          "expected_count": 1,
+          "product": "9fd5cb06-cb44-448f-88cc-2ec4fb8c1ea1",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/f02dfdb1-c521-4e5a-b98f-189d40bf0a70/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-14-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "ed2353f8-2a6a-45a9-a826-7e1fec40ac6a",
+            "location_code": "A-14-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/f02dfdb1-c521-4e5a-b98f-189d40bf0a70/pick/scan",
+          "status": 409,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-14-00\",\"product_id\":\"9fd5cb06-cb44-448f-88cc-2ec4fb8c1ea1\",\"storage_location_id\":\"ed2353f8-2a6a-45a9-a826-7e1fec40ac6a\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "detail": {
+              "code": "insufficient_unpacked",
+              "message": "Недостаточно товара в выбранном месте подбора.",
+              "context": {
+                "order_id": "8d08f87d-0973-41f9-9eb0-88d8fee60013",
+                "product_id": "9fd5cb06-cb44-448f-88cc-2ec4fb8c1ea1",
+                "location_id": "ed2353f8-2a6a-45a9-a826-7e1fec40ac6a",
+                "location_code": "A-14-1",
+                "requested": 1,
+                "available": 0,
+                "recommended_action": "Выберите другую ячейку или тару с доступным остатком."
+              },
+              "retryable": false
+            }
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "9fd5cb06-cb44-448f-88cc-2ec4fb8c1ea1",
+            "location": "ed2353f8-2a6a-45a9-a826-7e1fec40ac6a",
+            "container": null,
+            "quantity": 0,
+            "unpacked": 0,
+            "packed": 0
+          },
+          {
+            "product": "9fd5cb06-cb44-448f-88cc-2ec4fb8c1ea1",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "2291e8a2-5355-4167-bb64-1154745b1081",
+            "supply": "7e4289e7-75fa-4a6c-9057-1bcde5d2784c",
+            "product": "9fd5cb06-cb44-448f-88cc-2ec4fb8c1ea1",
+            "order": "b519a589-b3df-4e6d-a090-974ba29196b0",
+            "position": null,
+            "location": "ed2353f8-2a6a-45a9-a826-7e1fec40ac6a",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "1a598910-2367-43f4-af1f-f52eb94548b5",
+            "active": true,
+            "movement": "9c29e764-d18f-4ca7-9ba2-f491a05d8dbe"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "8d08f87d-0973-41f9-9eb0-88d8fee60013",
+            "product": "9fd5cb06-cb44-448f-88cc-2ec4fb8c1ea1",
+            "quantity": 1
+          },
+          {
+            "order": "b519a589-b3df-4e6d-a090-974ba29196b0",
+            "product": "9fd5cb06-cb44-448f-88cc-2ec4fb8c1ea1",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "manual-conflict",
+      "checkpoints": [
+        {
+          "name": "manual-conflict-first",
+          "expected_count": 2,
+          "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+          "status": "verified",
+          "actual_count": 2
+        },
+        {
+          "name": "manual-conflict-no-silent-overwrite",
+          "expected_count": 2,
+          "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+          "status": "verified",
+          "actual_count": 2
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/edad10fe-dfbd-495f-899a-3783eb6d77af/pick/set",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"product_id\":\"9bbd2ab4-5af4-4473-aaa0-89510511210e\",\"storage_location_id\":\"08109727-81b7-4063-894a-298eecd448af\",\"quantity\":2,\"expected_quantity\":0,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "id": "2158b8a2-8841-51f9-9aed-4cf26d6b99f6",
+            "product_id": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "sku_code": "PICK-15-00",
+            "product_name": "Browser picking manual-conflict product 0",
+            "storage_location_id": "08109727-81b7-4063-894a-298eecd448af",
+            "location_code": "A-15-1",
+            "quantity": 2
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/edad10fe-dfbd-495f-899a-3783eb6d77af/pick/set",
+          "status": 409,
+          "method": "POST",
+          "request": "{\"product_id\":\"9bbd2ab4-5af4-4473-aaa0-89510511210e\",\"storage_location_id\":\"08109727-81b7-4063-894a-298eecd448af\",\"quantity\":1,\"expected_quantity\":0,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "detail": {
+              "code": "pick_quantity_changed",
+              "message": "Количество подбора изменилось. Обновите данные и повторите действие.",
+              "context": {
+                "product_id": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+                "storage_location_id": "08109727-81b7-4063-894a-298eecd448af",
+                "expected_quantity": 0,
+                "current_quantity": 2
+              },
+              "retryable": false
+            }
+          },
+          "operator": "operator2"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "location": "08109727-81b7-4063-894a-298eecd448af",
+            "container": null,
+            "quantity": 28,
+            "unpacked": 28,
+            "packed": 0
+          },
+          {
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 2,
+            "unpacked": 2,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "71bae9fb-20b8-4d0a-864e-d64d01f530ff",
+            "supply": "edad10fe-dfbd-495f-899a-3783eb6d77af",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "order": "6b4fa36e-242a-4c26-8820-f04f21caa86c",
+            "position": null,
+            "location": "08109727-81b7-4063-894a-298eecd448af",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "3f694fea-2bf6-5db7-a468-5767945577f2",
+            "active": true,
+            "movement": "4d0e3f42-e675-4a6b-bff7-beec6f19a359"
+          },
+          {
+            "id": "d6af05b3-fee8-4b1d-99a0-1d6f6d93808e",
+            "supply": "edad10fe-dfbd-495f-899a-3783eb6d77af",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "order": "79e3b353-84c0-4b33-a1bd-4631b06235fd",
+            "position": null,
+            "location": "08109727-81b7-4063-894a-298eecd448af",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "6363687e-c362-53c0-8d8f-327018c19bdf",
+            "active": true,
+            "movement": "cad21d73-aebd-494a-b079-60718b09ab97"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "6b4fa36e-242a-4c26-8820-f04f21caa86c",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "79e3b353-84c0-4b33-a1bd-4631b06235fd",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "db4b9db3-6f6d-4c62-8697-fc0bb4b39280",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "c4790cd0-8bf4-453e-8fdb-6495c7549e31",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "c4ac962c-6ba9-4caf-aa75-fadc14723d65",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "e8b24702-a0d2-43da-a530-dfbf19180928",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "ea7b7b23-1a72-4e98-ad65-1f69480f4159",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "9330ee74-1364-4d3a-89d9-b367d65f86a5",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "eb2dbfaa-5823-4781-adfa-bcf82d42863a",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "44329688-1d32-4268-ba93-34996ede3d9d",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "20d07090-11b1-4549-8eb0-5d44b53a81ea",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "c7720384-c183-41e0-ab81-22030ff0adf7",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "e1be1cfe-3072-4c1d-889c-082a94854bde",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          },
+          {
+            "order": "55ed5cd4-a01e-4428-a8d6-6a3f882aa67e",
+            "product": "9bbd2ab4-5af4-4473-aaa0-89510511210e",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "tabs",
+      "checkpoints": [
+        {
+          "name": "tabs",
+          "expected_count": 1,
+          "product": "a2ffcb95-92f6-4117-8870-dff607b0afe7",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/2a897864-8200-4b28-8c5f-49104eff3683/print-assets",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"kind\":\"order_sticker\",\"order_ids\":[\"f0678984-5186-4247-9969-419346f78410\",\"b3d6670c-e081-4bfe-bea9-3798b42778f6\",\"06e571cc-46d4-4937-ba11-5f8ee8486b1d\"],\"retry_missing\":true}",
+          "body": {
+            "requested": 3,
+            "ready": 3,
+            "missing": 0,
+            "failed": 0,
+            "assets": [
+              {
+                "id": "2553cee6-2d3d-4a0c-b3ae-98be7bec4c6e",
+                "kind": "order_sticker",
+                "status": "ready",
+                "content_type": "image/png",
+                "width_mm": 58,
+                "height_mm": 40,
+                "preview_url": "/operations/fbs-print-assets/2553cee6-2d3d-4a0c-b3ae-98be7bec4c6e/content",
+                "download_url": "/operations/fbs-print-assets/2553cee6-2d3d-4a0c-b3ae-98be7bec4c6e/content",
+                "checksum": "sha256:32cfd1ece4d68b6f38b54ac413399f03109d85c9e8ebeb87227577c3786ca570",
+                "applied_at": null,
+                "error": null
+              },
+              {
+                "id": "adfe784a-f1fe-40d9-b652-20f0b7001de3",
+                "kind": "order_sticker",
+                "status": "ready",
+                "content_type": "image/png",
+                "width_mm": 58,
+                "height_mm": 40,
+                "preview_url": "/operations/fbs-print-assets/adfe784a-f1fe-40d9-b652-20f0b7001de3/content",
+                "download_url": "/operations/fbs-print-assets/adfe784a-f1fe-40d9-b652-20f0b7001de3/content",
+                "checksum": "sha256:a88d8e626b108aaf3c2584289160c921672c328a28d5be99781c0fe63780c6d8",
+                "applied_at": null,
+                "error": null
+              },
+              {
+                "id": "e1a54ac9-4990-48fe-9d4b-11dfac37e043",
+                "kind": "order_sticker",
+                "status": "ready",
+                "content_type": "image/png",
+                "width_mm": 58,
+                "height_mm": 40,
+                "preview_url": "/operations/fbs-print-assets/e1a54ac9-4990-48fe-9d4b-11dfac37e043/content",
+                "download_url": "/operations/fbs-print-assets/e1a54ac9-4990-48fe-9d4b-11dfac37e043/content",
+                "checksum": "sha256:58cd63d736dfe0d180db7172890870b5670c1e079a159e4c5cb8d5c4248b10fc",
+                "applied_at": null,
+                "error": null
+              }
+            ],
+            "order_errors": []
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/2a897864-8200-4b28-8c5f-49104eff3683/start-work",
+          "status": 200,
+          "method": "POST",
+          "request": null,
+          "body": {
+            "supply": {
+              "id": "2a897864-8200-4b28-8c5f-49104eff3683",
+              "marketplace": "wb",
+              "status": "assembling",
+              "planned_shipment_date": null
+            },
+            "orders": [
+              {
+                "id": "f0678984-5186-4247-9969-419346f78410",
+                "pick": {
+                  "status": "pending",
+                  "location_code": null,
+                  "picked_at": null
+                },
+                "positions": []
+              },
+              {
+                "id": "b3d6670c-e081-4bfe-bea9-3798b42778f6",
+                "pick": {
+                  "status": "pending",
+                  "location_code": null,
+                  "picked_at": null
+                },
+                "positions": []
+              },
+              {
+                "id": "06e571cc-46d4-4937-ba11-5f8ee8486b1d",
+                "pick": {
+                  "status": "pending",
+                  "location_code": null,
+                  "picked_at": null
+                },
+                "positions": []
+              }
+            ]
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/2a897864-8200-4b28-8c5f-49104eff3683/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-17-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "35020a28-d8bd-4932-8bb6-6d471fdada7d",
+            "location_code": "A-17-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/2a897864-8200-4b28-8c5f-49104eff3683/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-17-00\",\"product_id\":\"a2ffcb95-92f6-4117-8870-dff607b0afe7\",\"storage_location_id\":\"35020a28-d8bd-4932-8bb6-6d471fdada7d\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "35020a28-d8bd-4932-8bb6-6d471fdada7d",
+            "location_code": "A-17-1",
+            "product_id": "a2ffcb95-92f6-4117-8870-dff607b0afe7",
+            "sku_code": "PICK-17-00",
+            "product_name": "Browser picking tabs product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "a2ffcb95-92f6-4117-8870-dff607b0afe7",
+            "location": "35020a28-d8bd-4932-8bb6-6d471fdada7d",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "a2ffcb95-92f6-4117-8870-dff607b0afe7",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "662d4d32-e689-4e0c-8c58-17d602a28551",
+            "supply": "2a897864-8200-4b28-8c5f-49104eff3683",
+            "product": "a2ffcb95-92f6-4117-8870-dff607b0afe7",
+            "order": "06e571cc-46d4-4937-ba11-5f8ee8486b1d",
+            "position": null,
+            "location": "35020a28-d8bd-4932-8bb6-6d471fdada7d",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "beb36466-74c6-43e0-9df9-f4b446f7ce41",
+            "active": true,
+            "movement": "02b6a455-afbd-4c38-9bc4-2a881b501d26"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "f0678984-5186-4247-9969-419346f78410",
+            "product": "a2ffcb95-92f6-4117-8870-dff607b0afe7",
+            "quantity": 1
+          },
+          {
+            "order": "b3d6670c-e081-4bfe-bea9-3798b42778f6",
+            "product": "a2ffcb95-92f6-4117-8870-dff607b0afe7",
+            "quantity": 1
+          },
+          {
+            "order": "06e571cc-46d4-4937-ba11-5f8ee8486b1d",
+            "product": "a2ffcb95-92f6-4117-8870-dff607b0afe7",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "print",
+      "checkpoints": [],
+      "status": "passed",
+      "responses": [],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "88401473-f651-45e8-843f-97eda424f116",
+            "location": "ac1fc028-e0c2-4f23-a988-558c92d265b8",
+            "container": null,
+            "quantity": 30,
+            "unpacked": 30,
+            "packed": 0
+          }
+        ],
+        "picks": [],
+        "reserves": [
+          {
+            "order": "d216c5aa-7bbf-42b9-8ae9-8536c7d2fa85",
+            "product": "88401473-f651-45e8-843f-97eda424f116",
+            "quantity": 1
+          },
+          {
+            "order": "44810294-b1b6-4cc4-a4d9-19e574567087",
+            "product": "88401473-f651-45e8-843f-97eda424f116",
+            "quantity": 1
+          },
+          {
+            "order": "7cbb0aef-4d22-468b-9f20-4cc6d1456505",
+            "product": "88401473-f651-45e8-843f-97eda424f116",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "group",
+      "checkpoints": [
+        {
+          "name": "group",
+          "expected_count": 4,
+          "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+          "status": "verified",
+          "actual_count": 4
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9d054b20-b97f-4e99-bb84-2e111c4ed768/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-18-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "e5cdd69d-7b6f-4bb0-82ee-434156974ca1",
+            "location_code": "A-18-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9d054b20-b97f-4e99-bb84-2e111c4ed768/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-18-00\",\"product_id\":\"afb6352f-61f7-482b-af02-51e3553c9e9d\",\"storage_location_id\":\"e5cdd69d-7b6f-4bb0-82ee-434156974ca1\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "e5cdd69d-7b6f-4bb0-82ee-434156974ca1",
+            "location_code": "A-18-1",
+            "product_id": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "sku_code": "PICK-18-00",
+            "product_name": "Browser picking group product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9d054b20-b97f-4e99-bb84-2e111c4ed768/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-18-00\",\"product_id\":\"afb6352f-61f7-482b-af02-51e3553c9e9d\",\"storage_location_id\":\"e5cdd69d-7b6f-4bb0-82ee-434156974ca1\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "e5cdd69d-7b6f-4bb0-82ee-434156974ca1",
+            "location_code": "A-18-1",
+            "product_id": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "sku_code": "PICK-18-00",
+            "product_name": "Browser picking group product 0",
+            "picked_qty": 2,
+            "allocation_quantity": 2,
+            "source_picked_qty": 2,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9d054b20-b97f-4e99-bb84-2e111c4ed768/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-18-00\",\"product_id\":\"afb6352f-61f7-482b-af02-51e3553c9e9d\",\"storage_location_id\":\"e5cdd69d-7b6f-4bb0-82ee-434156974ca1\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "e5cdd69d-7b6f-4bb0-82ee-434156974ca1",
+            "location_code": "A-18-1",
+            "product_id": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "sku_code": "PICK-18-00",
+            "product_name": "Browser picking group product 0",
+            "picked_qty": 3,
+            "allocation_quantity": 3,
+            "source_picked_qty": 3,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/d0c280cd-5272-4400-8f81-2d5b563d3135/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-18-00\",\"product_id\":\"afb6352f-61f7-482b-af02-51e3553c9e9d\",\"storage_location_id\":\"e5cdd69d-7b6f-4bb0-82ee-434156974ca1\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "e5cdd69d-7b6f-4bb0-82ee-434156974ca1",
+            "location_code": "A-18-1",
+            "product_id": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "sku_code": "PICK-18-00",
+            "product_name": "Browser picking group product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "location": "e5cdd69d-7b6f-4bb0-82ee-434156974ca1",
+            "container": null,
+            "quantity": 26,
+            "unpacked": 26,
+            "packed": 0
+          },
+          {
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 4,
+            "unpacked": 4,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "a0d27faa-ee86-4826-a79f-cf572915521c",
+            "supply": "9d054b20-b97f-4e99-bb84-2e111c4ed768",
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "order": "2a98c4cd-d03f-4553-9868-647d2cd4e116",
+            "position": null,
+            "location": "e5cdd69d-7b6f-4bb0-82ee-434156974ca1",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "6830381b-e506-4d3b-add8-4f84af72cdae",
+            "active": true,
+            "movement": "244f93e1-5015-46a6-9851-f0cddf8f15e9"
+          },
+          {
+            "id": "f877a399-3e9b-4753-94d5-9f4b1a20c5d9",
+            "supply": "9d054b20-b97f-4e99-bb84-2e111c4ed768",
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "order": "7a1e615f-893c-4baf-ade8-0dc4cbdd50be",
+            "position": null,
+            "location": "e5cdd69d-7b6f-4bb0-82ee-434156974ca1",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "b9cf8d64-4fc0-43b6-83b1-1b4023a164e6",
+            "active": true,
+            "movement": "6875a6f4-aea4-4318-a0ed-06da93ae4d33"
+          },
+          {
+            "id": "b243a08e-03b5-4695-b059-322e9b3bf807",
+            "supply": "9d054b20-b97f-4e99-bb84-2e111c4ed768",
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "order": "883e4baf-c4bc-46ba-ac17-4f27de0e5af3",
+            "position": null,
+            "location": "e5cdd69d-7b6f-4bb0-82ee-434156974ca1",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "32d4bab2-0a31-47bf-b07e-cfbdb858bc7e",
+            "active": true,
+            "movement": "f142fb38-36db-4331-a86a-5ac53ace54b0"
+          },
+          {
+            "id": "f0f61b0a-a83b-440d-9073-0bb9a3fffa1d",
+            "supply": "d0c280cd-5272-4400-8f81-2d5b563d3135",
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "order": "47566611-3aa4-4047-b5f2-66291363d7db",
+            "position": null,
+            "location": "e5cdd69d-7b6f-4bb0-82ee-434156974ca1",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "548bd352-20e9-4903-8915-1bc718ec176e",
+            "active": true,
+            "movement": "4a6ca389-6328-4794-9a78-36c9fd417068"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "7fc969d2-22ea-4103-bc0f-5ddfa271f94f",
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "quantity": 1
+          },
+          {
+            "order": "47566611-3aa4-4047-b5f2-66291363d7db",
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "quantity": 1
+          },
+          {
+            "order": "a1c112ff-6e1c-40f1-af6b-b1a006ef4040",
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "quantity": 1
+          },
+          {
+            "order": "7a1e615f-893c-4baf-ade8-0dc4cbdd50be",
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "quantity": 1
+          },
+          {
+            "order": "883e4baf-c4bc-46ba-ac17-4f27de0e5af3",
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "quantity": 1
+          },
+          {
+            "order": "2a98c4cd-d03f-4553-9868-647d2cd4e116",
+            "product": "afb6352f-61f7-482b-af02-51e3553c9e9d",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "ozon",
+      "checkpoints": [
+        {
+          "name": "ozon",
+          "expected_count": 1,
+          "product": "85ac72df-8d9a-4479-b3da-a89e86cda63c",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "ozon-second",
+          "expected_count": 2,
+          "product": "85ac72df-8d9a-4479-b3da-a89e86cda63c",
+          "status": "verified",
+          "actual_count": 2
+        },
+        {
+          "name": "ozon-position-2",
+          "expected_count": 1,
+          "product": "0181fd97-1563-4530-b6c3-6e26af4a492c",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9db9e3ad-f9e1-4352-937c-5ffc9ea9c9c8/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-19-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "80b59a6f-aa4d-44f1-886d-22c467035c9d",
+            "location_code": "A-19-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9db9e3ad-f9e1-4352-937c-5ffc9ea9c9c8/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000001900\",\"product_id\":\"85ac72df-8d9a-4479-b3da-a89e86cda63c\",\"storage_location_id\":\"80b59a6f-aa4d-44f1-886d-22c467035c9d\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "80b59a6f-aa4d-44f1-886d-22c467035c9d",
+            "location_code": "A-19-1",
+            "product_id": "85ac72df-8d9a-4479-b3da-a89e86cda63c",
+            "sku_code": "PICK-19-00",
+            "product_name": "Browser picking ozon product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9db9e3ad-f9e1-4352-937c-5ffc9ea9c9c8/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000001900\",\"product_id\":\"85ac72df-8d9a-4479-b3da-a89e86cda63c\",\"storage_location_id\":\"80b59a6f-aa4d-44f1-886d-22c467035c9d\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "80b59a6f-aa4d-44f1-886d-22c467035c9d",
+            "location_code": "A-19-1",
+            "product_id": "85ac72df-8d9a-4479-b3da-a89e86cda63c",
+            "sku_code": "PICK-19-00",
+            "product_name": "Browser picking ozon product 0",
+            "picked_qty": 2,
+            "allocation_quantity": 2,
+            "source_picked_qty": 2,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/9db9e3ad-f9e1-4352-937c-5ffc9ea9c9c8/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000001901\",\"product_id\":\"0181fd97-1563-4530-b6c3-6e26af4a492c\",\"storage_location_id\":\"80b59a6f-aa4d-44f1-886d-22c467035c9d\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "80b59a6f-aa4d-44f1-886d-22c467035c9d",
+            "location_code": "A-19-1",
+            "product_id": "0181fd97-1563-4530-b6c3-6e26af4a492c",
+            "sku_code": "PICK-19-01",
+            "product_name": "Browser picking ozon product 1",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "0181fd97-1563-4530-b6c3-6e26af4a492c",
+            "location": "80b59a6f-aa4d-44f1-886d-22c467035c9d",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "85ac72df-8d9a-4479-b3da-a89e86cda63c",
+            "location": "80b59a6f-aa4d-44f1-886d-22c467035c9d",
+            "container": null,
+            "quantity": 28,
+            "unpacked": 28,
+            "packed": 0
+          },
+          {
+            "product": "85ac72df-8d9a-4479-b3da-a89e86cda63c",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 2,
+            "unpacked": 2,
+            "packed": 0
+          },
+          {
+            "product": "0181fd97-1563-4530-b6c3-6e26af4a492c",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "607fa6f4-d00a-4ad5-94c7-a3dcd378c414",
+            "supply": "9db9e3ad-f9e1-4352-937c-5ffc9ea9c9c8",
+            "product": "85ac72df-8d9a-4479-b3da-a89e86cda63c",
+            "order": null,
+            "position": "8db86387-206e-4baf-88b7-673cdcb5eeb1",
+            "location": "80b59a6f-aa4d-44f1-886d-22c467035c9d",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "e9369a52-f3f0-4075-8f31-524c0043a881",
+            "active": true,
+            "movement": "d4e0f5eb-80b7-4b01-85ed-5a289a8092eb"
+          },
+          {
+            "id": "0f18335a-47c7-45cb-bee6-e7aec063f3f4",
+            "supply": "9db9e3ad-f9e1-4352-937c-5ffc9ea9c9c8",
+            "product": "85ac72df-8d9a-4479-b3da-a89e86cda63c",
+            "order": null,
+            "position": "8db86387-206e-4baf-88b7-673cdcb5eeb1",
+            "location": "80b59a6f-aa4d-44f1-886d-22c467035c9d",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "7b112935-3bd5-4201-a84e-1533ff895bc7",
+            "active": true,
+            "movement": "b6c75ea2-91b9-4888-993d-8db1a7693bcc"
+          },
+          {
+            "id": "2c1cc29e-2ecd-4ed1-93a1-2adf1fa9215e",
+            "supply": "9db9e3ad-f9e1-4352-937c-5ffc9ea9c9c8",
+            "product": "0181fd97-1563-4530-b6c3-6e26af4a492c",
+            "order": null,
+            "position": "a3beaaba-9ad0-4da8-bdcb-94259f3095d8",
+            "location": "80b59a6f-aa4d-44f1-886d-22c467035c9d",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "87e9a5e6-ee2f-4d8a-b956-07091129ca38",
+            "active": true,
+            "movement": "64c13a9f-e5f8-43e2-a726-9d5f35c824f3"
+          }
+        ],
+        "reserves": [],
+        "positions": [
+          {
+            "id": "a3beaaba-9ad0-4da8-bdcb-94259f3095d8",
+            "order": "bb7f2e64-ea37-4571-8859-593a601d970d",
+            "product": "0181fd97-1563-4530-b6c3-6e26af4a492c",
+            "supply": "9db9e3ad-f9e1-4352-937c-5ffc9ea9c9c8",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 3,
+            "reserved_quantity": 3,
+            "picked_quantity": 1
+          },
+          {
+            "id": "8db86387-206e-4baf-88b7-673cdcb5eeb1",
+            "order": "bb7f2e64-ea37-4571-8859-593a601d970d",
+            "product": "85ac72df-8d9a-4479-b3da-a89e86cda63c",
+            "supply": "9db9e3ad-f9e1-4352-937c-5ffc9ea9c9c8",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 2,
+            "reserved_quantity": 2,
+            "picked_quantity": 2
+          }
+        ],
+        "position_reserves": [
+          {
+            "position": "8db86387-206e-4baf-88b7-673cdcb5eeb1",
+            "product": "85ac72df-8d9a-4479-b3da-a89e86cda63c",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 2
+          },
+          {
+            "position": "a3beaaba-9ad0-4da8-bdcb-94259f3095d8",
+            "product": "0181fd97-1563-4530-b6c3-6e26af4a492c",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "ozon-group",
+      "checkpoints": [
+        {
+          "name": "ozon-group",
+          "expected_count": 1,
+          "product": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "ozon-group-second",
+          "expected_count": 2,
+          "product": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+          "status": "verified",
+          "actual_count": 2
+        },
+        {
+          "name": "ozon-group-position-2",
+          "expected_count": 1,
+          "product": "964baa82-44b0-4cab-8bf6-325096ea6422",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/32a8932c-7669-44c1-a030-371c2b49d323/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-20-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5",
+            "location_code": "A-20-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/32a8932c-7669-44c1-a030-371c2b49d323/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000002000\",\"product_id\":\"a6770227-eab4-4511-95e2-7f3bdf322aeb\",\"storage_location_id\":\"10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5",
+            "location_code": "A-20-1",
+            "product_id": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+            "sku_code": "PICK-20-00",
+            "product_name": "Browser picking ozon-group product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/32a8932c-7669-44c1-a030-371c2b49d323/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000002000\",\"product_id\":\"a6770227-eab4-4511-95e2-7f3bdf322aeb\",\"storage_location_id\":\"10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5",
+            "location_code": "A-20-1",
+            "product_id": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+            "sku_code": "PICK-20-00",
+            "product_name": "Browser picking ozon-group product 0",
+            "picked_qty": 2,
+            "allocation_quantity": 2,
+            "source_picked_qty": 2,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/32a8932c-7669-44c1-a030-371c2b49d323/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000002001\",\"product_id\":\"964baa82-44b0-4cab-8bf6-325096ea6422\",\"storage_location_id\":\"10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5",
+            "location_code": "A-20-1",
+            "product_id": "964baa82-44b0-4cab-8bf6-325096ea6422",
+            "sku_code": "PICK-20-01",
+            "product_name": "Browser picking ozon-group product 1",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "964baa82-44b0-4cab-8bf6-325096ea6422",
+            "location": "10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+            "location": "10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5",
+            "container": null,
+            "quantity": 28,
+            "unpacked": 28,
+            "packed": 0
+          },
+          {
+            "product": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 2,
+            "unpacked": 2,
+            "packed": 0
+          },
+          {
+            "product": "964baa82-44b0-4cab-8bf6-325096ea6422",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "a530f243-3c59-452d-9ffd-eddfa78cd197",
+            "supply": "32a8932c-7669-44c1-a030-371c2b49d323",
+            "product": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+            "order": null,
+            "position": "d0e3e741-4d81-42ce-8c6b-341a1b1cd032",
+            "location": "10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "f62aa404-ac30-47e7-b138-7f7daa71834f",
+            "active": true,
+            "movement": "217abaea-6a9f-4040-9c5d-53e860cdaf7a"
+          },
+          {
+            "id": "69adacf5-e899-4774-ab0d-e3bef58f2122",
+            "supply": "32a8932c-7669-44c1-a030-371c2b49d323",
+            "product": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+            "order": null,
+            "position": "d0e3e741-4d81-42ce-8c6b-341a1b1cd032",
+            "location": "10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "bede5939-e697-4ece-abdb-5d1def97ee48",
+            "active": true,
+            "movement": "dd9cd8d2-19b7-422e-8a4a-d5b133afc8fd"
+          },
+          {
+            "id": "c2b98498-6793-44df-b298-a54cfbb36e19",
+            "supply": "32a8932c-7669-44c1-a030-371c2b49d323",
+            "product": "964baa82-44b0-4cab-8bf6-325096ea6422",
+            "order": null,
+            "position": "b178de4b-8944-41f4-b7a1-ecf2abc0785d",
+            "location": "10bac0e8-ae30-4cbf-b7ad-532be8a8d7e5",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "16836af7-ade8-4800-b527-5f3a4a9b366b",
+            "active": true,
+            "movement": "1c531a6b-043f-4022-89e2-b0c26c76d93e"
+          }
+        ],
+        "reserves": [],
+        "positions": [
+          {
+            "id": "b178de4b-8944-41f4-b7a1-ecf2abc0785d",
+            "order": "b47b998c-bfe0-436b-bfc0-529060abe836",
+            "product": "964baa82-44b0-4cab-8bf6-325096ea6422",
+            "supply": "32a8932c-7669-44c1-a030-371c2b49d323",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 3,
+            "reserved_quantity": 3,
+            "picked_quantity": 1
+          },
+          {
+            "id": "d0e3e741-4d81-42ce-8c6b-341a1b1cd032",
+            "order": "b47b998c-bfe0-436b-bfc0-529060abe836",
+            "product": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+            "supply": "32a8932c-7669-44c1-a030-371c2b49d323",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 2,
+            "reserved_quantity": 2,
+            "picked_quantity": 2
+          },
+          {
+            "id": "01314a56-1e26-41f6-aef8-d2d112c9afd2",
+            "order": "0905ee9b-fea5-4498-bdba-aa390986b822",
+            "product": "964baa82-44b0-4cab-8bf6-325096ea6422",
+            "supply": "5c2afe97-c617-472e-961e-e7cc69a0750b",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 3,
+            "reserved_quantity": 3,
+            "picked_quantity": 0
+          },
+          {
+            "id": "40e4767a-aa3c-4b89-8b25-007272e6f46e",
+            "order": "0905ee9b-fea5-4498-bdba-aa390986b822",
+            "product": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+            "supply": "5c2afe97-c617-472e-961e-e7cc69a0750b",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 2,
+            "reserved_quantity": 2,
+            "picked_quantity": 0
+          }
+        ],
+        "position_reserves": [
+          {
+            "position": "d0e3e741-4d81-42ce-8c6b-341a1b1cd032",
+            "product": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 2
+          },
+          {
+            "position": "b178de4b-8944-41f4-b7a1-ecf2abc0785d",
+            "product": "964baa82-44b0-4cab-8bf6-325096ea6422",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 3
+          },
+          {
+            "position": "40e4767a-aa3c-4b89-8b25-007272e6f46e",
+            "product": "a6770227-eab4-4511-95e2-7f3bdf322aeb",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 2
+          },
+          {
+            "position": "01314a56-1e26-41f6-aef8-d2d112c9afd2",
+            "product": "964baa82-44b0-4cab-8bf6-325096ea6422",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 3
+          }
+        ]
+      }
+    },
+    {
+      "name": "group-sellers",
+      "checkpoints": [
+        {
+          "name": "group-sellers-first",
+          "expected_count": 1,
+          "product": "0386dc2f-1f8b-47a4-9ba5-897a58757422",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "group-sellers-second",
+          "expected_count": 1,
+          "product": "5f6b1a72-1702-4770-8b47-d2706afbfbdf",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/5720b4e8-90e9-4fe9-95ae-41ef696c6518/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-26-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "3ac035a6-4972-437d-9d8a-3c0ca0651f31",
+            "location_code": "A-26-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/5720b4e8-90e9-4fe9-95ae-41ef696c6518/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000002600\",\"product_id\":\"0386dc2f-1f8b-47a4-9ba5-897a58757422\",\"storage_location_id\":\"3ac035a6-4972-437d-9d8a-3c0ca0651f31\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "3ac035a6-4972-437d-9d8a-3c0ca0651f31",
+            "location_code": "A-26-1",
+            "product_id": "0386dc2f-1f8b-47a4-9ba5-897a58757422",
+            "sku_code": "PICK-26-00",
+            "product_name": "Browser picking group-sellers product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/5720b4e8-90e9-4fe9-95ae-41ef696c6518/pick/scan",
+          "status": 409,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-26-2\",\"storage_location_id\":\"3ac035a6-4972-437d-9d8a-3c0ca0651f31\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "detail": {
+              "code": "wrong_product",
+              "message": "Товар не найден по штрихкоду в этой поставке.",
+              "context": {},
+              "retryable": false
+            }
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/b5f55b8e-1f96-497b-af9e-94047c5813d8/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-26-2\",\"storage_location_id\":\"3ac035a6-4972-437d-9d8a-3c0ca0651f31\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "1b981501-d2be-408f-8d0a-f4b2681d80a1",
+            "location_code": "A-26-2",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/b5f55b8e-1f96-497b-af9e-94047c5813d8/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000002600\",\"product_id\":\"5f6b1a72-1702-4770-8b47-d2706afbfbdf\",\"storage_location_id\":\"1b981501-d2be-408f-8d0a-f4b2681d80a1\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "1b981501-d2be-408f-8d0a-f4b2681d80a1",
+            "location_code": "A-26-2",
+            "product_id": "5f6b1a72-1702-4770-8b47-d2706afbfbdf",
+            "sku_code": "PICK-26-01",
+            "product_name": "Browser picking group-sellers product 1",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "5f6b1a72-1702-4770-8b47-d2706afbfbdf",
+            "location": "3ac035a6-4972-437d-9d8a-3c0ca0651f31",
+            "container": null,
+            "quantity": 0,
+            "unpacked": 0,
+            "packed": 0
+          },
+          {
+            "product": "0386dc2f-1f8b-47a4-9ba5-897a58757422",
+            "location": "1b981501-d2be-408f-8d0a-f4b2681d80a1",
+            "container": null,
+            "quantity": 0,
+            "unpacked": 0,
+            "packed": 0
+          },
+          {
+            "product": "5f6b1a72-1702-4770-8b47-d2706afbfbdf",
+            "location": "1b981501-d2be-408f-8d0a-f4b2681d80a1",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "0386dc2f-1f8b-47a4-9ba5-897a58757422",
+            "location": "3ac035a6-4972-437d-9d8a-3c0ca0651f31",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "0386dc2f-1f8b-47a4-9ba5-897a58757422",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          },
+          {
+            "product": "5f6b1a72-1702-4770-8b47-d2706afbfbdf",
+            "location": "99543204-d0fd-4808-98cc-b407b57390eb",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "a9041503-4471-4e66-9388-51b74a76e13a",
+            "supply": "5720b4e8-90e9-4fe9-95ae-41ef696c6518",
+            "product": "0386dc2f-1f8b-47a4-9ba5-897a58757422",
+            "order": "9ca529fc-fac5-4376-8703-df050fcf06b9",
+            "position": null,
+            "location": "3ac035a6-4972-437d-9d8a-3c0ca0651f31",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "92f2aeb6-d93b-4f72-b435-c88766a593a1",
+            "active": true,
+            "movement": "0d717d00-5c67-4b38-acbe-5634616da3c8"
+          },
+          {
+            "id": "5b08ec7f-5c78-4568-9a26-360b80fad271",
+            "supply": "b5f55b8e-1f96-497b-af9e-94047c5813d8",
+            "product": "5f6b1a72-1702-4770-8b47-d2706afbfbdf",
+            "order": "29707bdb-c993-4284-8529-7b1485af3524",
+            "position": null,
+            "location": "1b981501-d2be-408f-8d0a-f4b2681d80a1",
+            "container": null,
+            "sorting": "99543204-d0fd-4808-98cc-b407b57390eb",
+            "key": "2f92ccfc-f1d8-468a-990c-9e188390fdb5",
+            "active": true,
+            "movement": "e088c19f-42f5-4f3f-8881-8734fb95500e"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "b3d43cd0-da45-44a0-b419-3524106e2f44",
+            "product": "0386dc2f-1f8b-47a4-9ba5-897a58757422",
+            "quantity": 1
+          },
+          {
+            "order": "9ca529fc-fac5-4376-8703-df050fcf06b9",
+            "product": "0386dc2f-1f8b-47a4-9ba5-897a58757422",
+            "quantity": 1
+          },
+          {
+            "order": "ef46438f-3a72-49b8-b3f7-ce20ff925278",
+            "product": "0386dc2f-1f8b-47a4-9ba5-897a58757422",
+            "quantity": 1
+          },
+          {
+            "order": "29707bdb-c993-4284-8529-7b1485af3524",
+            "product": "5f6b1a72-1702-4770-8b47-d2706afbfbdf",
+            "quantity": 1
+          },
+          {
+            "order": "7e0239ae-c40d-4fdd-932e-017a107d4ac5",
+            "product": "5f6b1a72-1702-4770-8b47-d2706afbfbdf",
+            "quantity": 1
+          },
+          {
+            "order": "75acdddf-ee3b-4bcb-bffd-23a94dce4c79",
+            "product": "5f6b1a72-1702-4770-8b47-d2706afbfbdf",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "ozon-null",
+      "checkpoints": [
+        {
+          "name": "ozon-null-server-commit",
+          "expected_count": 1,
+          "product": "77a984ca-7ef4-4af7-81fe-c4544997d4a0",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "ozon-null-reload",
+          "expected_count": 1,
+          "product": "77a984ca-7ef4-4af7-81fe-c4544997d4a0",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/ce1bfb7e-96b3-404a-9473-58540a0d6fd4/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-27-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "e5458742-f6d5-410a-930d-23915017edb9",
+            "location_code": "A-27-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/ce1bfb7e-96b3-404a-9473-58540a0d6fd4/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"2900000002700\",\"storage_location_id\":\"e5458742-f6d5-410a-930d-23915017edb9\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "e5458742-f6d5-410a-930d-23915017edb9",
+            "location_code": "A-27-1",
+            "product_id": "77a984ca-7ef4-4af7-81fe-c4544997d4a0",
+            "sku_code": "PICK-27-00",
+            "product_name": "Browser picking ozon-null product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "77a984ca-7ef4-4af7-81fe-c4544997d4a0",
+            "location": "e5458742-f6d5-410a-930d-23915017edb9",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "77a984ca-7ef4-4af7-81fe-c4544997d4a0",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "bd9779c4-2367-4c3d-8360-c4e47bd4e201",
+            "supply": "ce1bfb7e-96b3-404a-9473-58540a0d6fd4",
+            "product": "77a984ca-7ef4-4af7-81fe-c4544997d4a0",
+            "order": null,
+            "position": "77e50256-8147-4f50-9519-87e54695f205",
+            "location": "e5458742-f6d5-410a-930d-23915017edb9",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "457f7ce4-4c60-496a-8ee0-f02db247ad51",
+            "active": true,
+            "movement": "ab9a48c9-5cf6-4127-88ae-128b77458214"
+          }
+        ],
+        "reserves": [],
+        "positions": [
+          {
+            "id": "77e50256-8147-4f50-9519-87e54695f205",
+            "order": "0b44675e-c5ca-4a42-992c-0f7a969a5041",
+            "product": "77a984ca-7ef4-4af7-81fe-c4544997d4a0",
+            "supply": "ce1bfb7e-96b3-404a-9473-58540a0d6fd4",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 2,
+            "reserved_quantity": 2,
+            "picked_quantity": 1
+          }
+        ],
+        "position_reserves": [
+          {
+            "position": "77e50256-8147-4f50-9519-87e54695f205",
+            "product": "77a984ca-7ef4-4af7-81fe-c4544997d4a0",
+            "warehouse": "3974af03-159c-4f12-bfd0-eda97722ccb2",
+            "quantity": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty",
+      "checkpoints": [
+        {
+          "name": "empty",
+          "expected_count": 0,
+          "product": "6e73e0b8-ca3d-4a9a-8f6a-88798f73f54c",
+          "status": "verified",
+          "actual_count": 0
+        }
+      ],
+      "status": "passed",
+      "responses": [],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "6e73e0b8-ca3d-4a9a-8f6a-88798f73f54c",
+            "location": "b28a6428-4e52-47d5-a259-12baa599ec03",
+            "container": null,
+            "quantity": 0,
+            "unpacked": 0,
+            "packed": 0
+          }
+        ],
+        "picks": [],
+        "reserves": [],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "no-stock",
+      "checkpoints": [
+        {
+          "name": "no-stock",
+          "expected_count": 0,
+          "product": "49b78cb1-117e-4bc8-8e6b-1db5af2add13",
+          "status": "verified",
+          "actual_count": 0
+        }
+      ],
+      "status": "passed",
+      "responses": [],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "49b78cb1-117e-4bc8-8e6b-1db5af2add13",
+            "location": "b7174a98-a1d5-444d-9aa2-bc3242d8982c",
+            "container": null,
+            "quantity": 0,
+            "unpacked": 0,
+            "packed": 0
+          }
+        ],
+        "picks": [],
+        "reserves": [
+          {
+            "order": "e36e487d-3442-4d12-b5e3-b0e3795bf5a7",
+            "product": "49b78cb1-117e-4bc8-8e6b-1db5af2add13",
+            "quantity": 1
+          },
+          {
+            "order": "3b58f81b-6040-42b4-ae1d-6a336ea49c1d",
+            "product": "49b78cb1-117e-4bc8-8e6b-1db5af2add13",
+            "quantity": 1
+          },
+          {
+            "order": "015d3004-4623-4393-94f0-35eac6db80a7",
+            "product": "49b78cb1-117e-4bc8-8e6b-1db5af2add13",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "partial",
+      "checkpoints": [
+        {
+          "name": "partial",
+          "expected_count": 1,
+          "product": "4f700b13-8d2f-4eda-b4e8-ddc481949c8a",
+          "status": "verified",
+          "actual_count": 1
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/b37378e7-c8b7-47d8-a07a-0a4168f2c1a6/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-23-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "1113cc3e-4db3-480b-b3cf-5ed0c69ec159",
+            "location_code": "A-23-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/b37378e7-c8b7-47d8-a07a-0a4168f2c1a6/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-23-00\",\"product_id\":\"4f700b13-8d2f-4eda-b4e8-ddc481949c8a\",\"storage_location_id\":\"1113cc3e-4db3-480b-b3cf-5ed0c69ec159\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "1113cc3e-4db3-480b-b3cf-5ed0c69ec159",
+            "location_code": "A-23-1",
+            "product_id": "4f700b13-8d2f-4eda-b4e8-ddc481949c8a",
+            "sku_code": "PICK-23-00",
+            "product_name": "Browser picking partial product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-orders/worklist?limit=500&status_group=active",
+          "method": "GET",
+          "status": "network-failed",
+          "request": null,
+          "failure": {
+            "errorText": "net::ERR_ABORTED"
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-assembly-tasks",
+          "method": "GET",
+          "status": "network-failed",
+          "request": null,
+          "failure": {
+            "errorText": "net::ERR_ABORTED"
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "4f700b13-8d2f-4eda-b4e8-ddc481949c8a",
+            "location": "1113cc3e-4db3-480b-b3cf-5ed0c69ec159",
+            "container": null,
+            "quantity": 29,
+            "unpacked": 29,
+            "packed": 0
+          },
+          {
+            "product": "4f700b13-8d2f-4eda-b4e8-ddc481949c8a",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 1,
+            "unpacked": 1,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "9bf3d608-bcc9-4a3f-9a52-ea3dd9f2da9d",
+            "supply": "b37378e7-c8b7-47d8-a07a-0a4168f2c1a6",
+            "product": "4f700b13-8d2f-4eda-b4e8-ddc481949c8a",
+            "order": "636b9cc9-a39f-49f5-8ed6-405e54f25265",
+            "position": null,
+            "location": "1113cc3e-4db3-480b-b3cf-5ed0c69ec159",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "542d43f1-f7df-43fe-8de7-b3d5d030d55b",
+            "active": true,
+            "movement": "3d5b473e-054d-4884-a31c-43fbd032c074"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "94535757-7108-4466-afff-0f8e689552ce",
+            "product": "4f700b13-8d2f-4eda-b4e8-ddc481949c8a",
+            "quantity": 1
+          },
+          {
+            "order": "636b9cc9-a39f-49f5-8ed6-405e54f25265",
+            "product": "4f700b13-8d2f-4eda-b4e8-ddc481949c8a",
+            "quantity": 1
+          },
+          {
+            "order": "fc596ad6-df32-4889-a44b-59ead0d69498",
+            "product": "4f700b13-8d2f-4eda-b4e8-ddc481949c8a",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "suffix",
+      "checkpoints": [
+        {
+          "name": "suffix-silence",
+          "expected_count": 1,
+          "product": "2ac9028b-c0b3-416a-8475-e1f60984cc5a",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "suffix-tab",
+          "expected_count": 2,
+          "product": "2ac9028b-c0b3-416a-8475-e1f60984cc5a",
+          "status": "verified",
+          "actual_count": 2
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/40f6e927-de5a-4ec8-ab52-4d87d559a446/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-24-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "35b2e085-540a-4174-8406-dbd00ac1b60d",
+            "location_code": "A-24-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/40f6e927-de5a-4ec8-ab52-4d87d559a446/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-24-00\",\"product_id\":\"2ac9028b-c0b3-416a-8475-e1f60984cc5a\",\"storage_location_id\":\"35b2e085-540a-4174-8406-dbd00ac1b60d\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "35b2e085-540a-4174-8406-dbd00ac1b60d",
+            "location_code": "A-24-1",
+            "product_id": "2ac9028b-c0b3-416a-8475-e1f60984cc5a",
+            "sku_code": "PICK-24-00",
+            "product_name": "Browser picking suffix product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/40f6e927-de5a-4ec8-ab52-4d87d559a446/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-24-00\",\"product_id\":\"2ac9028b-c0b3-416a-8475-e1f60984cc5a\",\"storage_location_id\":\"35b2e085-540a-4174-8406-dbd00ac1b60d\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "35b2e085-540a-4174-8406-dbd00ac1b60d",
+            "location_code": "A-24-1",
+            "product_id": "2ac9028b-c0b3-416a-8475-e1f60984cc5a",
+            "sku_code": "PICK-24-00",
+            "product_name": "Browser picking suffix product 0",
+            "picked_qty": 2,
+            "allocation_quantity": 2,
+            "source_picked_qty": 2,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "2ac9028b-c0b3-416a-8475-e1f60984cc5a",
+            "location": "35b2e085-540a-4174-8406-dbd00ac1b60d",
+            "container": null,
+            "quantity": 28,
+            "unpacked": 28,
+            "packed": 0
+          },
+          {
+            "product": "2ac9028b-c0b3-416a-8475-e1f60984cc5a",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 2,
+            "unpacked": 2,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "ec7d8fb6-88e9-4661-990b-235078c90434",
+            "supply": "40f6e927-de5a-4ec8-ab52-4d87d559a446",
+            "product": "2ac9028b-c0b3-416a-8475-e1f60984cc5a",
+            "order": "0fbb4934-18f7-4ae4-a2a0-26414f862857",
+            "position": null,
+            "location": "35b2e085-540a-4174-8406-dbd00ac1b60d",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "fd3f23df-a6a4-4519-9fb6-8d28f631ccd3",
+            "active": true,
+            "movement": "83b2b277-3894-4d83-939e-ca6a350f76c2"
+          },
+          {
+            "id": "f80ac3f7-6b91-41fc-8afb-f26e4c273861",
+            "supply": "40f6e927-de5a-4ec8-ab52-4d87d559a446",
+            "product": "2ac9028b-c0b3-416a-8475-e1f60984cc5a",
+            "order": "34d75cec-d40f-453b-82f0-449f2c1c97a4",
+            "position": null,
+            "location": "35b2e085-540a-4174-8406-dbd00ac1b60d",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "ce5b2668-45a8-41c6-b1c2-a37d2ad6e182",
+            "active": true,
+            "movement": "03e9bcb9-b83f-4d1f-8873-305834aa387c"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "e4ee7c41-783c-48d6-93cd-8fc78b178fd5",
+            "product": "2ac9028b-c0b3-416a-8475-e1f60984cc5a",
+            "quantity": 1
+          },
+          {
+            "order": "34d75cec-d40f-453b-82f0-449f2c1c97a4",
+            "product": "2ac9028b-c0b3-416a-8475-e1f60984cc5a",
+            "quantity": 1
+          },
+          {
+            "order": "0fbb4934-18f7-4ae4-a2a0-26414f862857",
+            "product": "2ac9028b-c0b3-416a-8475-e1f60984cc5a",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    },
+    {
+      "name": "focus",
+      "checkpoints": [
+        {
+          "name": "focus-scanner",
+          "expected_count": 1,
+          "product": "3d46a379-7d60-45da-81f7-8708bb53e15d",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "focus-blank",
+          "expected_count": 2,
+          "product": "3d46a379-7d60-45da-81f7-8708bb53e15d",
+          "status": "verified",
+          "actual_count": 2
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/2237d75e-ec43-4386-911e-60edc42cf4a1/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"LOC-25-1\",\"storage_location_id\":null,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "location",
+            "storage_location_id": "839d6daa-5358-470b-8cce-91e481c8f1c7",
+            "location_code": "A-25-1",
+            "product_id": null,
+            "sku_code": null,
+            "product_name": null,
+            "picked_qty": null,
+            "allocation_quantity": null,
+            "source_picked_qty": null,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/2237d75e-ec43-4386-911e-60edc42cf4a1/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-25-00\",\"product_id\":\"3d46a379-7d60-45da-81f7-8708bb53e15d\",\"storage_location_id\":\"839d6daa-5358-470b-8cce-91e481c8f1c7\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "839d6daa-5358-470b-8cce-91e481c8f1c7",
+            "location_code": "A-25-1",
+            "product_id": "3d46a379-7d60-45da-81f7-8708bb53e15d",
+            "sku_code": "PICK-25-00",
+            "product_name": "Browser picking focus product 0",
+            "picked_qty": 1,
+            "allocation_quantity": 1,
+            "source_picked_qty": 1,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/2237d75e-ec43-4386-911e-60edc42cf4a1/pick/scan",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"barcode\":\"PICK-25-00\",\"product_id\":\"3d46a379-7d60-45da-81f7-8708bb53e15d\",\"storage_location_id\":\"839d6daa-5358-470b-8cce-91e481c8f1c7\",\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "kind": "product",
+            "storage_location_id": "839d6daa-5358-470b-8cce-91e481c8f1c7",
+            "location_code": "A-25-1",
+            "product_id": "3d46a379-7d60-45da-81f7-8708bb53e15d",
+            "sku_code": "PICK-25-00",
+            "product_name": "Browser picking focus product 0",
+            "picked_qty": 2,
+            "allocation_quantity": 2,
+            "source_picked_qty": 2,
+            "container_kind": null,
+            "container_id": null,
+            "container_code": null
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "3d46a379-7d60-45da-81f7-8708bb53e15d",
+            "location": "839d6daa-5358-470b-8cce-91e481c8f1c7",
+            "container": null,
+            "quantity": 28,
+            "unpacked": 28,
+            "packed": 0
+          },
+          {
+            "product": "3d46a379-7d60-45da-81f7-8708bb53e15d",
+            "location": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "container": null,
+            "quantity": 2,
+            "unpacked": 2,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "c6613351-722e-401a-9e96-a02060c98be4",
+            "supply": "2237d75e-ec43-4386-911e-60edc42cf4a1",
+            "product": "3d46a379-7d60-45da-81f7-8708bb53e15d",
+            "order": "10b8c7d6-5f2a-4f78-8065-7da8a3b39545",
+            "position": null,
+            "location": "839d6daa-5358-470b-8cce-91e481c8f1c7",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "29ddb68f-4de2-4c35-b5d7-bca28538c5b0",
+            "active": true,
+            "movement": "6b97a1d2-68b2-47b3-b658-52f4970aee7c"
+          },
+          {
+            "id": "f4f6796e-cc67-401e-a872-8f6db4f7082a",
+            "supply": "2237d75e-ec43-4386-911e-60edc42cf4a1",
+            "product": "3d46a379-7d60-45da-81f7-8708bb53e15d",
+            "order": "75982cb7-ca6a-443d-b2ac-dd552228da2b",
+            "position": null,
+            "location": "839d6daa-5358-470b-8cce-91e481c8f1c7",
+            "container": null,
+            "sorting": "433c080d-942e-40c4-9bb6-389a8beef0b4",
+            "key": "d6407f2d-ff98-42b9-803d-a8f5059a2ba8",
+            "active": true,
+            "movement": "77420470-a714-4f9a-9ca1-7fd2cdfb3da7"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "75982cb7-ca6a-443d-b2ac-dd552228da2b",
+            "product": "3d46a379-7d60-45da-81f7-8708bb53e15d",
+            "quantity": 1
+          },
+          {
+            "order": "10b8c7d6-5f2a-4f78-8065-7da8a3b39545",
+            "product": "3d46a379-7d60-45da-81f7-8708bb53e15d",
+            "quantity": 1
+          },
+          {
+            "order": "f3df2ef6-c9bf-4a5b-ab8c-78f790d2ea58",
+            "product": "3d46a379-7d60-45da-81f7-8708bb53e15d",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    }
+  ]
+}
