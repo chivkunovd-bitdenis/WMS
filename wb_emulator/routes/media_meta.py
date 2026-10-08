@@ -14,6 +14,7 @@ from wb_emulator.services import supplies_store as store
 from wb_emulator.services.fault_injection import get_faults, maybe_delay
 from wb_emulator.services.marking_meta import (
     META_KINDS,
+    delete_meta,
     get_meta,
     parse_put_values,
     upsert_meta,
@@ -107,6 +108,20 @@ def get_order_meta(request: Request, order_id: int) -> dict[str, Any]:
     """GET /api/v3/orders/{order_id}/meta — marking identifiers and check statuses."""
     seller_key = _seller_key(request)
     return get_meta(seller_key, order_id)
+
+
+@router.delete("/orders/{order_id}/meta", status_code=204, response_class=Response)
+def delete_order_meta(
+    request: Request,
+    order_id: int,
+    key: str = Query(...),
+) -> Response:
+    """DELETE /api/v3/orders/{order_id}/meta?key=sgtin — remove one meta kind."""
+    seller_key = _seller_key(request)
+    if key not in META_KINDS:
+        raise HTTPException(status_code=400, detail="invalid_meta_kind")
+    delete_meta(seller_key, order_id, key)
+    return Response(status_code=204)
 
 
 @router.put("/orders/{order_id}/meta/{kind}")

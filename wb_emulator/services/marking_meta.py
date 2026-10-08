@@ -55,6 +55,17 @@ def upsert_meta(seller_key: str, order_id: int, kind: str, value: str) -> None:
     entries.append({"value": trimmed, "checkStatus": status})
 
 
+def delete_meta(seller_key: str, order_id: int, kind: str) -> None:
+    """Delete only one WB marking-meta kind; repeated deletes are idempotent."""
+    plural = plural_key_for_kind(kind)
+    bucket = _meta_store.get((seller_key, order_id))
+    if bucket is None:
+        return
+    bucket.pop(plural, None)
+    if not bucket:
+        _meta_store.pop((seller_key, order_id), None)
+
+
 def get_meta(seller_key: str, order_id: int) -> dict[str, Any]:
     """Return WB-shaped GET /orders/{id}/meta payload."""
     stored = _meta_store.get((seller_key, order_id), {})

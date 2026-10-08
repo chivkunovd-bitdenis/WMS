@@ -61,13 +61,26 @@ def test_post_order_stickers_returns_code128_png(client: TestClient) -> None:
     assert len(stickers) == 2
     for row in stickers:
         assert row["orderId"] in (100001, 100002)
-        assert row["barcode"].startswith("WB")
+        assert row["barcode"].startswith("*")
         _assert_valid_png_b64(row["file"])
 
 
 def test_get_supply_barcode_returns_qr_png(client: TestClient) -> None:
+    create = client.post(
+        "/api/v3/supplies",
+        headers=AUTH_HEADERS,
+        json={"name": "Delivered barcode test"},
+    )
+    assert create.status_code == 200
+    supply_id = create.json()["id"]
+    delivered = client.patch(
+        f"/api/v3/supplies/{supply_id}/deliver",
+        headers=AUTH_HEADERS,
+    )
+    assert delivered.status_code == 204
+
     response = client.get(
-        "/api/v3/supplies/WB-GI-TEST-1/barcode",
+        f"/api/v3/supplies/{supply_id}/barcode",
         params={"type": "png"},
         headers=AUTH_HEADERS,
     )
@@ -124,6 +137,75 @@ def test_put_meta_kiz_err_sets_error_check_status(client: TestClient) -> None:
     assert len(entries) == 1
     assert entries[0]["value"] == kiz
     assert entries[0]["checkStatus"] == "error"
+
+
+def test_delete_order_meta_removes_only_requested_kind_and_is_idempotent(
+    client: TestClient,
+) -> None:
+    order_id = 555003
+    other_order_id = 555004
+    kiz = "010460000000000021N4N57TEST0003"
+    uin = "UIN-TEST-0003"
+    foreign_seller_kiz = "010460000000000021N4N57SELLER0003"
+
+    for kind, body in (
+        ("sgtin", {"sgtins": [kiz]}),
+        ("uin", {"uins": [uin]}),
+    ):
+        response = client.put(
+            f"/api/v3/orders/{order_id}/meta/{kind}",
+            headers=AUTH_HEADERS,
+            json=body,
+        )
+        assert response.status_code == 200
+
+    assert client.put(
+        f"/api/v3/orders/{other_order_id}/meta/sgtin",
+        headers=AUTH_HEADERS,
+        json={"sgtins": [kiz]},
+    ).status_code == 200
+    assert client.put(
+        f"/api/v3/orders/{order_id}/meta/sgtin",
+        headers={"Authorization": "file-token"},
+        json={"sgtins": [foreign_seller_kiz]},
+    ).status_code == 200
+
+    delete_url = f"/api/v3/orders/{order_id}/meta"
+    first_delete = client.delete(
+        delete_url,
+        params={"key": "sgtin"},
+        headers=AUTH_HEADERS,
+    )
+    assert first_delete.status_code == 204
+    assert first_delete.content == b""
+
+    remaining = client.get(delete_url, headers=AUTH_HEADERS).json()
+    assert remaining == {"uins": [{"value": uin, "checkStatus": "ok"}]}
+    assert client.get(
+        f"/api/v3/orders/{other_order_id}/meta",
+        headers=AUTH_HEADERS,
+    ).json() == {"sgtins": [{"value": kiz, "checkStatus": "ok"}]}
+    assert client.get(delete_url, headers={"Authorization": "file-token"}).json() == {
+        "sgtins": [{"value": foreign_seller_kiz, "checkStatus": "ok"}]
+    }
+
+    second_delete = client.delete(
+        delete_url,
+        params={"key": "sgtin"},
+        headers=AUTH_HEADERS,
+    )
+    assert second_delete.status_code == 204
+    assert second_delete.content == b""
+
+
+def test_delete_order_meta_rejects_unknown_kind(client: TestClient) -> None:
+    response = client.delete(
+        "/api/v3/orders/555005/meta",
+        params={"key": "unknown"},
+        headers=AUTH_HEADERS,
+    )
+    assert response.status_code == 400
+    assert response.json() == {"detail": "invalid_meta_kind"}
 
 
 def test_media_meta_routes_require_auth(client: TestClient) -> None:
