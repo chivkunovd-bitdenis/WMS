@@ -84,9 +84,9 @@ def test_first_start_and_short_pause_send_no_downtime_notice(env: Any) -> None:
 
 
 def test_run_forever_starts_pollers_before_visible_recovery_card_edit(tmp_path, monkeypatch) -> None:
+    import support_agent.runner as runner
     from support_agent.case_journal import CaseJournal
     from support_agent.telegram import Bots
-    import support_agent.runner as runner
 
     cfg = make_config(tmp_path)
     cfg.agent.visible_moderator = True

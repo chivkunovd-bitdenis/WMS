@@ -457,7 +457,9 @@ def test_visible_startup_resolves_interrupted_native_sends_on_linked_card(tmp_pa
     first._delivery = lambda: SimpleNamespace(store=first.store, bots=bots)
 
     stable_keys = ["native-send:startup-unknown-a", "native-send:startup-unknown-b"]
-    for key, answer in zip(stable_keys, ("Проверенный ответ А", "Проверенный ответ Б")):
+    for key, answer in zip(
+        stable_keys, ("Проверенный ответ А", "Проверенный ответ Б"), strict=True,
+    ):
         with pytest.raises(ProcessStopped):
             first.send(CLIENT_CHAT, answer, key=key.removeprefix("native-send:"),
                        topic_id=topic_id)
