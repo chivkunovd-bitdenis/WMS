@@ -623,9 +623,11 @@ async def create_supply_from_orders(
         try:
             # Creation is committed. The optional prefetch owns its transaction
             # boundary and performs WB HTTP before opening any sticker writes.
-            async with asyncio.timeout(CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS):
+            async with asyncio.timeout(
+                CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS
+            ) as prefetch_timeout:
                 await _request_order_stickers_for_picking(
-                    session, tenant_id, supply, http_client, after_creation=True
+                    session, tenant_id, supply, http_client, creation_timeout=prefetch_timeout
                 )
         except TimeoutError:
             # Cancellation can interrupt a DB read before the WB HTTP call and
@@ -1328,7 +1330,7 @@ async def _request_order_stickers_for_picking(
     http_client: httpx.AsyncClient,
     *,
     orders: list[FbsOrder] | None = None,
-    after_creation: bool = False,
+    creation_timeout: asyncio.Timeout | None = None,
 ) -> None:
     target_orders = supply.orders if orders is None else orders
     missing = [
@@ -1345,9 +1347,14 @@ async def _request_order_stickers_for_picking(
             request_supply_print_batch,
         )
 
-        if after_creation:
+        if creation_timeout is not None:
             await prefetch_created_supply_stickers(
-                session, tenant_id, supply.id, order_ids=missing, http_client=http_client
+                session,
+                tenant_id,
+                supply.id,
+                order_ids=missing,
+                http_client=http_client,
+                prefetch_timeout=creation_timeout,
             )
             return
         await request_supply_print_batch(

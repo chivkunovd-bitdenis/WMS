@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import uuid
 from collections.abc import Awaitable, Callable
@@ -763,12 +764,14 @@ async def prefetch_created_supply_stickers(
     *,
     order_ids: list[uuid.UUID],
     http_client: httpx.AsyncClient,
+    prefetch_timeout: asyncio.Timeout,
 ) -> None:
     """Fetch after the caller has committed creation, before any sticker writes.
 
     Persist each original HTTP response through the normal asset path before
     fetching the next chunk. Other print callers retain their own transaction.
     """
+    deadline = prefetch_timeout.when()
     supply = await _get_supply(session, tenant_id, supply_id)
     requested_ids = set(order_ids)
     snapshot: list[tuple[uuid.UUID, int]] = []
@@ -792,6 +795,9 @@ async def prefetch_created_supply_stickers(
     # transaction too: no DB transaction may span the optional WB round trip.
     await session.commit()
     for offset in range(0, len(snapshot), WB_STICKER_CHUNK_SIZE):
+        if deadline is not None and asyncio.get_running_loop().time() >= deadline:
+            raise TimeoutError
+        prefetch_timeout.reschedule(deadline)
         chunk = snapshot[offset : offset + WB_STICKER_CHUNK_SIZE]
         chunk_ids = [order_id for order_id, _ in chunk]
         response: list[dict[str, Any]] | WildberriesClientError
@@ -801,6 +807,10 @@ async def prefetch_created_supply_stickers(
             )
         except WildberriesClientError as exc:
             response = exc
+        # The WB response is now known. The network deadline must not cancel
+        # its local persistence, even if this final commit crosses that deadline.
+        # The next HTTP request will use the original remaining budget above.
+        prefetch_timeout.reschedule(None)
 
         # Orders may have been cancelled or moved while HTTP was pending. Reload
         # current membership before applying this chunk's original response.
