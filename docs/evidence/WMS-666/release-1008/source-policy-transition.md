@@ -19,3 +19,13 @@ The source-binding fixture now adds the independently accepted product SHA `ffb5
 The renderer test correction in `ec44815fe063611723c2794781ff8b1a9288bf52` has an exact correction record in `docs/reviews/contract-corrections/WMS-666.json`, linked to Astra’s bounded report. The correction changes only the approved WMS-657 numeric WB fixture and WMS-673 established empty-location wording; layout, fresh-read, and output guards remain intact.
 
 The source-policy upgrade is not self-authorizing. The trusted-main bootstrap currently pins the earlier source. A separate, reviewable main-anchor change must identify the exact S commit under the existing `process_bootstrap.json` mechanism. That anchor change is not merged by this work. The task-document checker, full picking suite, mandatory exact-S CI, and deployed-SHA readback remain release gates; this document does not mark any of them green.
+
+## Local checks on the committed candidate
+
+The following checks ran after commit `2a9643159a935cf6d175b47355f2356be6623ef5`, with the trusted source, registry, and source-binding fixture already committed:
+
+- `python3 -m unittest scripts.ci.tests.test_ci_release_additions` — **7 tests, OK**.
+- `python3 scripts/ci/check_task_documents.py origin/etalon` — **Документы задач заполнены; AGENTS.md и CLAUDE.md совпадают.**
+- `python3 scripts/ci/product_scope.py --root . --trusted-ref ffb524e2950cfb250993ad4db3b0f394ca55f735` — **`{"unapproved_product_paths": []}`**.
+
+These local checks validate the source-binding/workflow contract, required task-document fields, and product-tree equality with accepted P. They do not replace exact-S full CI, full picking, or deployment readback.
