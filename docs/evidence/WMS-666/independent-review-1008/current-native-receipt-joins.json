@@ -83,6 +83,49 @@
           "ledger_sink_image_match": true
         }
       ]
+    },
+    "group-manual-native-verified": {
+      "count": 6,
+      "observed_at": "2026-10-08T01:36:59.577747+00:00",
+      "scope": "Scoped native segment passed; subsequent boxes403 keeps whole run failed; provider construction and publication are separate",
+      "jobs": [
+        {
+          "key": "b3e6b7b6-4ed3-40cd-885d-16fc25a47170",
+          "receipt": "emulator-0001-8ee34fda516b",
+          "sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "b3e6b7b6-4ed3-40cd-885d-16fc25a47170:chz",
+          "receipt": "emulator-0002-f2f4c4632159",
+          "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "b3e6b7b6-4ed3-40cd-885d-16fc25a47170:chz:c2",
+          "receipt": "emulator-0003-f2f4c4632159",
+          "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "9b5f18dd-3716-4b3c-9bf2-be87357fb7a4",
+          "receipt": "emulator-0004-ffebd4debcd7",
+          "sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "9b5f18dd-3716-4b3c-9bf2-be87357fb7a4:chz",
+          "receipt": "emulator-0005-d5b0dd700c56",
+          "sha256": "d5b0dd700c564239fe04d8774cf76fbb1e0e6c56112367b99c7422c82670637b",
+          "ledger_sink_image_match": true
+        },
+        {
+          "key": "9b5f18dd-3716-4b3c-9bf2-be87357fb7a4:chz:c2",
+          "receipt": "emulator-0006-d5b0dd700c56",
+          "sha256": "d5b0dd700c564239fe04d8774cf76fbb1e0e6c56112367b99c7422c82670637b",
+          "ledger_sink_image_match": true
+        }
+      ]
     }
   }
 }
