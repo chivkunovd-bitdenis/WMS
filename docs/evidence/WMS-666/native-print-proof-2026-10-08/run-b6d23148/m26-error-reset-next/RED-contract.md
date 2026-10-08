@@ -35,8 +35,9 @@ screen capture is `native/ui-A-selected.png`.
 The executed baseline runner's Git blob was `75f2d4fb1abbf6c62dd39837c583cbb387d748d9`.
 The published runner has since been tightened to count and match the one exact
 validation request before testing visible-error recovery, and to look only at a
-visible active-row or unified-bar message. That tightened runner blob is
-`2bcb5005334cef49732c4d5ac5e71346cee6a74e`; it was not rerun on the baseline.
+visible active-row or unified-bar message. Reviewer follow-up also corrected the
+active-row and neutral product-barcode predicates. The current runner blob is
+`ea025652f7831d8f9ac6970970c0a34c7d7188ee`; it was not rerun on the baseline.
 The captured API and database records independently satisfy its pre-error
 guards. The post-fix run must execute the published runner as-is.
 
