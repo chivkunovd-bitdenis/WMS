@@ -131,7 +131,7 @@ async def find_location_by_barcode(
         return None
     # Ячейку можно и отсканировать, и набрать кодом руками. Ограничения БД допускают,
     # что одна строка окажется штрихкодом одной ячейки и кодом другой на том же складе
-    # (uq_storage_locations_wh_code — код уникален по складу, а
+    # (uq_storage_locations_wh_code — код уникален по складу, а  # noqa: RUF003
     # uq_storage_locations_tenant_barcode — штрихкод по организации). Раньше такой ввод
     # возвращал две строки и ронял подбор через scalar_one_or_none(). Побеждает штрихкод:
     # сканер важнее клавиатуры (SORT-01).
@@ -208,7 +208,7 @@ async def get_pick_options(
             )
         )
 
-    for pid, locs in loc_by_product.items():
+    for locs in loc_by_product.values():
         locs.sort(key=lambda loc: loc.location_code)
 
     out: list[PickOptionProduct] = []
@@ -307,7 +307,7 @@ async def pick_scan(
         raise MarketplaceUnloadPickError("barcode_unknown")
 
     # Подбор не трогает короба (решение заказчика 2026-08-16) — только storage →
-    # pick allocation. Короб появляется отдельно и явно на упаковке.
+    # pick allocation. Короб появляется отдельно и явно на упаковке.  # noqa: RUF003
     result = await collect_svc.record_pick_allocation(
         session,
         tenant_id,

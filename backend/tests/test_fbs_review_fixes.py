@@ -47,7 +47,7 @@ from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryM
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
-from app.services import inventory_service, stock_direction_service
+from app.services import inventory_service
 from app.services.fbs_packaging_integration_service import (
     _write_off_active_orders_once,
     detach_cancelled_order_from_supply,

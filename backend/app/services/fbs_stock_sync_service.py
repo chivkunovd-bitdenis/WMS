@@ -250,7 +250,7 @@ def _build_publish_plan(
             continue
         if product.id not in pool_quantities:
             # Нет строки распределения в fbs_binding_stock_pools для этой привязки —
-            # это НЕ ошибка, просто админ ещё не выделил количество на этот склад.
+            # это НЕ ошибка, просто админ ещё не выделил количество на этот склад.  # noqa: RUF003
             # Товар просто не попадает в targets, никакого blocked_targets/error_code.
             continue
         amount = int(pool_quantities[product.id])
@@ -614,7 +614,11 @@ async def sync_binding_stocks(
         for t in targets:
             if t.amount == 0 and not t.is_explicit_zero:
                 zero_guard_blocked.append(
-                    _BlockedTarget(chrt_id=t.chrt_id, product_id=t.product_id, error_code=ERROR_UNSAFE_ZERO_BLOCKED)
+                    _BlockedTarget(
+                        chrt_id=t.chrt_id,
+                        product_id=t.product_id,
+                        error_code=ERROR_UNSAFE_ZERO_BLOCKED,
+                    )
                 )
                 continue
             safe_targets.append(t)

@@ -369,7 +369,7 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   await expect(prodRow).toBeVisible();
   const catalogHead = page.getByTestId('ff-products-table').locator('thead');
   await expect(catalogHead).toContainText('Название');
-  await expect(catalogHead).toContainText('Артикул селлера');
+  await expect(catalogHead).toContainText('Артикул продавца');
   await expect(catalogHead).toContainText('SKU');
   await expect(catalogHead).toContainText('ШК');
   await expect(catalogHead).toContainText('Размер');

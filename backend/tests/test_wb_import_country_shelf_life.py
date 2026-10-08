@@ -52,7 +52,7 @@ async def test_country_and_shelf_life_filled_when_card_has_them(
     card = {
         "nmID": 700_000_001,
         "vendorCode": f"CSL-{suffix}",
-        "title": "Товар со страной и сроком годности",
+        "title": "Товар \u0441\u043e страной и сроком годности",
         "sizes": [{"skus": [f"BAR-{suffix}-1"], "chrtID": 1}],
         "characteristics": [
             {"name": "Страна производства", "value": ["Россия"]},

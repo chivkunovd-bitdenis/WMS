@@ -15,8 +15,8 @@ from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
-from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_PENDING
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.user import User
@@ -272,7 +272,7 @@ async def upsert_fbs_warehouse_binding(
     if was_enabled and not body.stock_sync_enabled:
         # Оператор снял тумблер — WB не должен вечно хранить старое положительное
         # число. Помечаем "ожидание" сразу (синхронно), пока WB не подтвердил ноль,
-        # а саму публикацию нуля выполняем асинхронно в фоне.
+        # а саму публикацию нуля выполняем асинхронно в фоне.  # noqa: RUF003
         row.last_sync_status = STOCK_SYNC_STATUS_PENDING
         row.last_error_code = None
         await session.commit()

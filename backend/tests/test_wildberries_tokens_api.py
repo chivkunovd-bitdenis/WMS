@@ -166,8 +166,8 @@ async def test_wb_tokens_patch_get_roundtrip_and_clear(async_client: AsyncClient
     assert p2.status_code == 200
     assert p2.json()["has_content_token"] is False
     assert p2.json()["has_supplies_token"] is True
-    # Маркетплейс-токен уже был установлен (из p1) -> очистка контентного поля его
-    # не трогает: SKIP значит "не менять", а не "стереть, если контент стал пустым".
+    # Маркетплейс-токен уже был установлен (из p1) -> очистка контентного поля его  # noqa: RUF003
+    # не трогает: SKIP значит "не менять", а не "стереть, если контент стал пустым".  # noqa: RUF003
     assert p2.json()["has_marketplace_token"] is True
 
 
@@ -528,7 +528,7 @@ async def test_self_content_token_failed_marketplace_check_preserves_existing_ma
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Regression: неудачная проверка доступа к Marketplace API не должна стирать уже
-    рабочий маркетплейс-токен. До фикса `patch_seller_tokens` вызывался с
+    рабочий маркетплейс-токен. До фикса `patch_seller_tokens` вызывался \u0441
     `marketplace_api_token=None` при провале проверки, что безусловно стирало любой ранее
     сохранённый маркетплейс-ключ — даже полностью рабочий."""
 
@@ -552,7 +552,8 @@ async def test_self_content_token_failed_marketplace_check_preserves_existing_ma
 
     headers, tenant_id, seller_id = await _create_authenticated_seller(async_client)
 
-    # Шаг 1: селлер сохраняет ключ с областью "Маркетплейс" -> маркетплейс-токен сохраняется.
+    # Шаг 1: селлер сохраняет ключ с областью "Маркетплейс" ->  # noqa: RUF003
+    # маркетплейс-токен сохраняется.
     monkeypatch.setattr(
         "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
         ok_fetch_marketplace_seller_warehouses,
@@ -570,7 +571,8 @@ async def test_self_content_token_failed_marketplace_check_preserves_existing_ma
     assert marketplace_before == "working-marketplace-key"
 
     # Шаг 2: селлер пересохраняет только контентный ключ; проверка доступа к Marketplace API
-    # падает (например, WB отдал таймаут или у ключа нет нужной области). Ранее сохранённый
+    # падает (например, WB отдал таймаут или у ключа нет нужной области).  # noqa: RUF003
+    # Ранее сохранённый
     # рабочий маркетплейс-токен обязан выжить нетронутым.
     monkeypatch.setattr(
         "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",

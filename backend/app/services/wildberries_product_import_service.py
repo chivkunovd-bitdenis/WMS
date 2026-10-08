@@ -126,7 +126,7 @@ def _parse_dimensions_mm(item: dict) -> tuple[int | None, int | None, int | None
             return None
         if value <= 0:
             return None
-        return int(round(value * 10))
+        return round(value * 10)
 
     return (one("length"), one("width"), one("height"))
 

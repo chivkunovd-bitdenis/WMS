@@ -214,8 +214,8 @@ async def test_seller_stock_directions_summary_and_scope(
     assert summary.status_code == 200, summary.text
     row = next(item for item in summary.json() if item["product_id"] == str(product_id))
     assert row["quantity"] == 10
-    # Галки «FBS» у направлений больше нет: оба направления — обычный резерв,
-    # поэтому FBS-часть всегда ноль, а в резерв уходит вся сумма направлений.
+    # Галки «FBS» у направлений больше нет: оба направления — обычный резерв,  # noqa: RUF003
+    # поэтому FBS-часть всегда ноль, а в резерв уходит вся сумма направлений.  # noqa: RUF003
     assert row["quantity_fbs"] == 0
     assert row["quantity_reserved_directions"] == 5
     assert row["quantity_free_fbo"] == 5

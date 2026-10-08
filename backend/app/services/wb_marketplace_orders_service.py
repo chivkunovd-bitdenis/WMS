@@ -576,8 +576,8 @@ async def _debit_stock_pool_for_order(
     if binding_id is None:
         return empty
 
-    result = dict(empty)
-    # Рядом может работать фоновая публикация остатка со своей сессией. На Postgres
+    _result = dict(empty)
+    # Рядом может работать фоновая публикация остатка со своей сессией. На Postgres  # noqa: RUF003
     # это расходится само, на файловом SQLite (тесты, локальный стенд) вторая сессия
     # держит запись и мы получаем «database is locked». Списание — не тот повод,
     # чтобы валить всю синхронизацию заказов, поэтому короткий повтор.
@@ -612,8 +612,8 @@ async def _debit_stock_pool_once(
 ) -> dict[str, int]:
     async with session.begin_nested():
         # Без FOR UPDATE намеренно. Идемпотентность списания держит уникальность
-        # order_id в fbs_stock_pool_debits, а гонку двух синхронизаций ловит
-        # перехват IntegrityError у вызывающего — блокировка строки тут ничего
+        # order_id в fbs_stock_pool_debits, а гонку двух синхронизаций ловит  # noqa: RUF003
+        # перехват IntegrityError у вызывающего — блокировка строки тут ничего  # noqa: RUF003
         # не добавляет, зато на SQLite приводит к «database is locked».
         pool_stmt = select(FbsBindingStockPool).where(
             FbsBindingStockPool.binding_id == binding_id,
@@ -1208,7 +1208,7 @@ async def _get_or_create_wb_origin_supply(
 # Ключи сводки синхронизации, которые доезжают до `sync_seller_orders` и дальше — до
 # фонового задания `/operations/fbs-orders/sync`. Один источник умолчаний, чтобы во всех
 # ранних `return` не разъезжались набор ключей: раньше «пропуск из-за непривязанного
-# склада» был виден только в логе (logger.warning), оператор видел заказы с пометкой
+# склада» был виден только в логе (logger.warning), оператор видел заказы с пометкой  # noqa: RUF003
 # «склад WB не привязан» и не понимал, почему поставка из кабинета WB не появилась.
 def _empty_supply_link_result(**overrides: Any) -> dict[str, Any]:
     result: dict[str, Any] = {
@@ -1282,7 +1282,8 @@ async def link_confirmed_orders_to_wb_supplies(
             )
             if supply is None:
                 # _get_or_create_wb_origin_supply вернул None только по одной причине:
-                # ни у одного заказа поставки не нашлось привязки WB-склад → WMS-склад
+                # ни у одного заказа поставки не нашлось привязки  # noqa: RUF003
+                # WB-склад → WMS-склад
                 # (см. _resolve_supply_warehouse_for_orders). Раньше это было видно только
                 # в логе; теперь сводка несёт номер поставки WB дальше, в интерфейс.
                 skipped_unmapped_warehouse_supply_ids.append(wb_supply_id)

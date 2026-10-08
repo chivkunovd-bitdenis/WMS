@@ -87,7 +87,7 @@ async def test_reimport_pulls_real_dimensions_over_stub(
             Product(
                 tenant_id=tenant_id,
                 seller_id=seller_id,
-                name="Товар с заглушкой",
+                name="Товар \u0441 заглушкой",
                 sku_code=f"DIM-STUB-{suffix}",
                 wb_barcode=barcode,
                 length_mm=DEFAULT_PRODUCT_DIM_MM,
@@ -100,7 +100,7 @@ async def test_reimport_pulls_real_dimensions_over_stub(
     card = {
         "nmID": 800_000_002,
         "vendorCode": f"DIM-STUB-{suffix}",
-        "title": "Товар с заглушкой",
+        "title": "Товар \u0441 заглушкой",
         "sizes": [{"skus": [barcode], "chrtID": 1}],
         # WB sends centimeters; import converts to millimeters.
         "dimensions": {"length": 30, "width": 22, "height": 5},
@@ -133,7 +133,7 @@ async def test_reimport_does_not_overwrite_real_dimensions(
             Product(
                 tenant_id=tenant_id,
                 seller_id=seller_id,
-                name="Товар с реальными габаритами",
+                name="Товар \u0441 реальными габаритами",
                 sku_code=f"DIM-REAL-{suffix}",
                 wb_barcode=barcode,
                 length_mm=123,
@@ -146,7 +146,7 @@ async def test_reimport_does_not_overwrite_real_dimensions(
     card = {
         "nmID": 800_000_003,
         "vendorCode": f"DIM-REAL-{suffix}",
-        "title": "Товар с реальными габаритами",
+        "title": "Товар \u0441 реальными габаритами",
         "sizes": [{"skus": [barcode], "chrtID": 1}],
         "dimensions": {"length": 30, "width": 22, "height": 5},
     }
