@@ -60,7 +60,9 @@ def verify_execution(get, download, repository: str, sha: str, policy_bytes: byt
         if len(raw) > MAX_ARCHIVE:
             raise GateError('Слишком большой архив исполнения')
         policy = json.loads(policy_bytes)
-        required_files = {'execution.json', *(suite['report'] for suite in policy['suites'].values())}
+        docs_only = run.get('docs_only') is True
+        required_files = {'execution.json'} if docs_only else {
+            'execution.json', *(suite['report'] for suite in policy['suites'].values())}
         with zipfile.ZipFile(io.BytesIO(raw)) as archive, tempfile.TemporaryDirectory(prefix='wms-ci-proof-') as tmp:
             infos = archive.infolist()
             names = [info.filename for info in infos if not info.is_dir()]
@@ -77,18 +79,22 @@ def verify_execution(get, download, repository: str, sha: str, policy_bytes: byt
             metadata = json.loads(archive.read('execution.json'))
             expected = dict(version=1, sha=sha, head_sha=sha, run_id=run['run_id'],
                             run_attempt=run['run_attempt'], policy_sha256=hashlib.sha256(policy_bytes).hexdigest())
+            expected['docs_only'] = docs_only
             if any(metadata.get(key) != value for key, value in expected.items()):
                 raise GateError('Отчёт относится к другой версии, попытке или набору обязательных сценариев')
             baseline = metadata.get('base_sha')
             if (not isinstance(baseline, str) or not re.fullmatch('[0-9a-f]{40}', baseline)
                     or baseline in {'0'*40, sha}):
                 raise GateError('В отчёте отсутствует допустимый отдельный SHA базы сравнения')
-            report_root = Path(tmp)
-            for name in required_files - {'execution.json'}:
-                path = report_root / relative_path(name)
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(archive.read(name))
-            cases = verify_reports(policy, report_root, sha=sha)
+            if docs_only:
+                cases = {}
+            else:
+                report_root = Path(tmp)
+                for name in required_files - {'execution.json'}:
+                    path = report_root / relative_path(name)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(archive.read(name))
+                cases = verify_reports(policy, report_root, sha=sha)
         # A rerun/new run during artifact download invalidates even a complete report.
         if verify(get, repository, sha) != run:
             raise GateError('CI изменился во время чтения отчёта; нужна повторная проверка', 4)

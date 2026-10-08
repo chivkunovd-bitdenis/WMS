@@ -14,10 +14,10 @@ class ArtifactFixture(AnchorFixture):
     def __init__(self):
         super().__init__()
         self.metadata = {'version': 1, 'sha': M, 'head_sha': H, 'base_sha': B, 'run_id': 10,
-                         'run_attempt': 1, 'policy_sha256': self.digest()}
+                         'run_attempt': 1, 'policy_sha256': self.digest(), 'docs_only': False}
         self.artifacts = [{'id': 90, 'name': f'process-proof-{M}-10-1', 'expired': False,
                            'size_in_bytes': 2000, 'workflow_run': {'id': 10, 'head_sha': H}}]
-        self.entries = [('execution.json', None)]
+        self.entries = [('execution.json', None), ('qr.json', json.dumps({'sha': M, 'status': 'PASS', 'cases': [{'id': 'first', 'status': 'PASS'}, {'id': 'next', 'status': 'PASS'}]}))]
         self.advance_attempt = False
         self.run_reads = 0
 
@@ -111,15 +111,38 @@ class TrustedArtifactTests(unittest.TestCase):
         self.reject()
 
     def test_tree_missing_changed_mode_symlink_or_duplicates_refuse(self):
-        for mutation in ['missing', 'mode', 'symlink', 'type', 'duplicate']:
+        for mutation in ['missing', 'blob', 'invalid-mode', 'symlink', 'type', 'duplicate']:
             with self.subTest(mutation=mutation):
                 self.f = ArtifactFixture()
                 if mutation == 'missing': self.f.tree.pop()
-                elif mutation == 'mode': self.f.tree[-1]['mode'] = '100755'
+                elif mutation == 'blob': self.f.override_policy_row_sha = 'e' * 40
+                elif mutation == 'invalid-mode': self.f.tree[-1]['mode'] = '100600'
                 elif mutation == 'symlink': self.f.tree[-1]['mode'] = '120000'
                 elif mutation == 'type': self.f.tree[-1]['type'] = 'commit'
                 else: self.f.tree.append(copy.deepcopy(self.f.tree[-1]))
                 self.reject()
+
+    def test_regular_executable_manifest_blob_is_accepted(self):
+        self.f.tree[-1]['mode'] = '100755'
+        self.assertTrue(self.verify()['evidence_complete'])
+
+    def test_current_required_report_must_be_present_and_pass_every_case_for_merge_sha(self):
+        good = self.f.entries[1]
+        bad_reports = [
+            [],
+            [('qr.json', 'not json')],
+            [('qr.json', json.dumps({'sha': M, 'status': 'PASS', 'cases': [{'id': 'first', 'status': 'PASS'}]}))],
+            [('qr.json', json.dumps({'sha': M, 'status': 'PASS', 'cases': [{'id': 'first', 'status': 'PASS'}, {'id': 'next', 'status': 'SKIP'}]}))],
+            [('qr.json', json.dumps({'sha': 'e'*40, 'status': 'PASS', 'cases': [{'id': 'first', 'status': 'PASS'}, {'id': 'next', 'status': 'PASS'}]}))],
+        ]
+        for report in bad_reports:
+            with self.subTest(report=report):
+                self.f = ArtifactFixture()
+                self.f.entries = [('execution.json', None), *report]
+                self.reject()
+        self.f = ArtifactFixture()
+        self.f.entries = [('execution.json', None), good]
+        self.assertTrue(self.verify()['evidence_complete'])
 
     def test_policy_cannot_remove_suite_change_report_format_or_exact(self):
         for field, value in [('report', 'different.json'), ('format', 'junit'), ('exact', False)]:
