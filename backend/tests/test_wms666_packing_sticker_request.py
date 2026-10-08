@@ -154,11 +154,19 @@ async def test_creation_preserves_completed_sticker_chunk_after_timeout_and_retr
     calls: list[list[int]] = []
     second_chunk_writer_id = uuid.uuid4()
     second_chunk_cancelled = False
+    second_chunk_completed = False
     assert fbs_supply_service.CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS == 8.0
+    deadline_seconds = 2.0
+    fetch_seconds = 1.2
+    monkeypatch.setattr(
+        fbs_supply_service, "CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS", deadline_seconds
+    )
 
     async def stickers(client, *, api_token, order_ids, **kwargs):
-        nonlocal second_chunk_cancelled
+        nonlocal second_chunk_cancelled, second_chunk_completed
         calls.append(list(order_ids))
+        if len(calls) == 1:
+            await asyncio.sleep(fetch_seconds)
         if len(calls) == 2:
             # Persisting the previous chunk must not leave a writer locked
             # while the next WB request is pending.
@@ -170,12 +178,13 @@ async def test_creation_preserves_completed_sticker_chunk_after_timeout_and_retr
                 ))
                 await independent.commit()
             try:
-                # Exercise the real creation deadline after one complete WB
-                # response, not a shorter test-only timeout or provider error.
-                await asyncio.sleep(9)
+                # Each fetch fits a fresh budget, but their combined duration
+                # exceeds the one deadline shared by all creation chunks.
+                await asyncio.sleep(fetch_seconds)
             except asyncio.CancelledError:
                 second_chunk_cancelled = True
                 raise
+            second_chunk_completed = True
         return [{
             "orderId": wb_id,
             "partA": "5877994",
@@ -197,6 +206,7 @@ async def test_creation_preserves_completed_sticker_chunk_after_timeout_and_retr
         "/operations/fbs-supplies/from-orders", headers=headers, json=body
     )
     assert response.status_code == 201, response.text
+    assert not second_chunk_completed, "The second chunk received a renewed deadline"
     assert second_chunk_cancelled
     assert [len(chunk) for chunk in calls] == [100, 1]
     result = response.json()
