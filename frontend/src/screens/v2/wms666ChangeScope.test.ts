@@ -39,6 +39,57 @@ const WMS_666_DOCUMENT_HISTORY = [
       afterBlob: '9dda566e064373fce1e817ce11c8fd5c1b345165' }],
   },
 ]
+const WMS_666_RC7_HISTORY = [
+  {
+    commit: '603720d6dc4751e6f29593207e4ea7b1219d0509',
+    changedPaths: [
+      'backend/app/services/fbs_print_asset_service.py',
+      'backend/app/services/fbs_supply_service.py',
+    ],
+    files: [
+      {
+        path: 'backend/app/services/fbs_print_asset_service.py',
+        beforeEntry: '100644 blob 878cdce1c8750b2bce274048c6a6afb9919fcb10\tbackend/app/services/fbs_print_asset_service.py',
+        afterEntry: '100644 blob d49ee1ae8ef20c5814001c90046b6c849835dc9b\tbackend/app/services/fbs_print_asset_service.py',
+      },
+      {
+        path: 'backend/app/services/fbs_supply_service.py',
+        beforeEntry: '100644 blob 96860f53021e7442d300c1f8e1330ef57181d76d\tbackend/app/services/fbs_supply_service.py',
+        afterEntry: '100644 blob 3c5b84686e7ac860257297d60785dc9d867d4614\tbackend/app/services/fbs_supply_service.py',
+      },
+    ],
+  },
+  {
+    commit: '70c2c2c6cf16aee81292042a9dde6161fb5384e2',
+    changedPaths: ['backend/app/services/fbs_print_asset_service.py'],
+    files: [
+      {
+        path: 'backend/app/services/fbs_print_asset_service.py',
+        beforeEntry: '100644 blob d49ee1ae8ef20c5814001c90046b6c849835dc9b\tbackend/app/services/fbs_print_asset_service.py',
+        afterEntry: '100644 blob 2281ff64b91f1f743c44df746ce16e9e319f8ced\tbackend/app/services/fbs_print_asset_service.py',
+      },
+    ],
+  },
+  {
+    commit: '739a63343fc38d2a3441d9b613b4652c7f0380e0',
+    changedPaths: [
+      'backend/app/services/fbs_print_asset_service.py',
+      'backend/app/services/fbs_supply_service.py',
+    ],
+    files: [
+      {
+        path: 'backend/app/services/fbs_print_asset_service.py',
+        beforeEntry: '100644 blob 2281ff64b91f1f743c44df746ce16e9e319f8ced\tbackend/app/services/fbs_print_asset_service.py',
+        afterEntry: '100644 blob b6b44641b76dc8516a25614414c8fc4ee5d5e65c\tbackend/app/services/fbs_print_asset_service.py',
+      },
+      {
+        path: 'backend/app/services/fbs_supply_service.py',
+        beforeEntry: '100644 blob 3c5b84686e7ac860257297d60785dc9d867d4614\tbackend/app/services/fbs_supply_service.py',
+        afterEntry: '100644 blob 80cf3f2ecf333fcb1e60c079bb00b2f8b26856aa\tbackend/app/services/fbs_supply_service.py',
+      },
+    ],
+  },
+]
 const WMS_666_PROOF_FILES = new Set([
   '.github/workflows/wms666-browser-proof.yml',
   'scripts/ci/wms666-browser-proof.mjs',
@@ -54,11 +105,15 @@ const WMS_666_PROOF_FILES = new Set([
 ])
 
 export function wms666AcceptedHistoryChange(
-  cwd: string | URL, commit: string, path: string, recoveryReads = new Map<string, boolean>(),
+  cwd: string | URL,
+  commit: string,
+  path: string,
+  recoveryReads = new Map<string, boolean>(),
+  recoveryEntries = recoveryHistory.entries,
 ): boolean {
   const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
   const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
-  const recovery = recoveryHistory.entries.find((entry) => entry.commit === commit)
+  const recovery = recoveryEntries.find((entry) => entry.commit === commit)
   const recoveredFile = recovery?.files.find((entry) => entry.path === path)
   if (recovery && recoveredFile) {
     // Exact independently reviewed history only. No future change of these paths
@@ -153,11 +208,15 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       'backend/alembic/versions/2026_new_mode.py',
       'backend/app/models/fbs_packing_group.py',
       'backend/app/services/inventory_service.py',
+      'backend/app/services/fbs_print_asset_service.py',
+      'backend/app/services/fbs_supply_service.py',
       'guards/MANIFEST.json',
     ])).toEqual([
       'backend/alembic/versions/2026_new_mode.py',
       'backend/app/models/fbs_packing_group.py',
       'backend/app/services/inventory_service.py',
+      'backend/app/services/fbs_print_asset_service.py',
+      'backend/app/services/fbs_supply_service.py',
       'guards/MANIFEST.json',
     ])
     expect(wms666ScopeViolations([
@@ -323,6 +382,95 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       }
       expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'backend/app/services/inventory_service.py')).toBe(false)
       expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'guards/MANIFEST.json')).toBe(false)
+    }
+  })
+
+  it('records only the five exact RC7 service blob pairs and each commit full path list', () => {
+    const cwd = new URL('../../../..', import.meta.url)
+    for (const expected of WMS_666_RC7_HISTORY) {
+      const actual = recoveryHistory.entries.find((entry) => entry.commit === expected.commit)
+      expect(actual && {
+        commit: actual.commit,
+        changedPaths: actual.changedPaths,
+        files: actual.files,
+      }).toEqual(expected)
+      for (const file of expected.files) {
+        expect(wms666AcceptedHistoryChange(cwd, expected.commit, file.path)).toBe(true)
+      }
+      expect(wms666AcceptedHistoryChange(cwd, expected.commit, 'backend/app/services/inventory_service.py'))
+        .toBe(false)
+    }
+
+    // WMS-517 and WMS-689 are not yet recorded as resolved, so their mixed
+    // commit cannot be admitted through this WMS-666-only history exception.
+    expect(wms666AcceptedHistoryChange(
+      cwd,
+      '30de00e5f70c3fde354036702aa921ebaab7fd65',
+      'backend/app/services/fbs_print_asset_service.py',
+    )).toBe(false)
+    expect(wms666ScopeViolations([
+      'backend/app/services/fbs_print_asset_service.py',
+      'backend/app/services/fbs_supply_service.py',
+    ])).toEqual([
+      'backend/app/services/fbs_print_asset_service.py',
+      'backend/app/services/fbs_supply_service.py',
+    ])
+  })
+
+  it('rejects RC7 history when commit, path, blob, mode, or complete path list differs', () => {
+    const cwd = new URL('../../../..', import.meta.url)
+    const expected = WMS_666_RC7_HISTORY[0]
+    const exactFixture = JSON.parse(JSON.stringify(expected)) as (typeof recoveryHistory.entries)[number]
+
+    expect(wms666AcceptedHistoryChange(
+      cwd,
+      expected.commit,
+      expected.files[0].path,
+      new Map(),
+      [exactFixture],
+    )).toBe(true)
+
+    expect(wms666AcceptedHistoryChange(cwd, 'ad10b48adb04a9bdb3e1197a9dd11a65050a32a5', expected.files[0].path))
+      .toBe(false)
+    expect(wms666AcceptedHistoryChange(cwd, expected.commit, `${expected.files[0].path}.renamed`)).toBe(false)
+
+    const clone = () => JSON.parse(JSON.stringify(exactFixture)) as typeof exactFixture
+    const wrongBlob = clone()
+    wrongBlob.files[0].afterEntry = wrongBlob.files[0].afterEntry.replace(
+      'd49ee1ae8ef20c5814001c90046b6c849835dc9b',
+      '0000000000000000000000000000000000000000',
+    )
+    const wrongMode = clone()
+    wrongMode.files[0].beforeEntry = wrongMode.files[0].beforeEntry.replace('100644 blob', '100755 blob')
+    const wrongPathList = clone()
+    wrongPathList.changedPaths = [...wrongPathList.changedPaths, 'backend/app/services/unlisted.py']
+    const incompleteFileList = clone()
+    incompleteFileList.files = [incompleteFileList.files[0]]
+
+    for (const corrupted of [wrongBlob, wrongMode, wrongPathList, incompleteFileList]) {
+      expect(wms666AcceptedHistoryChange(
+        cwd,
+        expected.commit,
+        expected.files[0].path,
+        new Map(),
+        [corrupted],
+      )).toBe(false)
+    }
+  })
+
+  it('fails closed when an exact RC7 source commit cannot be resolved', () => {
+    const repo = fixtureRepository()
+    try {
+      const expected = WMS_666_RC7_HISTORY[0]
+      expect(() => wms666AcceptedHistoryChange(
+        repo.cwd,
+        expected.commit,
+        expected.files[0].path,
+        new Map(),
+        [expected as (typeof recoveryHistory.entries)[number]],
+      )).toThrow()
+    } finally {
+      repo.close()
     }
   })
 
