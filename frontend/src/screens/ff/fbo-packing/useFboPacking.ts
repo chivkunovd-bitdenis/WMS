@@ -44,6 +44,22 @@ type CatalogMarkingFlag = { requires_honest_sign?: boolean }
 export const NO_CURRENT_BOX_MESSAGE = 'Сначала отсканируйте или создайте короб'
 export const KIZ_ALREADY_LINKED_MESSAGE = 'Этот КИЗ уже привязан к товару'
 
+/**
+ * Скан товара с неизвестным исходом: ответ на добавление штуки или на выдачу ЧЗ потерялся даже после
+ * автоматического повтора. Операция живёт до первого определённого ответа сервера (2xx или 4xx): ручной
+ * повтор того же кода в тот же короб идёт с прежними ключами, поэтому штука и код ЧЗ не задваиваются.
+ */
+type PendingScan = {
+  productId: string | null
+  mutationId: string
+  issueMutationId: string | null
+  unresolved: boolean
+}
+
+function isOutcomeUnknown(cause: unknown): boolean {
+  return cause instanceof FboPackingApiError && cause.outcomeUnknown
+}
+
 function errorText(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message ? cause.message : fallback
 }
@@ -140,6 +156,8 @@ export function useFboPacking(input: UseFboPackingInput) {
   const issueMutationRef = useRef(new Map<string, string>())
   const loadSequenceRef = useRef(0)
   const lineBarcodeKeyRef = useRef(new Map<string, string>())
+  // Сканы с неизвестным исходом: ключ — короб и исходный код.
+  const pendingScansRef = useRef(new Map<string, PendingScan>())
 
   const apiContext = useCallback(
     (): FboPackingApiContext => ({ requestId: latest.current.detail.id, headers: latest.current.authHeaders }),
@@ -215,26 +233,31 @@ export function useFboPacking(input: UseFboPackingInput) {
 
   /**
    * Выдача свободных кодов товара из пула. Кнопка «ШК + ЧЗ» хранит ключ операции до
-   * успешного ответа: после потери ответа повтор вернёт те же коды. Скан штуки берёт новый ключ на каждую
-   * штуку, а внутри одной выдачи при потере ответа один раз повторяет запрос с тем же ключом.
+   * успешного ответа: после потери ответа повтор вернёт те же коды. Скан штуки приносит свой ключ
+   * (scanMutationId): он хранится в незавершённом скане, а внутри одной выдачи при потере ответа
+   * запрос один раз повторяется автоматически с тем же ключом.
    */
   const issueCodes = useCallback(
-    async (productId: string, quantity: number | undefined, reuseKey = true): Promise<FboMarkingIssueResult> => {
+    async (
+      productId: string,
+      quantity: number | undefined,
+      reuseKey = true,
+      scanMutationId?: string,
+    ): Promise<FboMarkingIssueResult> => {
       const mutationKey = `${productId}:${quantity ?? 'all'}`
-      const mutationId = (reuseKey ? issueMutationRef.current.get(mutationKey) : undefined) ?? randomId()
-      if (reuseKey) issueMutationRef.current.set(mutationKey, mutationId)
+      const storeKey = reuseKey && scanMutationId === undefined
+      const mutationId = scanMutationId ?? (storeKey ? issueMutationRef.current.get(mutationKey) : undefined) ?? randomId()
+      if (storeKey) issueMutationRef.current.set(mutationKey, mutationId)
       let issued: FboMarkingIssueResult
       try {
         const request = () => issueMarkingCodes(apiContext(), { productId, quantity, mutationId })
         issued = await (reuseKey ? request() : retryOnceIfOutcomeUnknown(request))
       } catch (cause) {
         // Потерянный ответ: ключ остаётся, повтор вернёт те же коды. Отказ сервера снимает ключ.
-        if (!(cause instanceof FboPackingApiError && cause.outcomeUnknown)) {
-          issueMutationRef.current.delete(mutationKey)
-        }
+        if (storeKey && !isOutcomeUnknown(cause)) issueMutationRef.current.delete(mutationKey)
         throw cause
       }
-      issueMutationRef.current.delete(mutationKey)
+      if (storeKey) issueMutationRef.current.delete(mutationKey)
       await reloadCodes()
       latest.current.onChanged()
       return issued
@@ -253,11 +276,15 @@ export function useFboPacking(input: UseFboPackingInput) {
     [printCodes],
   )
 
-  /** Скан штуки с «Печатать ЧЗ»: один код на штуку (quantity=1), привязать и напечатать. */
+  /**
+   * Скан штуки с «Печатать ЧЗ»: один код на штуку (quantity=1), привязать и напечатать.
+   * Ключ выдачи принадлежит скану и переживает потерянный ответ.
+   */
   const issueOneAndPrint = useCallback(
-    async (productId: string): Promise<void> => {
+    async (productId: string, scan: PendingScan): Promise<void> => {
       await flushUnprinted(productId)
-      const issued = await issueCodes(productId, 1, false)
+      scan.issueMutationId ??= randomId()
+      const issued = await issueCodes(productId, 1, false, scan.issueMutationId)
       await printCodes(productId, issued.items)
     },
     [flushUnprinted, issueCodes, printCodes],
@@ -283,47 +310,70 @@ export function useFboPacking(input: UseFboPackingInput) {
       const { currentBoxId, detail: current, prefs: printPrefs } = latest.current
       const boxId = currentBoxId && current.boxes.some((box) => box.id === currentBoxId) ? currentBoxId : null
       if (!boxId) throw new Error(NO_CURRENT_BOX_MESSAGE)
-      const mutationId = randomId()
-      // Ответ потерялся — штука могла лечь в короб: одна автоматическая попытка тем же запросом и ключом.
-      const result = await retryOnceIfOutcomeUnknown(() =>
-        scanProductIntoBox(apiContext(), boxId, {
-          barcode: raw,
-          productId: matchedProductId,
-          mutationId,
-        }),
-      )
-      if (result.kind === 'ready_box') {
-        latest.current.onChanged()
-        return
+      // Тот же код в тот же короб после скана с неизвестным исходом продолжает его с прежними ключами.
+      // Незавершённая операция забирается из карты и возвращается в неё, только если исход снова неизвестен.
+      const scanKey = `${boxId}\u0000${raw}`
+      const pending = pendingScansRef.current.get(scanKey)
+      pendingScansRef.current.delete(scanKey)
+      const scan: PendingScan = pending ?? {
+        productId: matchedProductId,
+        mutationId: randomId(),
+        issueMutationId: null,
+        unresolved: false,
       }
-      if (result.kind !== 'product') {
-        throw new Error('Это ШК ячейки или тары. На упаковке отсканируйте ШК товара, ЧЗ или короба.')
-      }
-      const productId = result.product_id ?? matchedProductId
-      lastProductRef.current = productId
-      latest.current.onChanged()
-      if (!productId) return
-      // Штука уже в коробе; сбой печати не откатывает её, а сообщает отдельно.
-      const failures: string[] = []
-      const row = latest.current.rows.find((item) => item.productId === productId)
-      if (printPrefs.printBarcode && row) {
+      scan.unresolved = false
+      const mutationId = scan.mutationId
+      try {
+        // Ответ потерялся — штука могла лечь в короб: одна автоматическая попытка тем же запросом и ключом.
+        let result: Awaited<ReturnType<typeof scanProductIntoBox>>
         try {
-          await printProductBarcodeLabels(
-            productLabelData(metaOf(row), current.marketplace),
-            `fbo-bc:${current.id}:${mutationId}`,
+          result = await retryOnceIfOutcomeUnknown(() =>
+            scanProductIntoBox(apiContext(), boxId, {
+              barcode: raw,
+              productId: scan.productId,
+              mutationId,
+            }),
           )
         } catch (cause) {
-          failures.push(errorText(cause, 'Не удалось напечатать ШК товара.'))
+          if (isOutcomeUnknown(cause)) scan.unresolved = true
+          throw cause
         }
-      }
-      if (printPrefs.printChz && latest.current.requiresChz(productId)) {
-        try {
-          await issueOneAndPrint(productId)
-        } catch (cause) {
-          failures.push(errorText(cause, 'Не удалось выдать и напечатать ЧЗ.'))
+        if (result.kind === 'ready_box') {
+          latest.current.onChanged()
+          return
         }
+        if (result.kind !== 'product') {
+          throw new Error('Это ШК ячейки или тары. На упаковке отсканируйте ШК товара, ЧЗ или короба.')
+        }
+        const productId = result.product_id ?? scan.productId
+        lastProductRef.current = productId
+        latest.current.onChanged()
+        if (!productId) return
+        // Штука уже в коробе; сбой печати не откатывает её, а сообщает отдельно.
+        const failures: string[] = []
+        const row = latest.current.rows.find((item) => item.productId === productId)
+        if (printPrefs.printBarcode && row) {
+          try {
+            await printProductBarcodeLabels(
+              productLabelData(metaOf(row), current.marketplace),
+              `fbo-bc:${current.id}:${mutationId}`,
+            )
+          } catch (cause) {
+            failures.push(errorText(cause, 'Не удалось напечатать ШК товара.'))
+          }
+        }
+        if (printPrefs.printChz && latest.current.requiresChz(productId)) {
+          try {
+            await issueOneAndPrint(productId, scan)
+          } catch (cause) {
+            if (isOutcomeUnknown(cause)) scan.unresolved = true
+            failures.push(errorText(cause, 'Не удалось выдать и напечатать ЧЗ.'))
+          }
+        }
+        if (failures.length > 0) throw new Error(`Штука уложена в короб. ${failures.join(' ')}`)
+      } finally {
+        if (scan.unresolved) pendingScansRef.current.set(scanKey, scan)
       }
-      if (failures.length > 0) throw new Error(`Штука уложена в короб. ${failures.join(' ')}`)
     },
     [apiContext, issueOneAndPrint, metaOf],
   )

@@ -316,17 +316,73 @@ describe('WMS-686 FBO упаковка · скан (R29–R31)', () => {
     expect(onChanged).toHaveBeenCalled()
   })
 
-  it('повтор после потери ответа делается один раз; следующий скан оператора — новый mutation_id', async () => {
-    handlers.set('POST /boxes/B1/scan', () => ({ status: 503, body: { detail: 'unavailable' } }))
+  /** Сервер: штука ложится по новому mutation_id один раз; тот же ключ возвращает прежний результат. */
+  function serverApplyingByKey(lostResponses: number) {
+    const applied = new Set<string>()
+    let answers = 0
+    handlers.set('POST /boxes/B1/scan', (body) => {
+      applied.add(String(body?.mutation_id))
+      answers += 1
+      if (answers <= lostResponses) return { status: 503, body: { detail: 'unavailable' } }
+      return { body: { kind: 'product', product_id: 'p1', quantity: 1, picked_qty: 20 } }
+    })
+    return applied
+  }
+
+  it('два потерянных ответа подряд: ручной повтор того же скана уходит с прежним ключом, штука не задваивается', async () => {
+    const applied = serverApplyingByKey(2)
     await mount()
     await scan('2000000000011')
     expect(posts('/boxes/B1/scan')).toHaveLength(2)
     expect(q('fbo-packing-scan-error')).not.toBeNull()
     await scan('2000000000011')
     const requests = posts('/boxes/B1/scan')
+    expect(requests).toHaveLength(3)
+    expect(requests[2]?.body).toEqual(requests[0]?.body)
+    expect(requests[2]?.body?.mutation_id).toBe(requests[0]?.body?.mutation_id)
+    expect(applied.size).toBe(1)
+    expect(q('fbo-packing-scan-error')).toBeNull()
+  })
+
+  it('после определённого ответа операция снята: следующий скан того же кода — новый ключ', async () => {
+    const applied = serverApplyingByKey(2)
+    await mount()
+    await scan('2000000000011')
+    await scan('2000000000011')
+    await scan('2000000000011')
+    const requests = posts('/boxes/B1/scan')
     expect(requests).toHaveLength(4)
-    expect(requests[0]?.body?.mutation_id).toBe(requests[1]?.body?.mutation_id)
-    expect(requests[2]?.body?.mutation_id).toBe(requests[3]?.body?.mutation_id)
+    expect(requests[3]?.body?.mutation_id).not.toBe(requests[0]?.body?.mutation_id)
+    expect(applied.size).toBe(2)
+  })
+
+  it('ручной повтор получил отказ сервера (4xx): операция снята, следующий скан — новый ключ', async () => {
+    let answers = 0
+    handlers.set('POST /boxes/B1/scan', () => {
+      answers += 1
+      if (answers <= 2) return { status: 503, body: { detail: 'unavailable' } }
+      if (answers === 3) return { status: 422, body: { detail: 'plan_limit_exceeded' } }
+      return { body: { kind: 'product', product_id: 'p1', quantity: 1, picked_qty: 20 } }
+    })
+    await mount()
+    await scan('2000000000011')
+    await scan('2000000000011')
+    expect(q('fbo-packing-scan-error')?.textContent).toBe('Нельзя добавить больше, чем в плане отгрузки.')
+    await scan('2000000000011')
+    const requests = posts('/boxes/B1/scan')
+    expect(requests).toHaveLength(4)
+    expect(requests[2]?.body?.mutation_id).toBe(requests[0]?.body?.mutation_id)
+    expect(requests[3]?.body?.mutation_id).not.toBe(requests[0]?.body?.mutation_id)
+  })
+
+  it('другой код или другой короб не подхватывает чужую незавершённую операцию', async () => {
+    handlers.set('POST /boxes/B1/scan', () => ({ status: 503, body: { detail: 'unavailable' } }))
+    await mount()
+    await scan('2000000000011')
+    handlers.set('POST /boxes/B1/scan', () => ({ body: { kind: 'product', product_id: 'p2', quantity: 1, picked_qty: 5 } }))
+    await scan('2000000000028')
+    const requests = posts('/boxes/B1/scan')
+    expect(requests).toHaveLength(3)
     expect(requests[2]?.body?.mutation_id).not.toBe(requests[0]?.body?.mutation_id)
   })
 
@@ -428,6 +484,42 @@ describe('WMS-686 FBO упаковка · галки печати (R25)', () => 
     expect(q('fbo-packing-scan-error')).toBeNull()
     const keys = mocks.printPrepared.mock.calls.map((call) => call[0].idempotencyKey)
     expect(keys.filter((key) => key === 'fbo-chz:n1')).toHaveLength(1)
+  })
+
+  it('два потерянных ответа на выдачу ЧЗ: ручной повтор скана уходит с прежними ключами добавления и выдачи, код выдан и напечатан один раз', async () => {
+    const issued = code('n1')
+    const issuedKeys = new Set<string>()
+    let answers = 0
+    handlers.set('POST /marking-codes/issue', (body) => {
+      issuedKeys.add(String(body?.mutation_id))
+      answers += 1
+      if (answers <= 2) return { status: 503, body: { detail: 'unavailable' } }
+      serverCodes = [issued]
+      return { body: { items: [issued], shortage: 0 } }
+    })
+    await mount()
+    await act(async () => { toggle('fbo-scan-print-chz-toggle').click() })
+    await scan('2000000000011')
+    expect(posts('/marking-codes/issue')).toHaveLength(2)
+    expect(q('fbo-packing-scan-error')?.textContent).toContain('Штука уложена в короб.')
+    expect(mocks.printPrepared).not.toHaveBeenCalled()
+    await scan('2000000000011')
+    const adds = posts('/boxes/B1/scan')
+    const issues = posts('/marking-codes/issue')
+    expect(adds).toHaveLength(2)
+    expect(adds[1]?.body?.mutation_id).toBe(adds[0]?.body?.mutation_id)
+    expect(issues).toHaveLength(3)
+    expect(issues[2]?.body?.mutation_id).toBe(issues[0]?.body?.mutation_id)
+    expect(issuedKeys.size).toBe(1)
+    expect(q('fbo-packing-scan-error')).toBeNull()
+    const keys = mocks.printPrepared.mock.calls.map((call) => call[0].idempotencyKey)
+    expect(keys.filter((key) => key === 'fbo-chz:n1')).toHaveLength(1)
+    // Операция завершена определённым ответом: следующий скан берёт новые ключи.
+    await scan('2000000000011')
+    const nextAdd = posts('/boxes/B1/scan')[2]
+    const nextIssue = posts('/marking-codes/issue')[3]
+    expect(nextAdd?.body?.mutation_id).not.toBe(adds[0]?.body?.mutation_id)
+    expect(nextIssue?.body?.mutation_id).not.toBe(issues[0]?.body?.mutation_id)
   })
 
   it('пустой пул при скане: штука остаётся уложенной, красное сообщение, ложного успеха нет', async () => {

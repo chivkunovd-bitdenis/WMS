@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactElement, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import {
@@ -284,6 +284,19 @@ const mpUnloadSteps: { value: MpUnloadTab; label: string; testId: string }[] = [
 
 function mpUnloadStepLabel(step: MpUnloadTab): string {
   return mpUnloadSteps.find((item) => item.value === step)?.label ?? step
+}
+
+/**
+ * Подсказка недоступной вкладки. MUI Tabs подмешивает своим прямым детям свойства вкладки
+ * (fullWidth, indicator, selectionFollowsFocus, textColor), а обычный <Tooltip> отдаёт их на <span>
+ * и React пишет в консоль «does not recognize». Эта обёртка принимает и отбрасывает лишнее.
+ */
+function MpBlockedStepTab({ title, children }: { title: ReactNode; children: ReactElement }) {
+  return (
+    <Tooltip title={title}>
+      <span>{children}</span>
+    </Tooltip>
+  )
 }
 
 /**
@@ -2935,9 +2948,9 @@ export function FfSuppliesShipmentsPage({
                   if (enabled) return tab
                   // Disabled-таб MUI без обёртки <span> не показывает Tooltip.
                   return (
-                    <Tooltip key={step.value} title={mpStepBlockedReason(step.value)}>
-                      <span>{tab}</span>
-                    </Tooltip>
+                    <MpBlockedStepTab key={step.value} title={mpStepBlockedReason(step.value)}>
+                      {tab}
+                    </MpBlockedStepTab>
                   )
                 })}
               </Tabs>
