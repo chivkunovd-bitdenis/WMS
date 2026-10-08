@@ -97,9 +97,9 @@ def legacy_sales_http(monkeypatch):
         async def aclose(self):
             pass
 
-    # The legacy boundary needs no real broker. Injecting a fake broker URL here
-    # also made unrelated runtime gate tests construct a CRPT HTTP client.
-    # Shared Redis/rate/cache contracts have their own explicit Redis fixture.
+    # This legacy HTTP-only boundary needs no broker. Keep it disabled so these
+    # cases never try to acquire a Redis reader lease through the fake client.
+    # Shared Redis/rate/cache contracts use their own explicit Redis fixture.
     monkeypatch.setattr(settings, "celery_broker_url", None)
     monkeypatch.setattr(wb_sales_report, "Redis", SimpleNamespace(
         from_url=lambda *args, **kwargs: RedisBoundary()))
@@ -173,13 +173,8 @@ async def seed(
     session.add(order)
     await session.flush()
     if _LEGACY_SALES_ENABLED.get() if sales_evidence is None else sales_evidence:
-        if _LEGACY_SALES_ENABLED.get():
-            from app.core.settings import settings
-
-            # Activate the fake sales broker only when synthetic sale data is
-            # seeded. Gate-only tests create no sales and keep broker=None.
-            # The shared fixture's monkeypatch restores the original setting.
-            settings.celery_broker_url = "redis://legacy-fixture.invalid/0"
+        # Keep the legacy HTTP fixture broker-free: its fake Redis cannot acquire
+        # the shared reader lease. Redis ownership has separate contract tests.
         order.wb_rid = f"legacy-fixture-{order.id}"
         token = f"legacy-fixture-{seller.id}"
         session.add(

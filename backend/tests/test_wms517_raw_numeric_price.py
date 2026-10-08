@@ -11,6 +11,7 @@ from test_withdrawal_orchestration import MOD, Emulator
 from test_wms517_sales_contract import fixture_order, sale, sales_http  # noqa: F401
 from test_wms517_sales_partial_decimal_regressions import add_same_scope_order
 from test_wms517_sales_regressions import redis_boundary  # noqa: F401
+from test_wms517_sales_report_singleflight_contract import redis_ownership_io  # noqa: F401
 
 from app.api.deps import get_current_user
 from app.db.session import SessionLocal
