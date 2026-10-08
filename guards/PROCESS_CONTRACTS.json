@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "85785a903b673b943cb0748a6602a83f853fba24baa37d1f4d7caeab160440fc",
+    ".github/workflows/ci.yml": "1be2d890928bbcf8707a806d65a7af349da716633772e133ccf1bbeeea640c67",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -1842,7 +1842,9 @@
         "scripts.ci.tests.test_retain_web_assets::test_image_selection_uses_current_compose_service_not_previous_container[None-production-images1-production-web]",
         "scripts.ci.tests.test_retain_web_assets::test_image_selection_uses_current_compose_service_not_previous_container[None-production-images2-production_web]",
         "scripts.ci.tests.test_retain_web_assets::test_image_selection_refuses_missing_or_ambiguous_build_target[images0]",
-        "scripts.ci.tests.test_retain_web_assets::test_image_selection_refuses_missing_or_ambiguous_build_target[images1]"
+        "scripts.ci.tests.test_retain_web_assets::test_image_selection_refuses_missing_or_ambiguous_build_target[images1]",
+        "scripts.ci.tests.test_backend_shard_progress.BackendShardProgressContracts::test_progress_records_identity_start_phases_and_failure_detail_as_jsonl",
+        "scripts.ci.tests.test_backend_shard_progress.BackendShardProgressContracts::test_actual_xdist_run_writes_controller_progress_without_receipt_changes"
       ]
     },
     "product-scope": {

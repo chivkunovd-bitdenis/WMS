@@ -450,6 +450,7 @@ jobs:
       - name: Persist exact full-backend shard infrastructure cases
         run: >-
           python -m pytest -q scripts/ci/tests/test_backend_shards.py
+          scripts/ci/tests/test_backend_shard_progress.py
           scripts/ci/tests/test_backend_shard_failclosed.py
           scripts/ci/tests/test_ci_release_additions.py
           scripts/ci/tests/test_backend_shard_redis_setup.py
