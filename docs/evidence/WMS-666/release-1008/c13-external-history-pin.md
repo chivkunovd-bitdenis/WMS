@@ -10,7 +10,7 @@ Test Files  1 passed (1)
 Tests       3 passed | 12 skipped (15)
 ```
 
-The cases verify a matching ancestry pin still catches a later forbidden backend edit, rejects a valid-looking pin whose source is outside the checked-out lineage, and rejects malformed/duplicate-key JSON.
+The cases verify a matching ancestry pin still catches later forbidden committed, staged, and unstaged edits; a separately focused case catches a WMS-666 backend commit forked before the pin and merged after it; the invalid-pin cases reject a source outside the checkout lineage and malformed/duplicate-key JSON.
 
 The focused live-checkout guard remains intentionally red until the external pin is advanced to an independently accepted source on this checkout's ancestry. Current trusted origin values are `base_sha=a5df04f1560de0eaaf855199065936cb22a222b1` and `source_sha=39d1afdc8f37cdfda3c7768804ccccc3c9ad4e6e`; the latter is not an ancestor of current `HEAD=2211542d2dcb1ddf9b49c961e94aa4f5640e48c3`. The run therefore failed closed exactly at the ancestry check:
 
