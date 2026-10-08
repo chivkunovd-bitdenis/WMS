@@ -59,7 +59,7 @@ function MarkingCodesList({ productId, codes, busy, disabled, controller }: {
             borderColor: 'divider',
           }}
         >
-          <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Box sx={{ minWidth: 0, flex: '0 1 auto' }}>
             <Typography variant="body2" title={printableCode(code.cis_code)} sx={{ wordBreak: 'break-all' }}>
               {printableCode(code.cis_code)}
             </Typography>
@@ -168,19 +168,19 @@ export function FboPackingProductsTable({ controller, disabled = false }: {
         <Alert severity="warning" data-testid="fbo-packing-codes-error">{controller.codesError}</Alert>
       ) : null}
       <TableContainer component={Paper} variant="outlined" data-testid="ff-packaging-lines-table">
-        <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+        <Table size="small" sx={{ tableLayout: 'fixed', width: '100%', minWidth: 1100 }}>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: '22%' }}>Товар</TableCell>
+              <TableCell sx={{ width: '17%' }}>Товар</TableCell>
               <TableCell sx={{ width: '9%' }}>Артикул продавца</TableCell>
               <TableCell sx={{ width: '8%' }}>Артикул WB</TableCell>
               <TableCell sx={{ width: '6%' }}>Размер</TableCell>
-              <TableCell sx={{ width: '12%' }}>ШК</TableCell>
+              <TableCell sx={{ width: '13%' }}>ШК</TableCell>
               <TableCell align="center" sx={{ width: '4%' }}>ТЗ</TableCell>
               <TableCell align="right" sx={{ width: '6%' }}>Нужно</TableCell>
               <TableCell align="right" sx={{ width: '7%' }}>В коробах</TableCell>
-              <TableCell sx={{ width: '15%' }}>ЧЗ</TableCell>
-              <TableCell align="right" sx={{ width: '11%' }}>Действия</TableCell>
+              <TableCell sx={{ width: '18%' }}>ЧЗ</TableCell>
+              <TableCell align="right" sx={{ width: '12%' }}>Действия</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>

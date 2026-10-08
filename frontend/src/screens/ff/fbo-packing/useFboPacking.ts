@@ -146,10 +146,14 @@ export function useFboPacking(input: UseFboPackingInput) {
     }
   }, [apiContext])
 
-  // Коды читаются при открытии и после каждого обновления данных отгрузки.
+  // Коды читаются при открытии и когда у отгрузки меняются числа (подбор может отвязать коды).
+  // Подпись из чисел, а не сам объект: родитель может отдавать новый объект на каждый рендер.
+  const dataSignature = `${detail.id}|${detail.status}|${rows
+    .map((row) => `${row.productId}:${row.need}:${row.picked}:${row.inBoxes}`)
+    .join(',')}`
   useEffect(() => {
     void reloadCodes()
-  }, [detail, reloadCodes])
+  }, [dataSignature, reloadCodes])
 
   const setPrefs = useCallback((next: FboPackingPrintPreferences) => {
     setPrefsState(next)
