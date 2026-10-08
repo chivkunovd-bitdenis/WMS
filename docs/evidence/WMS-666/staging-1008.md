@@ -1,6 +1,6 @@
 # WMS-666: WMS test-stage deployment receipt
 
-Recorded 2026-10-08. This receipt separates the code SHA served by the test stage from the canonical merge SHA and from the pending operator browser acceptance.
+Recorded 2026-10-08. This receipt separates the code SHA served by the test stage from the canonical merge SHA, the separate WB emulator deployment, and the operator browser acceptance.
 
 ## Deployment identity and health
 
@@ -14,7 +14,7 @@ The target is Railway project `loyal-wonder` (`c28e681d-4535-4c96-ac97-c7b600a7f
 | Web | `f2ad51a8-009d-488c-9d64-7054072ccac6` | `d18909ec-fad5-4e1f-ae38-605f39b6f1ab` | `61012808c26ba8dabcd271ef21bbbc362caaffaa` |
 | Worker | `ed8faf85-069f-4e94-8d6c-d76899165687` | `ceb97d6f-9485-4573-af82-98847582bfa4` | `61012808c26ba8dabcd271ef21bbbc362caaffaa` |
 | Beat | `d3355f36-aa1e-48c9-b69c-9e6005c4e1d9` | `3a48b80f-e999-4b12-abc2-bb4559487d8c` | `61012808c26ba8dabcd271ef21bbbc362caaffaa` |
-| WB emulator | `582b4add-d338-424c-be03-9bb66af6c8f0` | `bd4e28f4-40cb-4a13-8270-e328c89c8479` | Separate emulator service; no WMS source SHA |
+| WB emulator | `582b4add-d338-424c-be03-9bb66af6c8f0` | `57217bfe-9a7c-463a-bbf7-b49e34a15108` | Emulator source `8972229a725bc0f58a9bddb8890f55cbe2bf5736`; image `sha256:405088a44b9c379d09df0134c222878213160f35403e6f9b3285995fe06f1e1f` |
 
 The four WMS services reported `SUCCESS/RUNNING`. After the merge-SHA deployment, the standard staging smoke returned HTTP 200 from the web root, the web `/api/health` proxy, and the backend `/health` endpoint; the SPA shell loaded successfully. The non-secret `WILDBERRIES_MARKETPLACE_API_BASE` setting on WMS, worker, and beat points to `http://wb-emulator.railway.internal:8000`. The other WB API base settings have not been verified, so this receipt does not claim that every possible WB request is emulator-routed.
 
@@ -45,8 +45,16 @@ The accepted proof used the actual Direct Print Handler with a local emulated si
 
 This proves rendering and delivery to the emulated native sink only. Physical printer output and paper were not tested.
 
-## Operator acceptance still pending
+## Live stage acceptance
 
-No authenticated stage browser session was available when deployment and CI were verified. The existing Chrome tab was at the login screen; no password reset, credential change, token creation, or stage data mutation was performed. Therefore current-SHA live operator checks for ordinary/group packing, selected/all packing, refreshed sticker and KIZ behavior, manual/continuous printing, recovery, and picking-list rendering remain pending a user login. The existing C11 stage evidence is from an earlier release and is not presented as acceptance of this SHA.
+The live CUA browser run exercised the representative flows against WMS SHA `61012808c26ba8dabcd271ef21bbbc362caaffaa` and the WB emulator deployment above. In grouped supply 000005, two consecutive barcode scans for orders 500019 and 500020 completed; the final grouped screen showed 4 of 8 orders printed and 3 of 8 packed, with both orders still present. The ordinary flow exercised a manual KIZ print, cancellation/unlink followed by reprint, and a second order completed through barcode scan and KIZ assignment. After reloading the grouped view, orders 500050 and 500067 both retained their current KIZ state as WB-accepted; the UI showed 37 and 36 pool units respectively. No stock movement or shipment was performed. The state shown after reload is captured in [stage-packing-1008.jpg](stage-packing-1008.jpg); it shows only the synthetic suffixes, not full KIZ values.
+
+The grouped picking-list preview was also checked against the staged order set: it contained 8 units across 6 product rows, preserved the source position `П№000046`, and showed the expected 6/8 counts. The preview is browser evidence, not a physical print.
+
+Five browser-originated print jobs were passed through the unchanged Direct Print Handler into its local emulated sink; the compact per-job receipts are in [stage-native-joins-1008.json](stage-native-joins-1008.json). The two grouped jobs came from the scans for orders 500019/500020; their individual UUID-to-order mapping was not captured, so this receipt does not assign one. The other three jobs belong to ordinary order 500067: a label, a KIZ label, and its second copy. All five sink PNG hashes match the handler's persisted job hash and receipt. This establishes browser-to-handler-to-emulated-sink delivery, not output on a physical printer or paper.
+
+The live unlink initially exposed that the WB emulator lacked the supported DELETE metadata route. The emulator-only fix was deployed and the same staged unlink/reprint path then completed: cancellation cleared the old KIZ at WB and returned one pool unit; reprint obtained and persisted a replacement that the emulator accepted. For order 500050, the read-only WMS and WB readbacks agreed after reprint: the marking was `printed`, its check status was `ok`, and WB metadata was `accepted`; the stored values matched by hash. For order 500067, final CUA reload showed its current KIZ as WB-accepted. The ordinary supply remained packed 1 of 2, with the reprint restoring its printed count. The emulator SQLite snapshot and the four known current metadata rows were restored after its stateless deployment; integrity and row-count readbacks matched. This preservation covers the enumerated current staging test orders and their metadata, not arbitrary orphan metadata keys outside WMS orders.
+
+This operator run covers representative ordinary and grouped packing, manual and barcode-driven KIZ/QR printing, cancellation and reprint recovery, WB acceptance, and picking-list readiness. It does not repeat the full 43-case browser matrix on the live stage. The existing CI and earlier accepted print proofs remain separately referenced above; neither is presented as physical-printer evidence.
 
 No production deployment or production merge was performed.

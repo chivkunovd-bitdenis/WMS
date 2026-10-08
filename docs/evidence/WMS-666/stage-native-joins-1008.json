@@ -1,0 +1,77 @@
+{
+  "stage_wms_source_sha": "61012808c26ba8dabcd271ef21bbbc362caaffaa",
+  "wb_emulator_source_sha": "8972229a725bc0f58a9bddb8890f55cbe2bf5736",
+  "handler": "unchanged Direct Print Handler",
+  "sink": "local emulated sink at 127.0.0.1:17843",
+  "physical_printer_or_paper_tested": false,
+  "jobs": [
+    {
+      "sequence": 1,
+      "flow": "grouped",
+      "idempotency_key": "47c47035-19b1-4812-b7cd-05b9dccf1926",
+      "captured_action": "scan barcode 2000000000023; order in {500019,500020}, exact UUID-to-order mapping not captured",
+      "handler_receipt": "emulated-stage-01-547571cf406f",
+      "handler_png_sha256": "547571cf406f7fff90783b364943d0a15b73163b5ee7b01a2272530a9fd6d8dc",
+      "sink_png_sha256": "547571cf406f7fff90783b364943d0a15b73163b5ee7b01a2272530a9fd6d8dc",
+      "sink_bytes": 11379,
+      "join_valid": true
+    },
+    {
+      "sequence": 2,
+      "flow": "grouped",
+      "idempotency_key": "8d083cbb-22b4-41a6-a261-fcc006e6c249",
+      "captured_action": "second scan barcode 2000000000023; order in {500019,500020}, exact UUID-to-order mapping not captured",
+      "handler_receipt": "emulated-stage-02-32cfd1ece4d6",
+      "handler_png_sha256": "32cfd1ece4d68b6f38b54ac413399f03109d85c9e8ebeb87227577c3786ca570",
+      "sink_png_sha256": "32cfd1ece4d68b6f38b54ac413399f03109d85c9e8ebeb87227577c3786ca570",
+      "sink_bytes": 11534,
+      "join_valid": true
+    },
+    {
+      "sequence": 3,
+      "flow": "ordinary",
+      "order": "500067",
+      "idempotency_key": "90e8e25f-c7e5-46fb-a8b6-6e208b7aff71",
+      "captured_action": "scan barcode 2000000000011; ordinary label job",
+      "handler_input_image_sha256": "ce3866540c8ced82d95808efcbf6009a7a3b241d93be3c6c21e0f10ebc370412",
+      "handler_receipt": "emulated-stage-03-547571cf406f",
+      "handler_png_sha256": "547571cf406f7fff90783b364943d0a15b73163b5ee7b01a2272530a9fd6d8dc",
+      "sink_png_sha256": "547571cf406f7fff90783b364943d0a15b73163b5ee7b01a2272530a9fd6d8dc",
+      "sink_bytes": 11379,
+      "join_valid": true
+    },
+    {
+      "sequence": 4,
+      "flow": "ordinary",
+      "order": "500067",
+      "idempotency_key": "90e8e25f-c7e5-46fb-a8b6-6e208b7aff71:chz",
+      "captured_action": "KIZ label; code value omitted",
+      "handler_input_image_sha256": "de1b51d07e601e1de4120c7c350dca7e4b9c8aa06e93f2ad5ed9616d4720e77f",
+      "handler_receipt": "emulated-stage-04-18d05b049203",
+      "handler_png_sha256": "18d05b049203e996d62d289802e8b96dd5caf22d7c83b36f9e59a8fd130329ee",
+      "sink_png_sha256": "18d05b049203e996d62d289802e8b96dd5caf22d7c83b36f9e59a8fd130329ee",
+      "sink_bytes": 26180,
+      "join_valid": true
+    },
+    {
+      "sequence": 5,
+      "flow": "ordinary",
+      "order": "500067",
+      "idempotency_key": "90e8e25f-c7e5-46fb-a8b6-6e208b7aff71:chz:c2",
+      "captured_action": "second KIZ copy; code value omitted",
+      "handler_input_image_sha256": "de1b51d07e601e1de4120c7c350dca7e4b9c8aa06e93f2ad5ed9616d4720e77f",
+      "handler_receipt": "emulated-stage-05-18d05b049203",
+      "handler_png_sha256": "18d05b049203e996d62d289802e8b96dd5caf22d7c83b36f9e59a8fd130329ee",
+      "sink_png_sha256": "18d05b049203e996d62d289802e8b96dd5caf22d7c83b36f9e59a8fd130329ee",
+      "sink_bytes": 26180,
+      "join_valid": true
+    }
+  ],
+  "validation": {
+    "job_count": 5,
+    "all_handler_receipts_persisted": true,
+    "all_sink_receipts_persisted": true,
+    "all_handler_png_hashes_equal_sink_png_hashes": true,
+    "raw_kiz_values_included": false
+  }
+}
