@@ -1,0 +1,43 @@
+{
+  "baseline": "212f19d548496fef7baf75c83204b771e304281b",
+  "candidate": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+  "source_identity": {
+    "frontend/src/screens/v2/fbsUx.ts": {
+      "scope": "entire file",
+      "equal": true,
+      "baseline_sha256": "259775e8eaf16f7145c5f408ed140bd6514e0bb98e005e4b61fd0336ef33c401",
+      "candidate_sha256": "259775e8eaf16f7145c5f408ed140bd6514e0bb98e005e4b61fd0336ef33c401",
+      "diff": ""
+    },
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": {
+      "scope": "printPickingList declaration through next const declaration",
+      "equal": false,
+      "baseline_sha256": "eb7d347c8e8c3a987489e910c4dab6c15f9f5ae09355d27983245b2e23688b36",
+      "candidate_sha256": "f0b066cf2354ab9943584aa9f44e5a4ae31c8e00f7d177077270c0d1eaaea940",
+      "diff": "--- \n+++ \n@@ -45,7 +45,7 @@\n       marketplace: workspace.supply.marketplace,\n       sellerName: workspace.supply.seller.name,\n       wmsWarehouseName: workspace.supply.wms_warehouse.name,\n-      routeLabel: workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',\n+      routeLabel: workspaceRouteLabel,\n       deadlineLabel: new Date(workspace.supply.nearest_deadline_at).toLocaleString('ru-RU'),\n       printedAtLabel: new Date().toLocaleString('ru-RU'),\n       rows,\n"
+    },
+    "frontend/src/screens/v2/FfFbsSupplyAssembly.tsx": {
+      "scope": "printPickingList declaration through next const declaration",
+      "equal": true,
+      "baseline_sha256": "afecd2f88daa3610a650b42e321fde81ad062056a9bc1363f09d142b5c5d1747",
+      "candidate_sha256": "afecd2f88daa3610a650b42e321fde81ad062056a9bc1363f09d142b5c5d1747",
+      "diff": ""
+    }
+  },
+  "c6_c10_full_cell_comparison": [
+    {
+      "row": 0,
+      "cell": 5,
+      "expected": "Нет свободного остатка",
+      "actual": "Нет текущего остатка"
+    }
+  ],
+  "diagnostic_sha256": "f7bc19872035f0eb33a7467fba3a19b3b1f67090fa39ad5875adcdbc3893a39a",
+  "c5_diagnostic_commit": "6f06083ae9974f37682b49eafaa22b8e31f611e7",
+  "c5_domain_source": {
+    "test": "baseInput.marketplace=wb",
+    "model": "FbsOrder.wb_order_id: Mapped[int], BigInteger",
+    "builder": "WB uses order.wb_order_id; Ozon uses external_order_id fallback",
+    "correction": "C5 only numeric5524537174 plus exact PDF match; no geometry/PDF/negative assertion removal"
+  }
+}
