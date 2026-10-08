@@ -109,7 +109,7 @@ CASES = (
             "requires_honest_sign: true",
             "const cis1 =",
             "const cis2 =",
-            "Buffer.from(`cis\\n${cis1}\\n${cis2}`)",
+            "Buffer.from(`cis\n${cis1}\n${cis2}`)",
             "row.getByTestId(`ff-honest-sign-status-${productId}`)",
             "await expect(honestSignChip).toHaveCount(1)",
             "await expect(honestSignChip).toBeVisible()",
@@ -391,6 +391,23 @@ def audit_contract(overrides: Mapping[str, str] | None = None) -> list[str]:
 def test_named_e2e_cases_retain_their_required_business_assertions() -> None:
     errors = audit_contract()
     assert not errors, "WMS-703 E2E contract regressed:\n" + "\n".join(errors)
+
+
+def test_e4_guard_rejects_literal_backslash_n_marking_csv() -> None:
+    case = next(case for case in CASES if case.case_id == "E4")
+    source = _source(case.path, {})
+    block, error = _test_block(source, case.title)
+    assert error is None
+    physical_lf_fixture = "Buffer.from(`cis\n${cis1}\n${cis2}`)"
+    literal_backslash_fixture = r"Buffer.from(`cis\\n${cis1}\\n${cis2}`)"
+    assert physical_lf_fixture in block
+    mutated_block = block.replace(physical_lf_fixture, literal_backslash_fixture, 1)
+    full_mutated = source.replace(block, mutated_block, 1)
+    errors = audit_contract({case.path: full_mutated})
+    assert any(
+        f"E4: missing protected assertion {physical_lf_fixture!r}" == error
+        for error in errors
+    )
 
 
 @pytest.mark.parametrize(

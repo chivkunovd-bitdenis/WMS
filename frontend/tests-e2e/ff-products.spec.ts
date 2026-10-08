@@ -218,7 +218,9 @@ test('ff products: marking icon shows count and opens honest sign product card',
       files: {
         name: 'codes.csv',
         mimeType: 'text/csv',
-        buffer: Buffer.from(`cis\n${cis1}\n${cis2}`),
+        buffer: Buffer.from(`cis
+${cis1}
+${cis2}`),
       },
     },
   })
