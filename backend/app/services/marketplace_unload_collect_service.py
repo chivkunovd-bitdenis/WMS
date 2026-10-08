@@ -21,6 +21,7 @@ from app.models.packaging_task import PackagingTaskLine
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service
+from app.services import marketplace_unload_kiz_service as kiz_svc
 from app.services import marketplace_unload_service as mu_svc
 from app.services import sorting_location_service as sort_loc_svc
 from app.services import tenant_settings_service as tenant_settings_svc
@@ -60,6 +61,8 @@ class SetPickAllocationResult:
     location_code: str
     quantity: int
     picked_qty: int
+    #: КИЗ, отвязанные от товара, потому что подобранного стало меньше, чем КИЗ (WMS-686).
+    unlinked_marking_codes: tuple[str, ...] = ()
 
 
 @dataclass
@@ -724,6 +727,7 @@ async def set_pick_allocation(
 
     # diff < 0: current_qty > quantity >= 0, значит строка подбора существует.
     assert alloc is not None
+    picked_before_reduce = await picked_qty_for_product(session, request_id, product_id)
     alloc_id = alloc.id
     remove_qty = -diff
     unknown_available = int(alloc.quantity) - int(alloc.quantity_source_known or 0)
@@ -766,6 +770,11 @@ async def set_pick_allocation(
         tenant_id=tenant_id,
         warehouse_id=req.warehouse_id,
     )
+    # WMS-686 D3.4: КИЗ не может быть больше подобранного — лишние (последние
+    # привязанные) отвязываются в той же транзакции; оператор видит, какие.
+    unlinked = await kiz_svc.unlink_excess_codes(
+        session, tenant_id, request_id, product_id, previous_picked=picked_before_reduce
+    )
 
     if pkg_task is not None:
         task_line = next((ln for ln in pkg_task.lines if ln.product_id == product_id), None)
@@ -792,6 +801,7 @@ async def set_pick_allocation(
         location_code=loc.code,
         quantity=max(0, new_qty),
         picked_qty=picked_after.get(product_id, 0),
+        unlinked_marking_codes=tuple(code.cis_code for code in unlinked),
     )
 
 
@@ -1163,6 +1173,7 @@ async def remove_from_box(
         await pkg_svc.sync_mp_task_packed_from_boxes(session, tenant_id, pkg_task)
 
     historical_before = await _unknown_box_quantity(session, request_id, line.product_id)
+    picked_before_reduce = await picked_qty_for_product(session, request_id, line.product_id)
     unknown_available = line_qty - int(line.quantity_source_known or 0)
     source_known_removed = max(0, remove_qty - unknown_available)
     unknown_removed = remove_qty - source_known_removed
@@ -1198,6 +1209,14 @@ async def remove_from_box(
         remove_qty,
         tenant_id=tenant_id,
         warehouse_id=req.warehouse_id,
+    )
+    # Подобранное уменьшилось — КИЗ сверх подобранного отвязываются (WMS-686 D3.4).
+    await kiz_svc.unlink_excess_codes(
+        session,
+        tenant_id,
+        request_id,
+        line.product_id,
+        previous_picked=picked_before_reduce,
     )
 
     new_qty = line_qty - remove_qty
@@ -1310,3 +1329,7 @@ async def rollback_all_collected_for_cancel(
     line_res = await session.execute(box_line_stmt)
     for line in line_res.scalars().all():
         await session.delete(line)
+
+    # WMS-686 D3.5: отмена отгрузки отвязывает её КИЗ (код возвращается к своей судьбе:
+    # непечатанный из пула — в свободные, напечатанный/внешний — остаётся нанесённым).
+    await kiz_svc.unlink_all_codes(session, tenant_id, request_id)

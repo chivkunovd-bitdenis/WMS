@@ -360,37 +360,41 @@ async def pick_scan(
                 location_code=loc.code,
             )
 
-    if container_kind is None and container_id is None:
-        try:
-            container = await resolve_container_scan(
-                session,
-                tenant_id,
-                req.warehouse_id,
-                raw,
-            )
-        except InventoryContainerScanError as exc:
-            if exc.code != "container_scan_not_found":
-                raise MarketplaceUnloadPickError("invalid_container_reference") from exc
-        else:
-            location_id = await warehouse_map_service.resolve_container_location(
-                session,
-                tenant_id,
-                req.warehouse_id,
-                container.kind,
-                container.id,
-            )
-            location = await session.get(StorageLocation, location_id)
-            return PickScanResult(
-                kind="container",
-                storage_location_id=location_id,
-                location_code=location.code if location is not None else None,
-                container_kind=container.kind,
-                container_id=container.id,
-                container_code=container.code,
-            )
-    elif container_kind is None or container_id is None:
+    if (container_kind is None) != (container_id is None):
         raise MarketplaceUnloadPickError("invalid_container_reference")
-    else:
+
+    # Новый ШК тары заменяет источник, который удерживает сканер: ШК тары
+    # распознаётся и при уже выбранной таре (WMS-686, как в FBS-подборе).
+    try:
+        container = await resolve_container_scan(
+            session,
+            tenant_id,
+            req.warehouse_id,
+            raw,
+        )
+    except InventoryContainerScanError as exc:
+        if exc.code != "container_scan_not_found":
+            raise MarketplaceUnloadPickError("invalid_container_reference") from exc
+        container = None
+    if container is not None:
+        location_id = await warehouse_map_service.resolve_container_location(
+            session,
+            tenant_id,
+            req.warehouse_id,
+            container.kind,
+            container.id,
+        )
+        location = await session.get(StorageLocation, location_id)
+        return PickScanResult(
+            kind="container",
+            storage_location_id=location_id,
+            location_code=location.code if location is not None else None,
+            container_kind=container.kind,
+            container_id=container.id,
+            container_code=container.code,
+        )
+
+    if container_kind is not None and container_id is not None:
         try:
             await validate_container(
                 session,

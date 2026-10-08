@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -96,7 +97,12 @@ _AIM_PREFIXES = ("]d2", "]d1", "]Q1", "]Q3", "]C1")
 _CIS_MIN_LENGTH = 19
 _CIS_MAX_LENGTH = 256
 _GS_LITERAL_SUBSTITUTES = ("<GS>", "{GS}", "\\x1d")
-_GS_SINGLE_CHAR_SUBSTITUTES = frozenset(("~", "|", "#"))
+# «]» — GS, пришедший в поле ввода при русской раскладке (WMS-686: экран подбора
+# FBO превращает Ctrl+] в «]»). В наборе символов GS1 для AI 21/91/92/93 «]» не
+# встречается, поэтому замена безопасна; применяется она только на границе полей
+# (см. _restore_gs_substitutes: после разделителя обязан идти следующий AI).
+_GS_SINGLE_CHAR_SUBSTITUTES = frozenset(("~", "|", "#", "]"))
+_AI_BRACKET_RE = re.compile(r"\((\d{2,4})\)")
 _GS1_FIXED_AI_VALUE_LENGTHS: dict[str, int] = {
     "00": 18,
     "01": 14,
@@ -536,6 +542,34 @@ def _has_complete_gs1_structure(value: str) -> bool:
     return seen_prefix_ai and seen_serial_ai
 
 
+def _flatten_ai_brackets(value: str) -> tuple[str, bool]:
+    """Человекочитаемая запись «(01)GTIN(21)серия(91)…» -> строка элементов GS1.
+
+    Скобки вокруг AI в самом коде не встречаются, поэтому разворачиваем только
+    запись, которая начинается со скобочного AI и целиком состоит из известных AI.
+    Разделитель GS ставится перед AI, который идёт после поля переменной длины.
+    """
+    text = value.lstrip()
+    if _AI_BRACKET_RE.match(text) is None:
+        return value, False
+    parts = _AI_BRACKET_RE.split(text)
+    # [текст до первого AI, AI, значение, AI, значение, ...]
+    if parts[0].strip():
+        return value, False
+    markers = parts[1::2]
+    if any(marker not in _GS1_AI_CODES for marker in markers):
+        return value, False
+    out: list[str] = []
+    previous_ai: str | None = None
+    for marker, field in zip(markers, parts[2::2], strict=True):
+        if previous_ai is not None and previous_ai not in _GS1_FIXED_AI_VALUE_LENGTHS:
+            out.append(_GS)
+        out.append(marker)
+        out.append(field.strip())
+        previous_ai = marker
+    return "".join(out), True
+
+
 def _has_keyboard_layout_noise(value: str) -> bool:
     return any(char in _KEYBOARD_LAYOUT_MARKERS for char in value)
 
@@ -559,8 +593,9 @@ def normalize_scanned_cis(raw: str) -> tuple[str, list[str]]:
     if aim_prefix_removed:
         hints.append("aim_prefix")
 
+    value, brackets_flattened = _flatten_ai_brackets(value)
     value, gs_changed = _restore_gs_substitutes(value)
-    if gs_changed:
+    if gs_changed or brackets_flattened:
         hints.append("gs_substitute")
 
     if _has_keyboard_layout_noise(value):

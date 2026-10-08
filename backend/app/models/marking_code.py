@@ -21,6 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.marketplace_unload import MarketplaceUnloadLine
     from app.models.packaging_task import PackagingTaskLine
     from app.models.product import Product
     from app.models.seller import Seller
@@ -258,6 +259,14 @@ class MarkingCode(Base):
         nullable=True,
         index=True,
     )
+    # WMS-686: КИЗ хранится на строке товара отгрузки FBO. Связи «КИЗ ↔ короб»
+    # нет: товар связан с коробом составом короба, а с КИЗ — этой колонкой.
+    marketplace_unload_line_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("marketplace_unload_lines.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     cis_code: Mapped[str] = mapped_column(String(512), nullable=False)
     source: Mapped[str] = mapped_column(
         String(16), nullable=False, default="pool", server_default="pool"
@@ -307,6 +316,9 @@ class MarkingCode(Base):
     packaging_task_line: Mapped[PackagingTaskLine | None] = relationship(
         "PackagingTaskLine",
         back_populates="marking_codes",
+    )
+    marketplace_unload_line: Mapped[MarketplaceUnloadLine | None] = relationship(
+        "MarketplaceUnloadLine",
     )
     reserved_by_user: Mapped[User | None] = relationship(
         "User",

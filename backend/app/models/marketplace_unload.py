@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     Date,
@@ -23,6 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.inbound_intake import InboundIntakeBox
     from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
     from app.models.packaging_task import PackagingTask
     from app.models.product import Product
@@ -75,6 +77,8 @@ class MarketplaceUnloadRequest(Base):
     cancelled_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # WMS-686: сведения пропуска (водитель, машина) одной машины на отгрузку.
+    pass_details: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     warehouse: Mapped[Warehouse] = relationship("Warehouse")
@@ -158,6 +162,14 @@ class MarketplaceUnloadBox(Base):
         nullable=True,
         index=True,
     )
+    # WMS-686: короб приёмки (INB), перенесённый в отгрузку целиком. Его ШК —
+    # это ШК короба отгрузки, когда складского короба (WHB) у него нет.
+    inbound_intake_box_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("inbound_intake_boxes.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -168,6 +180,7 @@ class MarketplaceUnloadBox(Base):
         back_populates="boxes",
     )
     warehouse_box: Mapped[WarehouseBox | None] = relationship("WarehouseBox")
+    inbound_intake_box: Mapped[InboundIntakeBox | None] = relationship("InboundIntakeBox")
     lines: Mapped[list[MarketplaceUnloadBoxLine]] = relationship(
         "MarketplaceUnloadBoxLine",
         back_populates="box",

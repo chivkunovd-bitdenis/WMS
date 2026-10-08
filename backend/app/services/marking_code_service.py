@@ -7,13 +7,13 @@ import io
 import json
 import re
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import Select, func, or_, select, text
+from sqlalchemy import Select, and_, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
@@ -84,12 +84,14 @@ MARKING_SOURCE_RECEPTION = "reception"
 MARKING_SOURCE_SORTING = "sorting"
 MARKING_SOURCE_SHIPPING = "shipping"
 MARKING_SOURCE_PACKING_FBS_PRINT = "packing_fbs_print"
+MARKING_SOURCE_PACKING_FBO = "packing_fbo"
 _MARKING_SOURCE_LABELS = {
     MARKING_SOURCE_CATALOG: "Каталог",
     MARKING_SOURCE_RECEPTION: "Приёмка",
     MARKING_SOURCE_SORTING: "Сортировка",
     MARKING_SOURCE_SHIPPING: "Отгрузка",
     MARKING_SOURCE_PACKING_FBS_PRINT: "Упаковка/FBS-печать",
+    MARKING_SOURCE_PACKING_FBO: "Отгрузка FBO",
 }
 _IMPORT_REQUEST_LOCKS: dict[uuid.UUID, tuple[asyncio.Lock, int]] = {}
 
@@ -191,6 +193,7 @@ async def record_event(
     reason: str | None = None,
     copies: int = 1,
     source_process: str | None = None,
+    occurred_at: datetime | None = None,
 ) -> MarkingCodeEvent:
     packaging_task_id: uuid.UUID | None = None
     packaging_task_line_id: uuid.UUID | None = None
@@ -212,6 +215,8 @@ async def record_event(
         reason=reason,
         meta_json=_event_meta_json(source_process),
     )
+    if occurred_at is not None:
+        event.created_at = occurred_at
     session.add(event)
     return event
 
@@ -701,6 +706,18 @@ def _gtin_lookup_variants(gtin: str) -> list[str]:
         if with_leading not in variants:
             variants.append(with_leading)
     return variants
+
+
+# WMS-686: публичные имена для процессов, которые сверяют код с товаром так же, как FBS.
+gtin_lookup_variants = _gtin_lookup_variants
+
+
+async def label_artifact_flags_for_codes(codes: Sequence[MarkingCode]) -> list[bool]:
+    """Есть ли у кода печатаемая заводская этикетка (проверка PDF вне потока запроса)."""
+    return await asyncio.to_thread(
+        _label_artifact_flags,
+        [(code.label_artifact_pdf, code.cis_code) for code in codes],
+    )
 
 
 def _parse_csv_rows(content: bytes) -> list[dict[str, str]]:
@@ -1769,6 +1786,9 @@ async def _pool_ids_for_product(
         MarkingPoolProduct.product_id == product_id,
     )
     return list((await session.execute(stmt)).scalars().all())
+
+
+pool_ids_for_product = _pool_ids_for_product
 
 
 def _marking_supply_key(pool_ids: list[uuid.UUID], product_id: uuid.UUID) -> tuple[str, ...]:
@@ -3333,7 +3353,13 @@ async def print_codes_for_product(
     source_process: str = MARKING_SOURCE_CATALOG,
     document_number: str | None = None,
     packaging_task_line: PackagingTaskLine | None = None,
+    marketplace_unload_line_id: uuid.UUID | None = None,
 ) -> PrintMarkingCodesResult:
+    """Выдать свободные коды товара из пула и пометить напечатанными.
+
+    marketplace_unload_line_id (WMS-686): выданный код сразу занимает строку товара
+    отгрузки FBO; такой код больше не доступен ни одному другому процессу.
+    """
     if quantity < 1:
         raise MarkingCodeServiceError("invalid_print_quantity")
 
@@ -3411,6 +3437,9 @@ async def print_codes_for_product(
         code.product_id = product.id
         if packaging_task_line is not None:
             code.packaging_task_line_id = packaging_task_line.id
+        if marketplace_unload_line_id is not None:
+            code.marketplace_unload_line_id = marketplace_unload_line_id
+            code.applied_at = now
         code.printed_at = now
         code.printed_by_user_id = acting_user_id
         code.reserved_by_user_id = None
@@ -3424,6 +3453,9 @@ async def print_codes_for_product(
             packaging_task=packaging_task_line,
             copies=event_copies,
             source_process=source_process,
+            # Время привязки к отгрузке FBO нужно с точностью до микросекунд: по нему
+            # выбираются «последние привязанные» коды при уменьшении подобранного.
+            occurred_at=now if marketplace_unload_line_id is not None else None,
         )
 
     if commit:
@@ -5074,7 +5106,7 @@ async def _restore_code_scope_error(
             return "product_mismatch"
         if product.wb_barcode and product.wb_barcode not in _gtin_lookup_variants(gtin):
             return "product_mismatch"
-    if code.packaging_task_line_id is not None:
+    if is_code_bound(code):
         return "linked_code"
     linked = await session.scalar(
         select(FbsOrderMarking.id)
@@ -5249,6 +5281,31 @@ async def restore_truncated_pool_cis_codes(
 MARKING_OPERATOR_CANCEL_REASON = "отмена оператором"
 
 
+def is_code_bound(code: MarkingCode) -> bool:
+    """Код занят: привязан к строке упаковки FBS/Ozon или к строке товара отгрузки FBO.
+
+    WMS-686: единственное место, где «занятость» кода решается по привязкам.
+    Все процессы (приёмка, FBS/Ozon, передача владения) спрашивают здесь.
+    """
+    return code.packaging_task_line_id is not None or code.marketplace_unload_line_id is not None
+
+
+def bound_code_clause() -> ColumnElement[bool]:
+    """SQL-форма is_code_bound: код привязан."""
+    return or_(
+        MarkingCode.packaging_task_line_id.is_not(None),
+        MarkingCode.marketplace_unload_line_id.is_not(None),
+    )
+
+
+def free_code_clause() -> ColumnElement[bool]:
+    """SQL-форма отрицания is_code_bound: код свободен от привязок."""
+    return and_(
+        MarkingCode.packaging_task_line_id.is_(None),
+        MarkingCode.marketplace_unload_line_id.is_(None),
+    )
+
+
 async def is_unbound_cancelled_wb_code(session: AsyncSession, code: MarkingCode) -> bool:
     """An operator detached a physical label; it never returns to the print pool.
 
@@ -5257,8 +5314,7 @@ async def is_unbound_cancelled_wb_code(session: AsyncSession, code: MarkingCode)
     """
     from app.models.fbs_order import FbsOrderMarking
 
-    if (code.status not in {STATUS_APPLIED, STATUS_INTRODUCED}
-            or code.packaging_task_line_id is not None):
+    if code.status not in {STATUS_APPLIED, STATUS_INTRODUCED} or is_code_bound(code):
         return False
     if await session.scalar(select(FbsOrderMarking.id).where(
         FbsOrderMarking.tenant_id == code.tenant_id,
@@ -5278,7 +5334,7 @@ async def is_unbound_received_code(session: AsyncSession, code: MarkingCode) -> 
     from app.models.fbs_order import FbsOrderMarking
 
     if (code.source != "external_fbs" or code.status != STATUS_APPLIED
-            or code.packaging_task_line_id is not None or code.pool_id is not None):
+            or is_code_bound(code) or code.pool_id is not None):
         return False
     # Historical/rejected/cancelled bindings are not released by a receipt scan.
     if await session.scalar(select(FbsOrderMarking.id).where(

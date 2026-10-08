@@ -32,6 +32,11 @@ from app.services.document_number_service import (
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
+from app.services.marking_code_service import (
+    bound_code_clause,
+    free_code_clause,
+    is_code_bound,
+)
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     get_sorting_location,
@@ -358,7 +363,7 @@ async def _marking_codes_for_transfer(
             MarkingCode.seller_id == source_seller_id,
             MarkingCode.product_id == source_product_id,
             MarkingCode.status.in_(TRANSFERABLE_MARKING_STATUSES),
-            MarkingCode.packaging_task_line_id.is_(None),
+            free_code_clause(),
         )
         .order_by(MarkingCode.created_at, MarkingCode.id)
         .limit(limit)
@@ -373,7 +378,7 @@ async def _marking_codes_for_transfer(
                 MarkingCode.seller_id == source_seller_id,
                 MarkingCode.product_id == source_product_id,
                 or_(
-                    MarkingCode.packaging_task_line_id.is_not(None),
+                    bound_code_clause(),
                     MarkingCode.status.not_in(TRANSFERABLE_MARKING_STATUSES),
                 ),
             )
@@ -733,7 +738,7 @@ async def apply_ownership_transfer_plan(
                 or code.seller_id != source_seller_id
                 or code.product_id != row.source_product_id
                 or code.status not in TRANSFERABLE_MARKING_STATUSES
-                or code.packaging_task_line_id is not None
+                or is_code_bound(code)
             ):
                 raise OwnershipTransferError("marking_code_changed_after_plan")
             previous_pool_id = code.pool_id
