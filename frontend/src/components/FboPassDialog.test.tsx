@@ -426,12 +426,16 @@ describe('FboPassDialog · Скачать XLSX', () => {
     expect(calls.some((c) => c.url.endsWith('/pass.xlsx'))).toBe(false)
   })
 
-  it('недоступно при несохранённой правке: файл строится из сохранённого', async () => {
+  it('при несохранённой правке и уже сохранённом пропуске скачивается сохранённое с сервера', async () => {
     getResponse = () => json({ pass_details: FILLED, editable: true })
     await render()
     expect(button('download')!.disabled).toBe(false)
     await type('car_number', 'К999КК99')
-    expect(button('download')!.disabled).toBe(true)
+    expect(button('download')!.disabled).toBe(false)
+    await click('download')
+    expect(calls.some((c) => c.url.endsWith('/pass.xlsx'))).toBe(true)
+    expect(downloads).toEqual(['Пропуск.xlsx'])
+    expect(field('car_number').value).toBe('К999КК99')
   })
 
   it('ошибка сервера при скачивании показана в окне и не закрывает форму', async () => {

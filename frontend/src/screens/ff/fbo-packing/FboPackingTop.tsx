@@ -15,6 +15,7 @@ export type FboPackingTopProps = {
   onBoxBarcodeScanned: (code: string) => Promise<void>
   /** Вызывается после каждого успешного изменения: родитель перечитывает отгрузку. */
   onChanged: () => void
+  /** Режим просмотра (после проведения): без скана, печати, выдачи и отвязки КИЗ. */
   disabled?: boolean
 }
 

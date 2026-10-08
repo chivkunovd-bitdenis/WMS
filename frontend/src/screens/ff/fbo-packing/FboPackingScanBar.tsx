@@ -77,6 +77,7 @@ export function FboPackingScanBar({ controller, disabled = false }: {
           variant="outlined"
           startIcon={<PrintOutlined fontSize="small" />}
           onClick={controller.printWaybill}
+          disabled={disabled}
           data-testid="ff-packaging-print-sheet"
           sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}
         >

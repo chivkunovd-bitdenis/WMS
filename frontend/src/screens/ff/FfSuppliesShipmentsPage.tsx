@@ -405,6 +405,8 @@ export function FfSuppliesShipmentsPage({
   const [markingIncomplete, setMarkingIncomplete] = useState<{
     items: MarkingIncompleteItem[]
     acknowledgeDiscrepancy: boolean
+    /** Ошибка повторного «Завершить» из этого окна: показывается в самом окне, окно остаётся открытым. */
+    error?: string | null
   } | null>(null)
   const [passDialogOpen, setPassDialogOpen] = useState(false)
   const attachInFlightRef = useRef(false)
@@ -512,7 +514,9 @@ export function FfSuppliesShipmentsPage({
           const message = await readApiErrorMessage(res)
           if (docDetailRequests.current.isLatest(docDetailRequestId)) {
             setModalError(message)
-            setUnloadDetail(null)
+            // WMS-686: ошибка фонового перечитывания не уничтожает рабочий экран — остаётся
+            // последний успешно загруженный документ; обнуляется только чужой (смена документа).
+            setUnloadDetail((prev) => (prev && prev.id === docModalId ? prev : null))
           }
           return
         }
@@ -732,7 +736,8 @@ export function FfSuppliesShipmentsPage({
     } catch (e) {
       if (docDetailRequests.current.isLatest(docDetailRequestId)) {
         setModalError(e instanceof Error ? e.message : 'Не удалось загрузить документ.')
-        setUnloadDetail(null)
+        // WMS-686: см. выше — последний успешный документ остаётся на экране.
+        setUnloadDetail((prev) => (prev && prev.id === docModalId ? prev : null))
         setDivergeDetail(null)
       }
     } finally {
@@ -1726,6 +1731,10 @@ export function FfSuppliesShipmentsPage({
     }
     setModalBusy(true)
     setModalError(null)
+    // WMS-686: «Завершить» из красного окна (acknowledgeMarking) показывает свою ошибку в самом окне.
+    setMarkingIncomplete((current) => (current ? { ...current, error: null } : current))
+    const failInRedDialog = (message: string) =>
+      setMarkingIncomplete((current) => (current ? { ...current, error: message } : current))
     try {
       const res = await fetch(
         apiUrl(`/operations/marketplace-unload-requests/${docModalId}/ship`),
@@ -1747,17 +1756,19 @@ export function FfSuppliesShipmentsPage({
           setMarkingIncomplete({ items: incompleteItems, acknowledgeDiscrepancy })
           return
         }
-        setMarkingIncomplete(null)
         const msg = await readApiErrorMessage(res)
-        if (msg.includes('distribution_incomplete')) {
-          setModalError(
-            acknowledgeDiscrepancy
-              ? 'Не удалось завершить: нет товаров в коробах или нужно подтверждение расхождения.'
-              : 'План и факт не совпадают. Подтвердите расхождение или скорректируйте короба.',
-          )
-        } else {
-          setModalError(msg)
+        const shownMessage = msg.includes('distribution_incomplete')
+          ? acknowledgeDiscrepancy
+            ? 'Не удалось завершить: нет товаров в коробах или нужно подтверждение расхождения.'
+            : 'План и факт не совпадают. Подтвердите расхождение или скорректируйте короба.'
+          : msg
+        if (acknowledgeMarking) {
+          // Окно не закрываем: повтор «Завершить» уйдёт с теми же подтверждениями.
+          failInRedDialog(shownMessage)
+          return
         }
+        setMarkingIncomplete(null)
+        setModalError(shownMessage)
         return
       }
       setMpShipConfirmOpen(false)
@@ -1765,7 +1776,9 @@ export function FfSuppliesShipmentsPage({
       await loadDocDetail()
       await onRefreshFfSupplyExtras()
     } catch (e) {
-      setModalError(e instanceof Error ? e.message : 'Не удалось завершить отгрузку.')
+      const message = e instanceof Error ? e.message : 'Не удалось завершить отгрузку.'
+      if (acknowledgeMarking) failInRedDialog(message)
+      else setModalError(message)
     } finally {
       setModalBusy(false)
     }
@@ -2084,6 +2097,7 @@ export function FfSuppliesShipmentsPage({
   const mpCollecting =
     docModal === 'marketplace_unload' && unloadDetail?.status === 'collecting'
   const mpExecutionPhase = mpConfirmed || mpCollecting
+  const mpShipped = docModal === 'marketplace_unload' && unloadDetail?.status === 'shipped'
   // Кнопки шапки (XLSX для WB, пропуск) осмысленны, когда у отгрузки уже есть короба
   // и машина: после утверждения и после проведения.
   const mpPassFilled = Object.values(unloadDetail?.pass_details ?? {}).some(
@@ -3152,7 +3166,9 @@ export function FfSuppliesShipmentsPage({
                   {/* WMS-686: вместо панели задания упаковки — верхний блок упаковки FBO
                       (строка скана, общая таблица товаров, КИЗ). Он собирается из данных
                       отгрузки, задание упаковки для FBO ничего не решает. */}
-                  {mpExecutionPhase && token && authHeaders ? (
+                  {/* После проведения (shipped) та же таблица остаётся для просмотра результата:
+                      без скана, печати и отвязки КИЗ (disabled). */}
+                  {(mpExecutionPhase || mpShipped) && unloadDetail && token && authHeaders ? (
                     <FboPackingTop
                       token={token}
                       authHeaders={authHeaders}
@@ -3160,6 +3176,7 @@ export function FfSuppliesShipmentsPage({
                       currentBoxId={currentBoxId}
                       onBoxBarcodeScanned={handleBoxBarcodeScan}
                       onChanged={() => loadDocDetail()}
+                      disabled={mpShipped}
                     />
                   ) : null}
                   <Accordion
@@ -3877,6 +3894,11 @@ export function FfSuppliesShipmentsPage({
         }
       >
         <Stack spacing={1.5} sx={{ color: 'error.main' }}>
+          {markingIncomplete?.error ? (
+            <Alert severity="error" data-testid="ff-mp-ship-marking-error">
+              {markingIncomplete.error}
+            </Alert>
+          ) : null}
           {(markingIncomplete?.items ?? []).length > 0 ? (
             <Stack spacing={0.5} data-testid="ff-mp-ship-marking-items">
               {(markingIncomplete?.items ?? []).map((item) => (

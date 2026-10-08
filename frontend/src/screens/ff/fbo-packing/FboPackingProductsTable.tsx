@@ -71,7 +71,7 @@ function MarkingCodesList({ productId, codes, busy, disabled, controller }: {
           </Box>
           <Button
             size="small"
-            disabled={busy}
+            disabled={busy || disabled}
             onClick={() => void controller.reprintCode(code)}
             data-testid={`fbo-packing-code-reprint-${code.marking_code_id}`}
             sx={{ flexShrink: 0 }}
@@ -126,8 +126,8 @@ export function FboPackingProductsTable({ controller, disabled = false }: {
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
         <Chip
           size="small"
-          color={incomplete ? 'error' : 'success'}
-          variant={incomplete ? 'outlined' : 'filled'}
+          color={incomplete ? 'error' : 'default'}
+          variant="outlined"
           label={`${k} из ${row.need}`}
           clickable={k > 0}
           onClick={k > 0 ? () => toggle(row.productId) : undefined}
@@ -267,7 +267,7 @@ export function FboPackingProductsTable({ controller, disabled = false }: {
                           aria-label={`Печать товара ${meta.product_name}`}
                           onClick={() => void controller.printLine(row.productId)}
                           data-testid={`ff-packaging-line-print-${lineId}`}
-                          disabled={busy}
+                          disabled={busy || disabled}
                           sx={{ whiteSpace: 'nowrap' }}
                         >
                           ШК + ЧЗ

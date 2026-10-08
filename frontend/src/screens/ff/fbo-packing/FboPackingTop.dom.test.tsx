@@ -197,6 +197,38 @@ describe('WMS-686 FBO упаковка · общая таблица (R26, R27)',
     expect(q('fbo-packing-chz-hint-p1')).toBeNull()
   })
 
+  it('K = P: счётчик нейтральный (не зелёная заливка); красный только при нехватке', async () => {
+    serverCodes = Array.from({ length: 30 }, (_, i) => code(`k${i}`))
+    await mount()
+    const full = q('fbo-packing-chz-p1')!.className
+    expect(full).not.toContain('MuiChip-filled')
+    expect(full).not.toContain('colorSuccess')
+    expect(full).not.toContain('colorError')
+    expect(q('fbo-packing-chz-none-p2')!.className).toContain('MuiChip-outlined')
+    expect(full).toContain('MuiChip-outlined')
+    await act(async () => { root.unmount() })
+    root = createRoot(host)
+    serverCodes = [code('c1')]
+    await mount()
+    expect(q('fbo-packing-chz-p1')!.className).toContain('colorError')
+  })
+
+  it('режим просмотра (после проведения): таблица видна, скан, печать и отвязка недоступны', async () => {
+    serverCodes = [code('c1'), code('c2')]
+    await mount(baseDetail({ status: 'shipped' }), 'B1', true)
+    expect(q('fbo-packing-need-p1')?.textContent).toBe('30')
+    expect(q('fbo-packing-chz-p1')?.textContent).toBe('2 из 30')
+    expect((q('fbo-packing-scan-input') as HTMLInputElement).disabled).toBe(true)
+    expect((q('ff-packaging-line-print-L1') as HTMLButtonElement).disabled).toBe(true)
+    expect((q('ff-packaging-print-sheet') as HTMLButtonElement).disabled).toBe(true)
+    expect(host.querySelector<HTMLInputElement>('[data-testid="fbo-scan-print-chz-toggle"] input')!.disabled).toBe(true)
+    // список КИЗ раскрывается для просмотра, но отвязать и перепечатать нельзя
+    await click('fbo-packing-chz-p1')
+    expect(q('fbo-packing-code-c1')).not.toBeNull()
+    expect((q('fbo-packing-code-unbind-c1') as HTMLButtonElement).disabled).toBe(true)
+    expect((q('fbo-packing-code-reprint-c1') as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('нажатие на число раскрывает вертикальный список кодов с номером приёмки, повторное скрывает', async () => {
     serverCodes = [code('c1'), code('c2')]
     await mount()
@@ -265,6 +297,44 @@ describe('WMS-686 FBO упаковка · скан (R29–R31)', () => {
     expect(mocks.printPrepared).not.toHaveBeenCalled()
     expect(posts('/marking-codes/issue')).toHaveLength(0)
     expect(q('fbo-packing-scan-error')).toBeNull()
+  })
+
+  it('потеря ответа на скан штуки: один автоматический повтор тем же телом и тем же mutation_id, штука не задваивается', async () => {
+    let attempts = 0
+    handlers.set('POST /boxes/B1/scan', () => {
+      attempts += 1
+      if (attempts === 1) return { status: 503, body: { detail: 'unavailable' } }
+      return { body: { kind: 'product', product_id: 'p1', quantity: 1, picked_qty: 20 } }
+    })
+    await mount()
+    await scan('2000000000011')
+    const requests = posts('/boxes/B1/scan')
+    expect(requests).toHaveLength(2)
+    expect(requests[0]?.body).toEqual(requests[1]?.body)
+    expect(requests[0]?.body?.mutation_id).toBe(requests[1]?.body?.mutation_id)
+    expect(q('fbo-packing-scan-error')).toBeNull()
+    expect(onChanged).toHaveBeenCalled()
+  })
+
+  it('повтор после потери ответа делается один раз; следующий скан оператора — новый mutation_id', async () => {
+    handlers.set('POST /boxes/B1/scan', () => ({ status: 503, body: { detail: 'unavailable' } }))
+    await mount()
+    await scan('2000000000011')
+    expect(posts('/boxes/B1/scan')).toHaveLength(2)
+    expect(q('fbo-packing-scan-error')).not.toBeNull()
+    await scan('2000000000011')
+    const requests = posts('/boxes/B1/scan')
+    expect(requests).toHaveLength(4)
+    expect(requests[0]?.body?.mutation_id).toBe(requests[1]?.body?.mutation_id)
+    expect(requests[2]?.body?.mutation_id).toBe(requests[3]?.body?.mutation_id)
+    expect(requests[2]?.body?.mutation_id).not.toBe(requests[0]?.body?.mutation_id)
+  })
+
+  it('отказ сервера по скану штуки не повторяется', async () => {
+    handlers.set('POST /boxes/B1/scan', () => ({ status: 422, body: { detail: 'plan_limit_exceeded' } }))
+    await mount()
+    await scan('2000000000011')
+    expect(posts('/boxes/B1/scan')).toHaveLength(1)
   })
 
   it('КИЗ сразу после ШК товара идёт с product_id этого товара; следующий КИЗ — без подсказки', async () => {
@@ -337,6 +407,27 @@ describe('WMS-686 FBO упаковка · галки печати (R25)', () => 
     const keys = mocks.printPrepared.mock.calls.map((call) => call[0].idempotencyKey)
     expect(keys.filter((key) => key.startsWith('fbo-bc:R1:'))).toHaveLength(2)
     expect(keys.filter((key) => key === 'fbo-chz:n1')).toHaveLength(2)
+  })
+
+  it('потеря ответа на выдачу ЧЗ со скана: один повтор тем же mutation_id, код выдан и напечатан один раз', async () => {
+    const issued = code('n1')
+    let attempts = 0
+    handlers.set('POST /marking-codes/issue', () => {
+      attempts += 1
+      if (attempts === 1) return { status: 503, body: { detail: 'unavailable' } }
+      serverCodes = [issued]
+      return { body: { items: [issued], shortage: 0 } }
+    })
+    await mount()
+    await act(async () => { toggle('fbo-scan-print-chz-toggle').click() })
+    await scan('2000000000011')
+    const issues = posts('/marking-codes/issue')
+    expect(issues).toHaveLength(2)
+    expect(issues[0]?.body?.mutation_id).toBe(issues[1]?.body?.mutation_id)
+    expect(issues[0]?.body).toEqual(issues[1]?.body)
+    expect(q('fbo-packing-scan-error')).toBeNull()
+    const keys = mocks.printPrepared.mock.calls.map((call) => call[0].idempotencyKey)
+    expect(keys.filter((key) => key === 'fbo-chz:n1')).toHaveLength(1)
   })
 
   it('пустой пул при скане: штука остаётся уложенной, красное сообщение, ложного успеха нет', async () => {

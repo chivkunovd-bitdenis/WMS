@@ -48,6 +48,20 @@ function errorText(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message ? cause.message : fallback
 }
 
+/**
+ * Ответ мог потеряться (обрыв связи, 5xx): запрос один раз повторяется автоматически теми же
+ * данными и тем же mutation_id, сервер вернёт результат первой попытки, а не выполнит операцию заново.
+ * Отказ сервера (4xx) не повторяется.
+ */
+async function retryOnceIfOutcomeUnknown<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call()
+  } catch (cause) {
+    if (cause instanceof FboPackingApiError && cause.outcomeUnknown) return call()
+    throw cause
+  }
+}
+
 /** R32: «Выдано N из M: в пуле не хватает КИЗ»; без нехватки сообщения нет. */
 function shortageNotice(issued: FboMarkingIssueResult): string | null {
   const shortage = issued.shortage ?? 0
@@ -201,7 +215,8 @@ export function useFboPacking(input: UseFboPackingInput) {
 
   /**
    * Выдача свободных кодов товара из пула. Кнопка «ШК + ЧЗ» хранит ключ операции до
-   * успешного ответа: после потери ответа повтор вернёт те же коды. Скан штуки берёт новый ключ каждый раз.
+   * успешного ответа: после потери ответа повтор вернёт те же коды. Скан штуки берёт новый ключ на каждую
+   * штуку, а внутри одной выдачи при потере ответа один раз повторяет запрос с тем же ключом.
    */
   const issueCodes = useCallback(
     async (productId: string, quantity: number | undefined, reuseKey = true): Promise<FboMarkingIssueResult> => {
@@ -210,7 +225,8 @@ export function useFboPacking(input: UseFboPackingInput) {
       if (reuseKey) issueMutationRef.current.set(mutationKey, mutationId)
       let issued: FboMarkingIssueResult
       try {
-        issued = await issueMarkingCodes(apiContext(), { productId, quantity, mutationId })
+        const request = () => issueMarkingCodes(apiContext(), { productId, quantity, mutationId })
+        issued = await (reuseKey ? request() : retryOnceIfOutcomeUnknown(request))
       } catch (cause) {
         // Потерянный ответ: ключ остаётся, повтор вернёт те же коды. Отказ сервера снимает ключ.
         if (!(cause instanceof FboPackingApiError && cause.outcomeUnknown)) {
@@ -268,11 +284,14 @@ export function useFboPacking(input: UseFboPackingInput) {
       const boxId = currentBoxId && current.boxes.some((box) => box.id === currentBoxId) ? currentBoxId : null
       if (!boxId) throw new Error(NO_CURRENT_BOX_MESSAGE)
       const mutationId = randomId()
-      const result = await scanProductIntoBox(apiContext(), boxId, {
-        barcode: raw,
-        productId: matchedProductId,
-        mutationId,
-      })
+      // Ответ потерялся — штука могла лечь в короб: одна автоматическая попытка тем же запросом и ключом.
+      const result = await retryOnceIfOutcomeUnknown(() =>
+        scanProductIntoBox(apiContext(), boxId, {
+          barcode: raw,
+          productId: matchedProductId,
+          mutationId,
+        }),
+      )
       if (result.kind === 'ready_box') {
         latest.current.onChanged()
         return
