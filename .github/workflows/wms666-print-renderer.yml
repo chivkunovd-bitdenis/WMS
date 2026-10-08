@@ -93,9 +93,14 @@ jobs:
           node -p "require('$RUNNER_TEMP/print-contract-tools/node_modules/playwright/package.json').version" > "$RUNNER_TEMP/release-print/playwright-version.txt"
 
       - name: Execute the existing WMS-672 / WMS-673 rendered browser and PDF suite
+        id: rendered_suite
+        continue-on-error: true
         run: bash application/scripts/ci/run_release_print.sh
 
       - name: Execute WMS-657 real Chromium and PDF layout cases C1-C6
+        id: wms657_suite
+        if: always()
+        continue-on-error: true
         working-directory: application/frontend
         env:
           WMS657_CAPTURE_DIR: ${{ runner.temp }}/release-print/657-rendered
@@ -155,6 +160,9 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/release-print/657.log"
 
       - name: Execute WMS-673 real single, group, and packing-screen DOM cases
+        id: wms673_dom_suite
+        if: always()
+        continue-on-error: true
         working-directory: application/frontend
         env:
           WMS673_EVIDENCE_DIR: ${{ runner.temp }}/release-print/673-dom
@@ -166,13 +174,23 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/release-print/673-dom.log"
 
       - name: Assert every required renderer case actually executed
+        env:
+          RENDERED_SUITE_OUTCOME: ${{ steps.rendered_suite.outcome }}
+          WMS657_SUITE_OUTCOME: ${{ steps.wms657_suite.outcome }}
+          WMS673_DOM_SUITE_OUTCOME: ${{ steps.wms673_dom_suite.outcome }}
         if: always()
         run: |
           python - <<'PY'
           import json, pathlib, sys
-          root = pathlib.Path(__import__("os").environ["RUNNER_TEMP"]) / "release-print"
+          import os
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "release-print"
           checks = [("657.json", 6), ("673-dom.json", 19), ("673.json", 5)]
           errors = []
+          for name in ("RENDERED_SUITE_OUTCOME", "WMS657_SUITE_OUTCOME", "WMS673_DOM_SUITE_OUTCOME"):
+              outcome = os.environ.get(name, "missing")
+              print(f"{name}: {outcome}")
+              if outcome != "success":
+                  errors.append(f"{name}: expected success, got {outcome}")
           for filename, expected in checks:
               path = root / filename
               if not path.exists():
