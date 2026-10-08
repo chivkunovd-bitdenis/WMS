@@ -1,11 +1,47 @@
 name: CI
 
-# Optional checks on PR only — does NOT block deploy (deploy.yml runs on push to main).
+# PR checks plus an explicit full run on workflow_dispatch. Production deployment
+# is a separate manual workflow (deploy.yml).
 on:
   pull_request:
   workflow_dispatch:
 
 jobs:
+  change-scope:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      product: ${{ steps.filter.outputs.product }}
+      e2e_specs: ${{ steps.filter.outputs.e2e_specs }}
+      backend: ${{ steps.filter.outputs.backend }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+      process_checks: ${{ steps.filter.outputs.process_checks }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            product:
+              - 'frontend/src/**'
+              - 'frontend/tests-e2e/**'
+              - 'backend/app/**'
+            e2e_specs:
+              - 'frontend/tests-e2e/**'
+            backend:
+              - 'backend/**'
+            e2e:
+              - 'backend/**'
+              - 'frontend/**'
+              - 'scripts/run_fbs_fullstack_e2e.sh'
+              - 'docker-compose.yml'
+            process_checks:
+              - 'scripts/ci/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/process-integrity.yml'
+
   tc-coverage-report:
     runs-on: ubuntu-latest
     steps:
@@ -22,46 +58,57 @@ jobs:
           path: docs/TC_AUTOMATION_COVERAGE.md
 
   pr-quality-contracts:
-    if: github.event_name == 'pull_request'
+    if: always() && github.event_name == 'pull_request'
+    needs: change-scope
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            product:
-              - 'frontend/src/**'
-              - 'frontend/tests-e2e/**'
-              - 'backend/app/api/**'
-              - 'backend/app/services/**'
-            e2e_specs:
-              - 'frontend/tests-e2e/**'
       - name: Paths filter result
         run: |
-          echo "product=${{ steps.filter.outputs.product }}"
-          echo "e2e_specs=${{ steps.filter.outputs.e2e_specs }}"
+          echo "product=${{ needs.change-scope.outputs.product }}"
+          echo "e2e_specs=${{ needs.change-scope.outputs.e2e_specs }}"
+          echo "backend=${{ needs.change-scope.outputs.backend }}"
+          echo "e2e=${{ needs.change-scope.outputs.e2e }}"
       - name: PR body contains Product gate (AGENTS.md)
+        if: needs.change-scope.result != 'success' || needs.change-scope.outputs.product == 'true'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: python3 scripts/ci/check_pr_product_gate.py
       - name: PR body contains Test coverage (AGENTS.md)
-        if: steps.filter.outputs.product == 'true'
+        if: needs.change-scope.result != 'success' || needs.change-scope.outputs.product == 'true'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: python3 scripts/ci/check_pr_test_coverage.py
       - name: Changed Playwright specs reference TC-ID
-        if: steps.filter.outputs.e2e_specs == 'true'
+        if: needs.change-scope.result != 'success' || needs.change-scope.outputs.e2e_specs == 'true'
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 scripts/ci/check_e2e_tc_mentions.py
 
+  process-checks:
+    needs: change-scope
+    if: always() && (github.event_name != 'pull_request' || needs.change-scope.result != 'success' || needs.change-scope.outputs.process_checks == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Trusted process checker unit tests
+        run: >-
+          python3 -m unittest
+          scripts.ci.tests.test_trusted_process_check
+          scripts.ci.tests.test_trusted_process_artifact
+          scripts.ci.tests.test_ci_scope
+
   backend:
+    needs: change-scope
+    if: always() && (github.event_name != 'pull_request' || needs.change-scope.result != 'success' || needs.change-scope.outputs.backend == 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -85,6 +132,8 @@ jobs:
         run: pytest
 
   e2e:
+    needs: change-scope
+    if: always() && (github.event_name != 'pull_request' || needs.change-scope.result != 'success' || needs.change-scope.outputs.e2e == 'true')
     runs-on: ubuntu-latest
     defaults:
       run:
