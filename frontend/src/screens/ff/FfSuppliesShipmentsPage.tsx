@@ -2125,7 +2125,9 @@ export function FfSuppliesShipmentsPage({
     )
     // WMS-686: «Упаковано» — сумма по коробам из данных самой отгрузки (B), а не
     // выработка задания упаковки: для FBO задание больше ни от чего не зависит.
-    const packed = unloadDetail.boxes.reduce(
+    // Формат прежний «B/N»: N — подобрано, а пока подбора нет — план (так вёл себя
+    // знаменатель задания упаковки).
+    const packedInBoxes = unloadDetail.boxes.reduce(
       (sum, box) => sum + box.lines.reduce((lineSum, ln) => lineSum + ln.quantity, 0),
       0,
     )
@@ -2133,7 +2135,7 @@ export function FfSuppliesShipmentsPage({
       planned,
       distributed,
       remaining: planned - distributed,
-      packed,
+      packed: `${packedInBoxes}/${distributed > 0 ? distributed : planned}`,
     }
   }, [unloadDetail, docModal])
 
