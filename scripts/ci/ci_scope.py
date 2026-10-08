@@ -14,10 +14,29 @@ def is_prose(path: str) -> bool:
     return path in {"README.md", "CONTRIBUTING.md"}
 
 
+def is_generated_evidence_output(path: str) -> bool:
+    """Skip only recognized WMS-666 run outputs, never runner inputs or code."""
+    prefix = "docs/evidence/WMS-666/release-1008/p2-prefix/"
+    if not path.startswith(prefix):
+        return False
+    name = path.rsplit("/", 1)[-1]
+    return (
+        name in {
+            "chrome.log", "result.json", "cdp-transport.json", "last-requests.json",
+            "requests.jsonl", "sink-receipts.jsonl", "source-identity.json",
+            "direct-jobs.sqlite3", "handler-receipt-joins.json",
+        }
+        or name.startswith(("WMS652-geometry-", "WMS652-realQrFlags-", "WMS652-selection-"))
+        or name.startswith(("supply_id-", "supply_ids-")) and name.endswith(".json")
+        or name.startswith("WMS666-whole-process-") and name.endswith((".html", ".json"))
+    )
+
+
 def full_wave(paths: list[str], event: str) -> bool:
     if event == "workflow_dispatch":
         return True
-    return not paths or any(not is_prose(path) for path in paths)
+    return not paths or any(not (is_prose(path) or is_generated_evidence_output(path))
+                            for path in paths)
 
 
 def changed_paths(root: Path, base: str, head: str) -> list[str]:

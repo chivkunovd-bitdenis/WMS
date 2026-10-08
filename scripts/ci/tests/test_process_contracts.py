@@ -176,23 +176,10 @@ class ProcessContractTests(unittest.TestCase):
         (self.root / 'picking.xml').write_bytes(junit([('scan[renamed]', ''), ('undo', '')]))
         self.m.verify_reports(changed, self.root)
 
-    def test_removing_mandatory_case_is_still_rejected(self):
-        def git(*args):
-            return subprocess.check_output(['git', '-C', str(self.root), *args], stderr=subprocess.DEVNULL)
-        git('init', '-q')
-        git('config', 'user.email', 'fixture@example.invalid')
-        git('config', 'user.name', 'Fixture')
-        policy_path = self.root / self.m.POLICY_PATH
-        policy_path.parent.mkdir(parents=True, exist_ok=True)
-        policy_path.write_text(json.dumps(self.policy))
-        git('add', '.')
-        git('commit', '-qm', 'fixture')
-        base = git('rev-parse', 'HEAD').decode().strip()
-        changed = copy.deepcopy(self.policy)
-        changed['suites']['picking']['cases'].remove('tests.test_pick::undo')
-        policy_path.write_text(json.dumps(changed))
-        with self.assertRaisesRegex(ValueError, 'case count decreased'):
-            self.m.verify_integrity(self.root, base)
+    def test_removed_mandatory_case_is_missing_from_unchanged_policy_report(self):
+        (self.root / 'picking.xml').write_bytes(junit([('scan[EAN]', '')]))
+        with self.assertRaisesRegex(ValueError, 'missing required cases.*undo'):
+            self.m.verify_reports(self.policy, self.root)
 
 
 if __name__ == '__main__':

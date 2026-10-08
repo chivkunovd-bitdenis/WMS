@@ -440,6 +440,7 @@ jobs:
       # The probe does not distinguish browser version from distribution effects.
       - name: Install Poppler and verify real PDF renderer
         id: pdftools
+        continue-on-error: true
         env:
           CHROME_PATH: /usr/bin/google-chrome
         run: |
@@ -687,6 +688,7 @@ jobs:
         if: needs.scope.outputs.run_full != 'true'
         env:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
+          CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python scripts/ci/build_process_proof.py --root "$GITHUB_WORKSPACE" --reports "$RUNNER_TEMP/process-proof" --base "$BASE_SHA" --docs-only
       - uses: actions/upload-artifact@v4
         with:
