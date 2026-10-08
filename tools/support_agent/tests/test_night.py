@@ -830,6 +830,9 @@ def _tester_repo(env: Any, tmp_path: Path) -> tuple[Any, int, Path]:
     (root / ".gitignore").write_text(".agent-runs/\n", encoding="utf-8")
     doc.write_text("# WMS-700\n\n| Класс | Тест |\n|---|---|\n", encoding="utf-8")
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "config", "--local", "user.name", "test"], cwd=root, check=True)
+    subprocess.run(["git", "config", "--local", "user.email", "test@example.test"],
+                   cwd=root, check=True)
     subprocess.run(["git", "add", "-A"], cwd=root, check=True)
     subprocess.run(["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
                     "commit", "-qm", "baseline"], cwd=root, check=True)
