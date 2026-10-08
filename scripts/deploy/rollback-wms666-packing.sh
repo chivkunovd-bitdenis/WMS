@@ -15,18 +15,20 @@ usage() {
   cat >&2 <<'EOF'
 Usage on production host:
   ./scripts/deploy/rollback-wms666-packing.sh prepare <reviewed-release-sha>
+  ./scripts/deploy/rollback-wms666-packing.sh arm <reviewed-release-sha>
   ./scripts/deploy/rollback-wms666-packing.sh seal <reviewed-release-sha>
   ./scripts/deploy/rollback-wms666-packing.sh rollback <reviewed-release-sha>
 
-Run `prepare` immediately before the reviewed deployment and `seal`
-immediately after it. Tomorrow, `rollback <reviewed-release-sha>` restores the
+Run `prepare` before building, `arm` after building and before replacing any
+container, and `seal` after deployment. `arm` records the exact new images so
+an interrupted deployment is also recoverable. Tomorrow, `rollback <reviewed-release-sha>` restores the
 API, worker, beat and web images saved by prepare. It refuses if a later
 deployment replaced any of those images.
 EOF
   exit 2
 }
 
-[[ "$MODE" == prepare || "$MODE" == seal || "$MODE" == rollback ]] || usage
+[[ "$MODE" == prepare || "$MODE" == arm || "$MODE" == seal || "$MODE" == rollback ]] || usage
 [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || usage
 [[ -d "$REPO_DIR" ]] || { echo "ERROR: repository not found: $REPO_DIR" >&2; exit 1; }
 cd "$REPO_DIR"
@@ -38,7 +40,7 @@ COMPOSE=(docker compose --env-file /opt/wms/.env -p wms_prod \
 
 current_image_id() {
   local service="$1" container_id
-  container_id="$("${COMPOSE[@]}" ps -q "$service")"
+  container_id="$("${COMPOSE[@]}" ps -a -q "$service")"
   [[ -n "$container_id" ]] || { echo "ERROR: ${service} container is absent" >&2; return 1; }
   docker inspect --format '{{.Image}}' "$container_id"
 }
@@ -100,19 +102,33 @@ case "$MODE" in
     echo "Rollback images saved for ${RELEASE_SHA}: ${APP_SERVICES[*]}"
     ;;
 
-  seal)
+  arm)
     load_state
     [[ "$status" == prepared ]] || { echo "ERROR: rollback record is not awaiting seal" >&2; exit 1; }
     [[ "$(git rev-parse HEAD)" == "$RELEASE_SHA" ]] \
       || { echo "ERROR: /opt/wms is not at reviewed release ${RELEASE_SHA}" >&2; exit 1; }
     for service in "${APP_SERVICES[@]}"; do
-      id="$(current_image_id "$service")"
+      id="$(docker image inspect --format '{{.Id}}' "wms_prod-${service}:latest")"
       [[ "$id" =~ ^sha256:[0-9a-f]{64}$ ]] \
         || { echo "ERROR: could not read the deployed ${service} image" >&2; exit 1; }
       printf -v "${service}_deployed" '%s' "$id"
     done
     [[ "$web_deployed" != "$web_before" ]] \
       || { echo "ERROR: production web is not running a newly built image" >&2; exit 1; }
+    write_state armed "$before_source_sha" "$before_index_sha"
+    echo "Exact release images recorded before replacing application containers."
+    ;;
+
+  seal)
+    load_state
+    [[ "$status" == armed ]] || { echo "ERROR: release images must be armed before deployment" >&2; exit 1; }
+    [[ "$(git rev-parse HEAD)" == "$RELEASE_SHA" ]] \
+      || { echo "ERROR: /opt/wms is not at reviewed release ${RELEASE_SHA}" >&2; exit 1; }
+    for service in "${APP_SERVICES[@]}"; do
+      deployed_var="${service}_deployed"
+      [[ "$(current_image_id "$service")" == "${!deployed_var}" ]] \
+        || { echo "ERROR: ${service} is not running the recorded release image" >&2; exit 1; }
+    done
     write_state deployed "$before_source_sha" "$before_index_sha"
     echo "Rollback is ready for ${RELEASE_SHA}; application images recorded."
     ;;
@@ -128,13 +144,19 @@ case "$MODE" in
       echo "Already rolled back to the saved application images."
       exit 0
     fi
-    [[ "$status" == deployed && "$web_deployed" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    [[ ( "$status" == deployed || "$status" == armed ) && "$web_deployed" =~ ^sha256:[0-9a-f]{64}$ ]] \
       || { echo "ERROR: release has not been sealed; refusing an unbounded rollback" >&2; exit 1; }
     for service in "${APP_SERVICES[@]}"; do
       deployed_var="${service}_deployed"
       before_var="${service}_before"
-      [[ "$(current_image_id "$service")" == "${!deployed_var}" ]] \
+      current="$(current_image_id "$service")"
+      [[ "$current" == "${!deployed_var}" || "$current" == "${!before_var}" ]] \
         || { echo "ERROR: production ${service} changed after this release; refusing to undo a later deployment" >&2; exit 1; }
+    done
+    # Validate every service before changing any tag. Both recorded images are
+    # safe: some services may already be restored after an interrupted attempt.
+    for service in "${APP_SERVICES[@]}"; do
+      before_var="${service}_before"
       docker image tag "${!before_var}" "wms_prod-${service}:latest"
     done
     "${COMPOSE[@]}" up -d --no-deps --no-build "${APP_SERVICES[@]}"
