@@ -1,0 +1,11 @@
+# M26 recovery checks after FIFO Escape fix
+
+Both frozen M26 recovery paths were rerun on exact product P and runtime `7f493b4fbff9c4fa85f0c7f6b88f096ae7df85bc` after the product change that leaves Escape cancellation under the shared scan queue. Source identity and service setup are in [`run-7f493b4-m26-runtime`](run-7f493b4-m26-runtime/README.md).
+
+The invalid-KIZ path passed: exact A selection, real validation HTTP 400 with visible error, no binding/pool/stock mutation or print, row-focused Escape blur, second Escape cancel/release, neutral scanner, and B selection without stale state. See [`run-7f493b4-m26-error-reset-next`](run-7f493b4-m26-error-reset-next/README.md).
+
+The FIFO path passed: exact A/KIZ validation HTTP 200 was held before React received it; one Escape at natural unified-input focus caused no cancellation request; releasing the unchanged response committed A's exact current KIZ, sent one QR through the real WMS Print Direct handler, packed A, and selected B on the next sticker scan without a visible error. The KIZ commit response is explicitly `wb_pending_confirmation`, so its marking remains `unknown`; this test proves local binding, print, and packing continuation only, not a Wildberries call or acknowledgement. Stock stayed unchanged. One pool code moved to `applied`; three stayed `available`. Independent QR decoding and request/receipt/PNG joins are in [`run-7f493b4-m26-fifo-escape-r2/native/native-output-join.json`](run-7f493b4-m26-fifo-escape-r2/native/native-output-join.json).
+
+The first FIFO attempt is retained at [`run-7f493b4-m26-fifo-escape`](run-7f493b4-m26-fifo-escape/). It failed only because its harness looked up `markings[].value` instead of the snapshot's `cis` field and exited when the first QR arrived, before the pack/API/UI quiescence. A read-only after-run snapshot then showed exact current A marking, packed order, and one accepted receipt. The corrected `r2` runner changes only that evidence-schema lookup and the completion wait; it keeps the same business expectations.
+
+The headless fake printer is a test sink, not a physical printer. The previously accepted site-side race between the last server validation and printer acceptance remains a residual and is not described as atomicity.

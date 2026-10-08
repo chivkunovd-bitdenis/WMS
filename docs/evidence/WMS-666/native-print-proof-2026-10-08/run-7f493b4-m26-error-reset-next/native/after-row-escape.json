@@ -1,0 +1,132 @@
+{
+  "before": {
+    "url": "http://127.0.0.1:16696/app/ff/fbs?supply_id=1dd16079-2453-4580-adc1-fdae8cc25625",
+    "alert": "Код Честного знака не распознан. Отсканируйте полный КИЗ ещё раз.",
+    "error": "Код Честного знака не распознан. Отсканируйте полный КИЗ ещё раз.",
+    "message": "",
+    "active": null,
+    "activeRow": "5cde7b49-18b8-4efc-84ef-607789feb5d0",
+    "kizInput": null,
+    "rowInput": "<input aria-invalid=\"false\" autocomplete=\"off\" id=\"_r_1l_\" placeholder=\"—\" aria-label=\"КИЗ заказа 800392\" data-testid=\"fbs-kiz-row-input\" class=\"MuiInputBase-input MuiInput-input css-1wd3yy0-MuiInputBase-input-MuiInput-input\" type=\"text\" value=\"\">",
+    "scanner": {
+      "value": "",
+      "placeholder": "Сканируйте Честный знак",
+      "disabled": false
+    },
+    "reset": {
+      "exists": false,
+      "disabled": null
+    },
+    "focus": {
+      "tag": "DIV",
+      "testid": null,
+      "id": null,
+      "placeholder": null
+    },
+    "body": "Заказы FBS\nОбновлено только что\nОбновить\nЗаказы\n0,0\nчаса\n\nсреднее время сборки: от поступления заказа до нажатия «Отгрузить»\n\nвсе продавцы\n\n0\nотгружено заказов\n0%\nуложились в 12 часов\n0%\nуложились в сутки\nНеделя\nМесяц\nСвой период\nПродавец\nВсе продавцы\nПродавец\nНовые\nВ работе\nВ доставке\nПросрочены\nЗавершённые\nОтменённые\nСеллер\nВсе селлеры\nСеллер\nМаркетплейс\nВсе\nМаркетплейс\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\n​\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\nНомер / название поставки\tСеллер\tСклад\tЗаказы / единицы\tКороба\tСтатус\tДата отгрузки\tПечать\n\n\nKIZ supply 1791427768095984000\n\nWB №WB-GI-KIZ-1791427768095984000-34fe75b4\tTape race\t\n\nWB 99\n\nWMS: Tape race\t2 / 2\t0\t\nВ работе\n\t—\t\nQR\nKIZ supply 1791427768095984000\n\nTape race · № WB WB-GI-KIZ-1791427768095984000-34fe75b4\n\nСклад WMS\n\nTape race\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 09.10.2026, 06:49:28\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\n\nKIZ product 800392 · сканируйте ЧЗ\n\nКод Честного знака не распознан. Отсканируйте полный КИЗ ещё раз.\nУпаковка и маркировка\n\nНапечатано 0 из 2 · упаковано 0 из 2 · выбрано 0\n\nВыбрать всё\nПечать всего (2)\nПроверить в WB\nДействия с поставкой\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800392\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-A\n\nЧЗ\n\nТЗ\nQR\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800393\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-B\n\nЧЗ\n\nТЗ\nQR\nДалее: Короба →"
+  },
+  "focused": {
+    "url": "http://127.0.0.1:16696/app/ff/fbs?supply_id=1dd16079-2453-4580-adc1-fdae8cc25625",
+    "alert": "Код Честного знака не распознан. Отсканируйте полный КИЗ ещё раз.",
+    "error": "Код Честного знака не распознан. Отсканируйте полный КИЗ ещё раз.",
+    "message": "",
+    "active": null,
+    "activeRow": "5cde7b49-18b8-4efc-84ef-607789feb5d0",
+    "kizInput": null,
+    "rowInput": "<input aria-invalid=\"false\" autocomplete=\"off\" id=\"_r_1l_\" placeholder=\"—\" aria-label=\"КИЗ заказа 800392\" data-testid=\"fbs-kiz-row-input\" class=\"MuiInputBase-input MuiInput-input css-1wd3yy0-MuiInputBase-input-MuiInput-input\" type=\"text\" value=\"\">",
+    "scanner": {
+      "value": "",
+      "placeholder": "Сканируйте Честный знак",
+      "disabled": false
+    },
+    "reset": {
+      "exists": false,
+      "disabled": null
+    },
+    "focus": {
+      "tag": "INPUT",
+      "testid": "fbs-kiz-row-input",
+      "id": "_r_1l_",
+      "placeholder": "—"
+    },
+    "body": "Заказы FBS\nОбновлено только что\nОбновить\nЗаказы\n0,0\nчаса\n\nсреднее время сборки: от поступления заказа до нажатия «Отгрузить»\n\nвсе продавцы\n\n0\nотгружено заказов\n0%\nуложились в 12 часов\n0%\nуложились в сутки\nНеделя\nМесяц\nСвой период\nПродавец\nВсе продавцы\nПродавец\nНовые\nВ работе\nВ доставке\nПросрочены\nЗавершённые\nОтменённые\nСеллер\nВсе селлеры\nСеллер\nМаркетплейс\nВсе\nМаркетплейс\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\n​\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\nНомер / название поставки\tСеллер\tСклад\tЗаказы / единицы\tКороба\tСтатус\tДата отгрузки\tПечать\n\n\nKIZ supply 1791427768095984000\n\nWB №WB-GI-KIZ-1791427768095984000-34fe75b4\tTape race\t\n\nWB 99\n\nWMS: Tape race\t2 / 2\t0\t\nВ работе\n\t—\t\nQR\nKIZ supply 1791427768095984000\n\nTape race · № WB WB-GI-KIZ-1791427768095984000-34fe75b4\n\nСклад WMS\n\nTape race\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 09.10.2026, 06:49:28\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\n\nKIZ product 800392 · сканируйте ЧЗ\n\nКод Честного знака не распознан. Отсканируйте полный КИЗ ещё раз.\nУпаковка и маркировка\n\nНапечатано 0 из 2 · упаковано 0 из 2 · выбрано 0\n\nВыбрать всё\nПечать всего (2)\nПроверить в WB\nДействия с поставкой\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800392\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-A\n\nЧЗ\n\nТЗ\nQR\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800393\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-B\n\nЧЗ\n\nТЗ\nQR\nДалее: Короба →"
+  },
+  "after": {
+    "url": "http://127.0.0.1:16696/app/ff/fbs?supply_id=1dd16079-2453-4580-adc1-fdae8cc25625",
+    "alert": "",
+    "error": "",
+    "message": "",
+    "active": null,
+    "activeRow": "5cde7b49-18b8-4efc-84ef-607789feb5d0",
+    "kizInput": null,
+    "rowInput": "<input aria-invalid=\"false\" autocomplete=\"off\" id=\"_r_1l_\" placeholder=\"—\" aria-label=\"КИЗ заказа 800392\" data-testid=\"fbs-kiz-row-input\" class=\"MuiInputBase-input MuiInput-input css-1wd3yy0-MuiInputBase-input-MuiInput-input\" type=\"text\" value=\"\">",
+    "scanner": {
+      "value": "",
+      "placeholder": "Сканируйте Честный знак",
+      "disabled": false
+    },
+    "reset": {
+      "exists": false,
+      "disabled": null
+    },
+    "focus": {
+      "tag": "BODY",
+      "testid": null,
+      "id": null,
+      "placeholder": null
+    },
+    "body": "Заказы FBS\nОбновлено только что\nОбновить\nЗаказы\n0,0\nчаса\n\nсреднее время сборки: от поступления заказа до нажатия «Отгрузить»\n\nвсе продавцы\n\n0\nотгружено заказов\n0%\nуложились в 12 часов\n0%\nуложились в сутки\nНеделя\nМесяц\nСвой период\nПродавец\nВсе продавцы\nПродавец\nНовые\nВ работе\nВ доставке\nПросрочены\nЗавершённые\nОтменённые\nСеллер\nВсе селлеры\nСеллер\nМаркетплейс\nВсе\nМаркетплейс\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\n​\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\nНомер / название поставки\tСеллер\tСклад\tЗаказы / единицы\tКороба\tСтатус\tДата отгрузки\tПечать\n\n\nKIZ supply 1791427768095984000\n\nWB №WB-GI-KIZ-1791427768095984000-34fe75b4\tTape race\t\n\nWB 99\n\nWMS: Tape race\t2 / 2\t0\t\nВ работе\n\t—\t\nQR\nKIZ supply 1791427768095984000\n\nTape race · № WB WB-GI-KIZ-1791427768095984000-34fe75b4\n\nСклад WMS\n\nTape race\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 09.10.2026, 06:49:28\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\n\nKIZ product 800392 · сканируйте ЧЗ\n\nУпаковка и маркировка\n\nНапечатано 0 из 2 · упаковано 0 из 2 · выбрано 0\n\nВыбрать всё\nПечать всего (2)\nПроверить в WB\nДействия с поставкой\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800392\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-A\n\nЧЗ\n\nТЗ\nQR\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800393\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-B\n\nЧЗ\n\nТЗ\nQR\nДалее: Короба →"
+  },
+  "db": {
+    "markings": [],
+    "codes": [
+      {
+        "id": "f1a73c50-7bb6-4430-b92f-3fbce114bc62",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "available"
+      },
+      {
+        "id": "4bc86d6a-72cd-4e0e-b5a0-4b20bb326be0",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "2bbafdad-0c60-4ab9-adbb-711ed977d36c",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "03536c69-a2bd-4f1c-8bbd-71cb418a5342",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      }
+    ],
+    "orders": [
+      {
+        "id": "d2e979a4-6340-4694-817d-5607a6aec178",
+        "pack_status": "pending",
+        "sticker_code": "*WMS666-FINAL-ORDER-B",
+        "sticker_barcode": "*WMS666-FINAL-ORDER-B",
+        "supply_id": "1dd16079-2453-4580-adc1-fdae8cc25625",
+        "seller_id": "cd2a8c9d-1b1e-466f-b131-5454cac80831"
+      },
+      {
+        "id": "5cde7b49-18b8-4efc-84ef-607789feb5d0",
+        "pack_status": "pending",
+        "sticker_code": "*WMS666-FINAL-ORDER-A",
+        "sticker_barcode": "*WMS666-FINAL-ORDER-A",
+        "supply_id": "1dd16079-2453-4580-adc1-fdae8cc25625",
+        "seller_id": "cd2a8c9d-1b1e-466f-b131-5454cac80831"
+      }
+    ],
+    "stock": "([(UUID('4c13b4c5-9c9f-454e-8314-11fdc696b853'), 3, 3, 0)], [(UUID('534c0f7d-001c-4ae1-b877-ba884cca4175'), 1), (UUID('60a128d2-b141-4810-93cf-9fe59deae6b8'), 1)], 0)",
+    "synthetic_provider_readbacks": []
+  },
+  "native": {
+    "drop_next_response": false,
+    "accepted_png_count": 0,
+    "product_sha": "7f493b4fbff9c4fa85f0c7f6b88f096ae7df85bc",
+    "runtime_checkout_sha": "7f493b4fbff9c4fa85f0c7f6b88f096ae7df85bc"
+  },
+  "cancel_requests": []
+}

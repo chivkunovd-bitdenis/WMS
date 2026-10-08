@@ -1,0 +1,91 @@
+{
+  "ui": {
+    "url": "http://127.0.0.1:16696/app/ff/fbs?supply_id=b2803a01-b9cb-4d65-8164-a35e478d7391",
+    "alert": "",
+    "error": "",
+    "message": "",
+    "active": null,
+    "activeRow": "a7f484fb-8ffd-492d-9a1c-4da919eec2ab",
+    "kizInput": null,
+    "rowInput": "<input aria-invalid=\"false\" autocomplete=\"off\" id=\"_r_1l_\" placeholder=\"—\" aria-label=\"КИЗ заказа 800392\" data-testid=\"fbs-kiz-row-input\" class=\"MuiInputBase-input MuiInput-input css-1wd3yy0-MuiInputBase-input-MuiInput-input\" type=\"text\" value=\"\">",
+    "scanner": {
+      "value": "",
+      "placeholder": "Сканируйте Честный знак",
+      "disabled": false
+    },
+    "reset": {
+      "exists": false,
+      "disabled": null
+    },
+    "focus": {
+      "tag": "INPUT",
+      "testid": null,
+      "id": "_r_1b_",
+      "placeholder": "Сканируйте Честный знак"
+    },
+    "body": "Заказы FBS\nОбновлено только что\nОбновить\nЗаказы\n0,0\nчаса\n\nсреднее время сборки: от поступления заказа до нажатия «Отгрузить»\n\nвсе продавцы\n\n0\nотгружено заказов\n0%\nуложились в 12 часов\n0%\nуложились в сутки\nНеделя\nМесяц\nСвой период\nПродавец\nВсе продавцы\nПродавец\nНовые\nВ работе\nВ доставке\nПросрочены\nЗавершённые\nОтменённые\nСеллер\nВсе селлеры\nСеллер\nМаркетплейс\nВсе\nМаркетплейс\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\n​\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\nНомер / название поставки\tСеллер\tСклад\tЗаказы / единицы\tКороба\tСтатус\tДата отгрузки\tПечать\n\n\nKIZ supply 1791427969096272000\n\nWB №WB-GI-KIZ-1791427969096272000-00727ea3\tTape race\t\n\nWB 99\n\nWMS: Tape race\t2 / 2\t0\t\nВ работе\n\t—\t\nQR\nKIZ supply 1791427969096272000\n\nTape race · № WB WB-GI-KIZ-1791427969096272000-00727ea3\n\nСклад WMS\n\nTape race\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 09.10.2026, 06:52:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\n\nKIZ product 800392 · сканируйте ЧЗ\n\nУпаковка и маркировка\n\nНапечатано 0 из 2 · упаковано 0 из 2 · выбрано 0\n\nВыбрать всё\nПечать всего (2)\nПроверить в WB\nДействия с поставкой\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800392\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-A\n\nЧЗ\n\nТЗ\nQR\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800393\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\n*WMS666-FINAL-ORD ER-B\n\nЧЗ\n\nТЗ\nQR\nДалее: Короба →"
+  },
+  "db": {
+    "markings": [],
+    "codes": [
+      {
+        "id": "cf236d8a-fb13-4e7e-b1a8-2c37f0827113",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "available"
+      },
+      {
+        "id": "50cf1721-306e-4bbc-a5f6-81e59f43e8ba",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "53c1e95f-24ab-45c1-8993-935cdcdde26e",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "5829831a-8280-4c15-9a28-13a8bac55d06",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      }
+    ],
+    "orders": [
+      {
+        "id": "638c2110-1db1-4fc9-a918-de862a40f75f",
+        "pack_status": "pending",
+        "sticker_code": "*WMS666-FINAL-ORDER-B",
+        "sticker_barcode": "*WMS666-FINAL-ORDER-B",
+        "supply_id": "b2803a01-b9cb-4d65-8164-a35e478d7391",
+        "seller_id": "8576a8fe-e7dd-426a-8089-2a73e9b522b6"
+      },
+      {
+        "id": "a7f484fb-8ffd-492d-9a1c-4da919eec2ab",
+        "pack_status": "pending",
+        "sticker_code": "*WMS666-FINAL-ORDER-A",
+        "sticker_barcode": "*WMS666-FINAL-ORDER-A",
+        "supply_id": "b2803a01-b9cb-4d65-8164-a35e478d7391",
+        "seller_id": "8576a8fe-e7dd-426a-8089-2a73e9b522b6"
+      }
+    ],
+    "stock": "([(UUID('f1dce6be-1a37-47e2-979a-b62e35c002d9'), 3, 3, 0)], [(UUID('7919399b-c816-44f9-a96f-6bdbcf5c1b03'), 1), (UUID('c4cccf1d-59ef-4aa8-880f-9f4b4b99d33d'), 1)], 0)",
+    "synthetic_provider_readbacks": []
+  },
+  "native": {
+    "drop_next_response": false,
+    "accepted_png_count": 1,
+    "product_sha": "7f493b4fbff9c4fa85f0c7f6b88f096ae7df85bc",
+    "runtime_checkout_sha": "7f493b4fbff9c4fa85f0c7f6b88f096ae7df85bc"
+  },
+  "held": {
+    "status": 200,
+    "request": {
+      "order_id": "a7f484fb-8ffd-492d-9a1c-4da919eec2ab",
+      "value": "010460043993125321KIZTAPE0000000000"
+    },
+    "response": {
+      "ok": true,
+      "hints": []
+    }
+  },
+  "focus_was_changed_by_runner": false
+}

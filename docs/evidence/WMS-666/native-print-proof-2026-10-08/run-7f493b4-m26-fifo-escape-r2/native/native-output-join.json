@@ -1,0 +1,41 @@
+{
+  "product_sha": "7f493b4fbff9c4fa85f0c7f6b88f096ae7df85bc",
+  "runtime_checkout_sha": "7f493b4fbff9c4fa85f0c7f6b88f096ae7df85bc",
+  "provenance": "Seed helper creates QR from persisted sticker barcode text and independently decodes the source PNG before calling the real API seed route; API stores that barcode as sticker_barcode; React fetches the saved asset; actual Handler receives imageDataUrl; injected submit sink stores the bytes and its receipt.",
+  "target": {
+    "supply_id": "b2803a01-b9cb-4d65-8164-a35e478d7391",
+    "order_id": "a7f484fb-8ffd-492d-9a1c-4da919eec2ab",
+    "sticker_code": "*WMS666-FINAL-ORDER-A",
+    "sticker_barcode": "*WMS666-FINAL-ORDER-A",
+    "scan_id": "0e6f1db3-1088-42bd-9633-b051039cceb1"
+  },
+  "source_fixture": {
+    "path": "fixtures/order-sticker-1.png",
+    "bytes": 1069,
+    "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+    "decoded": "*WMS666-FINAL-ORDER-A"
+  },
+  "native_request": {
+    "path": "/print",
+    "received_at_utc": "2026-10-08T02:52:57.971349+00:00",
+    "origin": "http://127.0.0.1:16696",
+    "idempotency_key": "0e6f1db3-1088-42bd-9633-b051039cceb1",
+    "png_bytes": 1069,
+    "png_sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+    "decoded": "*WMS666-FINAL-ORDER-A"
+  },
+  "submit_receipt": {
+    "accepted_at_utc": "2026-10-08T02:52:57.974180+00:00",
+    "receipt": "emulator-0002-976f95677ac0",
+    "job_key": "0e6f1db3-1088-42bd-9633-b051039cceb1",
+    "png": "sink/job-0002-976f95677ac0.png",
+    "png_bytes": 1069,
+    "png_sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+    "decoded": "*WMS666-FINAL-ORDER-A"
+  },
+  "assertions": {
+    "same_qr_value": true,
+    "byte_identical_source_request_sink": true,
+    "same_scan_key_request_receipt": true
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "markings": [],
+  "codes": [
+    {
+      "id": "cf236d8a-fb13-4e7e-b1a8-2c37f0827113",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "available"
+    },
+    {
+      "id": "50cf1721-306e-4bbc-a5f6-81e59f43e8ba",
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "status": "available"
+    },
+    {
+      "id": "53c1e95f-24ab-45c1-8993-935cdcdde26e",
+      "cis": "010460043993125321KIZTAPE0000000002",
+      "status": "available"
+    },
+    {
+      "id": "5829831a-8280-4c15-9a28-13a8bac55d06",
+      "cis": "010460043993125321KIZTAPE0000000003",
+      "status": "available"
+    }
+  ],
+  "orders": [
+    {
+      "id": "a7f484fb-8ffd-492d-9a1c-4da919eec2ab",
+      "pack_status": "pending",
+      "sticker_code": "*WMS666-FINAL-ORDER-A",
+      "sticker_barcode": "*WMS666-FINAL-ORDER-A",
+      "supply_id": "b2803a01-b9cb-4d65-8164-a35e478d7391",
+      "seller_id": "8576a8fe-e7dd-426a-8089-2a73e9b522b6"
+    },
+    {
+      "id": "638c2110-1db1-4fc9-a918-de862a40f75f",
+      "pack_status": "pending",
+      "sticker_code": "*WMS666-FINAL-ORDER-B",
+      "sticker_barcode": "*WMS666-FINAL-ORDER-B",
+      "supply_id": "b2803a01-b9cb-4d65-8164-a35e478d7391",
+      "seller_id": "8576a8fe-e7dd-426a-8089-2a73e9b522b6"
+    }
+  ],
+  "stock": "([(UUID('f1dce6be-1a37-47e2-979a-b62e35c002d9'), 3, 3, 0)], [(UUID('7919399b-c816-44f9-a96f-6bdbcf5c1b03'), 1), (UUID('c4cccf1d-59ef-4aa8-880f-9f4b4b99d33d'), 1)], 0)",
+  "synthetic_provider_readbacks": []
+}

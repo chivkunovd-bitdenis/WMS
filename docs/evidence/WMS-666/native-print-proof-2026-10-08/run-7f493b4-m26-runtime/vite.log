@@ -1,0 +1,82 @@
+
+  VITE v8.0.8  ready in 206 ms
+
+  ➜  Local:   http://127.0.0.1:16696/
+6:49:33 AM [vite] (client) [console.error] React does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+6:49:33 AM [vite] (client) [console.error] Received `false` for a non-boolean attribute `indicator`.
+
+If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+
+If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+6:49:33 AM [vite] (client) [console.error] React does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+6:49:33 AM [vite] (client) [console.error] React does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+6:49:33 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:49:33 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:49:33 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:49:33 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:49:33 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:49:34 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:49:34 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:49:45 AM [vite] (client) [console.error] React does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+6:49:45 AM [vite] (client) [console.error] Received `false` for a non-boolean attribute `indicator`.
+
+If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+
+If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+6:49:45 AM [vite] (client) [console.error] React does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+6:49:45 AM [vite] (client) [console.error] React does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+6:49:45 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:49:45 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:49:45 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:49:45 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:49:45 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:52:55 AM [vite] (client) [console.error] React does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+6:52:55 AM [vite] (client) [console.error] Received `false` for a non-boolean attribute `indicator`.
+
+If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+
+If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+6:52:55 AM [vite] (client) [console.error] React does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+6:52:55 AM [vite] (client) [console.error] React does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+6:52:55 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:52:55 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:52:55 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:52:55 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:52:55 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.
+6:52:55 AM [vite] (client) [console.error] MUI: The `value` provided to the Tabs component is invalid.
+None of the Tabs' children match with "packing".
+You can provide one of the following values: composition, 1, 2, 3.

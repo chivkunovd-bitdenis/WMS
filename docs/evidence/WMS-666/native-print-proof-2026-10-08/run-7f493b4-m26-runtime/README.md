@@ -1,0 +1,7 @@
+# Runtime identity for the M26 P 7f493b4 runs
+
+The runtime checkout was `/Users/deniscivkunov/Projects/WMS/.worktrees/wms666-native-final-runtime`, detached at exact product P `7f493b4fbff9c4fa85f0c7f6b88f096ae7df85bc`. The handler's startup guard independently checked that SHA and that the complete product paths `backend/app`, `frontend/src`, and `tools/print-agent` matched it. Per-file identities for the native printing and binding path are recorded in `native/source-identity.json`.
+
+The isolated synthetic API used `WMS_TEST_DATABASE_URL=postgresql+psycopg_async://deniscivkunov@127.0.0.1:5432/wms_test_666_native_print_final_0c44`, served on `127.0.0.1:16692`. It imported product modules and pytest fixtures from the runtime checkout using `PYTHONPATH=<runtime>/backend/tests:<runtime>/backend`; `wms666_native_print_server.py` enforces that exact database name before importing the application. Vite served from `<runtime>/frontend` on `127.0.0.1:16696`. The handler loaded `wms_print_direct.py` from `<runtime>/tools/print-agent`, served on `127.0.0.1:17843`, and used the test adapter's permitted UI origin `http://127.0.0.1:16696`.
+
+The startup output and source identities are retained in `api.log`, `vite.log`, `handler.log`, and `native/source-identity.json`. Browser runs used one temporary headless Chrome profile per case; after each process exited, its generated profile was removed while keeping screenshots, request logs, database snapshots, and receipts.
