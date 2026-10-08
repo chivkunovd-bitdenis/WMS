@@ -1,0 +1,1 @@
+{"at":"2026-10-07T22:56:54.740Z","method":"POST","path":"/print","idempotency_key":"30d54b40-b6ee-4c20-85f1-3e3548b3a659","width_mm":60,"height_mm":80,"png_bytes":1088,"png_sha256":"bbc5a20f2bdcbb9efddcba8f5d1dce46a3d5c5e80ecb5d3e078d6e421d144b9f","png":"native-inputs/native-input-01.png","simulated_before_handler_acceptance":true}

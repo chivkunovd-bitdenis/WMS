@@ -1,0 +1,120 @@
+{
+  "product_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+  "setup": "actual synthetic API commit through local no-external-HTTP ASGI fixture, WB sender stub from test fixture",
+  "seed": {
+    "supply_id": "3cc7ff72-1f57-4e70-9d15-a9c1ff4b8a0c",
+    "order_ids": [
+      "46ba410d-cccb-4357-a61c-65c1efa1b0bb",
+      "3af3f729-d770-44f1-b1d4-6b079d46f43b"
+    ]
+  },
+  "code": {
+    "id": "99302780-78ec-47b1-a6e1-717c22357ff9",
+    "cis": "010460043993125321KIZTAPE0000000000",
+    "status": "available"
+  },
+  "request": {
+    "order_id": "46ba410d-cccb-4357-a61c-65c1efa1b0bb",
+    "value": "010460043993125321KIZTAPE0000000000",
+    "confirmed": true,
+    "scan_no_wb_wait": false
+  },
+  "status": 200,
+  "body": [
+    {
+      "order_id": "46ba410d-cccb-4357-a61c-65c1efa1b0bb",
+      "status": "ok",
+      "code": "ok",
+      "message": "ok",
+      "newly_bound": true,
+      "bound_kiz": "010460043993125321KIZTAPE0000000000"
+    }
+  ],
+  "before": {
+    "markings": [],
+    "codes": [
+      {
+        "id": "99302780-78ec-47b1-a6e1-717c22357ff9",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "available"
+      },
+      {
+        "id": "4865ada3-880c-40a9-a383-6dca68c1213f",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "5fe94fa8-6fc8-42f3-b2c5-e92f22b5fad7",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "e9044970-e3ec-45f4-8bd5-17c0d8a15a44",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      }
+    ],
+    "orders": [
+      {
+        "id": "46ba410d-cccb-4357-a61c-65c1efa1b0bb",
+        "pack_status": "pending"
+      },
+      {
+        "id": "3af3f729-d770-44f1-b1d4-6b079d46f43b",
+        "pack_status": "pending"
+      }
+    ],
+    "stock": "([(UUID('7820996f-d94f-4a30-91d2-eaf5872c9fa5'), 3, 3, 0)], [(UUID('1b428ed3-aafb-4ee1-8af5-e93132bf99d7'), 1), (UUID('7f47ce81-e8da-475f-8ff3-1519f489cecb'), 1)], 0)"
+  },
+  "after": {
+    "markings": [
+      {
+        "id": "a42e22d1-e8c6-4042-b5b0-c023f79b56bb",
+        "order_id": "46ba410d-cccb-4357-a61c-65c1efa1b0bb",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "code_id": "99302780-78ec-47b1-a6e1-717c22357ff9",
+        "status": "accepted"
+      }
+    ],
+    "codes": [
+      {
+        "id": "4865ada3-880c-40a9-a383-6dca68c1213f",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "5fe94fa8-6fc8-42f3-b2c5-e92f22b5fad7",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "e9044970-e3ec-45f4-8bd5-17c0d8a15a44",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      },
+      {
+        "id": "99302780-78ec-47b1-a6e1-717c22357ff9",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "applied"
+      }
+    ],
+    "orders": [
+      {
+        "id": "3af3f729-d770-44f1-b1d4-6b079d46f43b",
+        "pack_status": "pending"
+      },
+      {
+        "id": "46ba410d-cccb-4357-a61c-65c1efa1b0bb",
+        "pack_status": "pending"
+      }
+    ],
+    "stock": "([(UUID('7820996f-d94f-4a30-91d2-eaf5872c9fa5'), 3, 3, 0)], [(UUID('1b428ed3-aafb-4ee1-8af5-e93132bf99d7'), 1), (UUID('7f47ce81-e8da-475f-8ff3-1519f489cecb'), 1)], 0)"
+  },
+  "current": {
+    "id": "a42e22d1-e8c6-4042-b5b0-c023f79b56bb",
+    "order_id": "46ba410d-cccb-4357-a61c-65c1efa1b0bb",
+    "cis": "010460043993125321KIZTAPE0000000000",
+    "code_id": "99302780-78ec-47b1-a6e1-717c22357ff9",
+    "status": "accepted"
+  }
+}

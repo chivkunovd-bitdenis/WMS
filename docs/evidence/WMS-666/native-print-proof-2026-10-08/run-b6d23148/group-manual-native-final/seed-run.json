@@ -1,0 +1,27 @@
+{
+  "backend": "http://127.0.0.1:16709",
+  "isolated_test_database": "wms_test_666_browser_proof",
+  "options": {
+    "codes": 4,
+    "multi": true,
+    "bare": true
+  },
+  "idle_before_seed": {
+    "active": 0
+  },
+  "tuple": {
+    "supply_id": "8d319572-1f46-4e86-8f0e-3f78fc407183",
+    "supply_ids": [
+      "8d319572-1f46-4e86-8f0e-3f78fc407183",
+      "9cba62af-1f0d-4af0-b554-e34a4c6c6487"
+    ],
+    "order_ids": [
+      "3b9239eb-486d-4a1d-8367-9da76510413c",
+      "b36809e9-64dd-4ed1-841f-2ce15caf418e"
+    ],
+    "barcode": "460666AUDIT",
+    "task_id": "6caa5eec-017c-4cff-9636-9fdbfb8c7ead",
+    "line_id": "ae4c3643-ca60-4d70-a49a-2be40e503c7a"
+  },
+  "secret_header_fields_removed": true
+}

@@ -1,0 +1,36 @@
+{
+  "markings": [],
+  "codes": [
+    {
+      "id": "5870e6ad-7a16-49fd-bb9f-e37b5ae2738b",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "available"
+    },
+    {
+      "id": "8c613d14-ab14-412c-935b-f215625af05e",
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "status": "available"
+    },
+    {
+      "id": "5de52b5f-0247-45e5-9b4e-0c81d9eb08e0",
+      "cis": "010460043993125321KIZTAPE0000000002",
+      "status": "available"
+    },
+    {
+      "id": "1d4d250b-cd79-474b-8e5c-ccb3455a3063",
+      "cis": "010460043993125321KIZTAPE0000000003",
+      "status": "available"
+    }
+  ],
+  "orders": [
+    {
+      "id": "f8ce269d-3c2a-4785-aa48-9067490cc7bc",
+      "pack_status": "pending"
+    },
+    {
+      "id": "de099ba6-9f80-4b6b-ac7e-d818df38bf64",
+      "pack_status": "pending"
+    }
+  ],
+  "stock": "([(UUID('3ea411d5-10eb-4365-88ed-cac7d343c460'), 3, 3, 0)], [(UUID('c47ddc56-481c-42af-b09b-1ff535dbf769'), 1), (UUID('e373bb75-9130-46b4-a3f7-e59efc2b55a2'), 1)], 0)"
+}

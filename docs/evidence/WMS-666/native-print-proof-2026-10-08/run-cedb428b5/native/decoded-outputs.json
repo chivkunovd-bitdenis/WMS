@@ -1,0 +1,105 @@
+{
+  "product_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+  "runtime_checkout_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+  "physicalPaper": "NOT_TESTED",
+  "sink": [
+    {
+      "accepted_at_utc": "2026-10-07T23:44:58.425947+00:00",
+      "bytes": 1069,
+      "job_key": "389f26de-aeb4-40cb-97a3-a9a526ef40b1",
+      "png": "sink/job-0001-976f95677ac0.png",
+      "receipt": "emulator-0001-976f95677ac0",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "width": 150,
+      "height": 150,
+      "hasTransparent": false,
+      "qrText": "*WMS666-FINAL-ORDER-A",
+      "cis": null,
+      "whiteCompositedCis": null,
+      "input": {
+        "key": "389f26de-aeb4-40cb-97a3-a9a526ef40b1",
+        "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+        "bytes": 1069,
+        "qrText": "*WMS666-FINAL-ORDER-A",
+        "cis": null,
+        "widthMm": 60,
+        "heightMm": 80
+      }
+    },
+    {
+      "accepted_at_utc": "2026-10-07T23:44:58.552674+00:00",
+      "bytes": 40498,
+      "job_key": "389f26de-aeb4-40cb-97a3-a9a526ef40b1:chz",
+      "png": "sink/job-0002-f2f4c4632159.png",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "width": 720,
+      "height": 960,
+      "hasTransparent": false,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "whiteCompositedCis": "010460043993125321KIZTAPE0000000000",
+      "input": {
+        "key": "389f26de-aeb4-40cb-97a3-a9a526ef40b1:chz:c2",
+        "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+        "bytes": 40498,
+        "qrText": null,
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "widthMm": 60,
+        "heightMm": 80
+      }
+    },
+    {
+      "accepted_at_utc": "2026-10-07T23:44:58.572992+00:00",
+      "bytes": 40498,
+      "job_key": "389f26de-aeb4-40cb-97a3-a9a526ef40b1:chz:c2",
+      "png": "sink/job-0003-f2f4c4632159.png",
+      "receipt": "emulator-0003-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "width": 720,
+      "height": 960,
+      "hasTransparent": false,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "whiteCompositedCis": "010460043993125321KIZTAPE0000000000",
+      "input": {
+        "key": "389f26de-aeb4-40cb-97a3-a9a526ef40b1:chz:c2",
+        "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+        "bytes": 40498,
+        "qrText": null,
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "widthMm": 60,
+        "heightMm": 80
+      }
+    }
+  ],
+  "inputChecks": [
+    {
+      "key": "389f26de-aeb4-40cb-97a3-a9a526ef40b1",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "bytes": 1069,
+      "qrText": "*WMS666-FINAL-ORDER-A",
+      "cis": null,
+      "widthMm": 60,
+      "heightMm": 80
+    },
+    {
+      "key": "389f26de-aeb4-40cb-97a3-a9a526ef40b1:chz",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "bytes": 40498,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "widthMm": 60,
+      "heightMm": 80
+    },
+    {
+      "key": "389f26de-aeb4-40cb-97a3-a9a526ef40b1:chz:c2",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "bytes": 40498,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "widthMm": 60,
+      "heightMm": 80
+    }
+  ]
+}

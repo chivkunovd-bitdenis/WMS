@@ -1,0 +1,73 @@
+{
+  "product_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+  "runtime_checkout_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+  "physicalPaper": "NOT_TESTED",
+  "sink": [
+    {
+      "accepted_at_utc": "2026-10-07T23:54:38.639591+00:00",
+      "bytes": 40498,
+      "job_key": "54e25030-56c5-485f-9aa6-78602a983556:chz",
+      "png": "sink/job-0001-f2f4c4632159.png",
+      "receipt": "emulator-0001-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "width": 720,
+      "height": 960,
+      "hasTransparent": false,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "whiteCompositedCis": "010460043993125321KIZTAPE0000000000",
+      "input": {
+        "key": "54e25030-56c5-485f-9aa6-78602a983556:chz:c2",
+        "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+        "bytes": 40498,
+        "qrText": null,
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "widthMm": 60,
+        "heightMm": 80
+      }
+    },
+    {
+      "accepted_at_utc": "2026-10-07T23:54:38.664020+00:00",
+      "bytes": 40498,
+      "job_key": "54e25030-56c5-485f-9aa6-78602a983556:chz:c2",
+      "png": "sink/job-0002-f2f4c4632159.png",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "width": 720,
+      "height": 960,
+      "hasTransparent": false,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "whiteCompositedCis": "010460043993125321KIZTAPE0000000000",
+      "input": {
+        "key": "54e25030-56c5-485f-9aa6-78602a983556:chz:c2",
+        "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+        "bytes": 40498,
+        "qrText": null,
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "widthMm": 60,
+        "heightMm": 80
+      }
+    }
+  ],
+  "inputChecks": [
+    {
+      "key": "54e25030-56c5-485f-9aa6-78602a983556:chz",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "bytes": 40498,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "widthMm": 60,
+      "heightMm": 80
+    },
+    {
+      "key": "54e25030-56c5-485f-9aa6-78602a983556:chz:c2",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "bytes": 40498,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "widthMm": 60,
+      "heightMm": 80
+    }
+  ]
+}

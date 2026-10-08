@@ -1,0 +1,17 @@
+[
+  {
+    "label": "physical-output-QR-A",
+    "value": "*WMS666-FINAL-ORDER-A",
+    "at": "2026-10-08T01:52:45.589Z"
+  },
+  {
+    "label": "physical-rescan-output-QR-A-after-idle",
+    "value": "*WMS666-FINAL-ORDER-A",
+    "at": "2026-10-08T01:52:46.863Z"
+  },
+  {
+    "label": "physical-product-barcode-B",
+    "value": "460666AUDIT",
+    "at": "2026-10-08T01:52:48.728Z"
+  }
+]

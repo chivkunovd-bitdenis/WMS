@@ -81,13 +81,13 @@ def build_handler(checkout: Path, output: Path, expected_runtime: str, product_s
 
     class EmulatedPrinter(native.Printer):
         def __init__(self):
-            self.current_key: str | None = None
+            self.request_context = threading.local()
             self.submit_lock = threading.Lock()
             self.accepted = 0
             super().__init__(ledger_dir, submit=self.capture)
 
         def print(self, body):
-            self.current_key = body.get("idempotencyKey")
+            self.request_context.job_key = body.get("idempotencyKey")
             return super().print(body)
 
         def capture(self, png: bytes) -> str:
@@ -103,7 +103,7 @@ def build_handler(checkout: Path, output: Path, expected_runtime: str, product_s
                 (sink_dir / name).write_bytes(png)
                 write_json_line(output / "sink-receipts.jsonl", {
                     "accepted_at_utc": datetime.now(UTC).isoformat(),
-                    "job_key": self.current_key,
+                    "job_key": getattr(self.request_context, "job_key", None),
                     "sha256": digest,
                     "png": f"sink/{name}",
                     "bytes": len(png),

@@ -1,0 +1,33 @@
+{
+  "product_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+  "supply_id": "31b35e66-e4d7-472e-af2e-f03a8d09e1ff",
+  "order_ids": [
+    "5e887ad9-d57d-45cd-9b44-9489c02e0cf9",
+    "0a0ce1ce-dd22-4b34-8914-46db0b1283ac"
+  ],
+  "supply_ids": [
+    "31b35e66-e4d7-472e-af2e-f03a8d09e1ff"
+  ],
+  "task_id": "2fdb3fb9-644e-4553-8810-db0046988802",
+  "line_id": "22e860e8-c652-48ba-a19f-2da4adc1e915",
+  "barcode": "460666AUDIT",
+  "order_sticker_barcodes": [
+    "*AUDIT0",
+    "*AUDIT1"
+  ],
+  "synthetic_order_stickers": [
+    {
+      "text": "*WMS666-FINAL-ORDER-A",
+      "file": "fixtures/order-sticker-1.png",
+      "bytes": 1069,
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a"
+    },
+    {
+      "text": "*WMS666-FINAL-ORDER-B",
+      "file": "fixtures/order-sticker-2.png",
+      "bytes": 1072,
+      "sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07"
+    }
+  ],
+  "auth_headers_persisted": false
+}

@@ -1,0 +1,334 @@
+[
+  {
+    "method": "GET",
+    "path": "/proxy/fbs/assembly-time?from=2026-09-30T22%3A58%3A13.146Z&to=2026-10-07T22%3A58%3A13.146Z",
+    "status": 200,
+    "bytes": 80
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=new",
+    "status": 200,
+    "bytes": 115
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-assembly-tasks",
+    "status": 200,
+    "bytes": 12
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=active",
+    "status": 200,
+    "bytes": 115
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/worklist?limit=500&status_group=active",
+    "status": 200,
+    "bytes": 623
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/workspace",
+    "status": 200,
+    "bytes": 4815
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e",
+    "status": 200,
+    "bytes": 1265
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-orders/kiz/lookup?supply_id=a654bc22-e015-4964-9f23-5b4697a93150&sticker=460666AUDIT",
+    "status": 200,
+    "bytes": 361
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print",
+    "status": 200,
+    "bytes": 1413,
+    "request": {
+      "barcode": "460666AUDIT",
+      "idempotency_key": "4dad0051-36e3-4ed3-a54e-f0f0f8dcce45",
+      "print_qr": true,
+      "print_chz": true,
+      "reprint_chz": false,
+      "await_honest_sign": true
+    },
+    "response": {
+      "scan_id": "37269375-1d11-44cc-a894-5bf92b572b24",
+      "order_id": "6ad37a5f-5fdd-4727-910e-08e82e06d036",
+      "wb_order_id": 800392,
+      "replayed": false,
+      "binding_target": {
+        "order_id": "6ad37a5f-5fdd-4727-910e-08e82e06d036",
+        "wb_order_id": 800392,
+        "product": {
+          "name": "KIZ product 800392",
+          "image_url": null,
+          "barcode": "460666AUDIT",
+          "seller_article": "SKU-KIZ-1791413877144526000-800392"
+        },
+        "current_kiz": null,
+        "needs_confirmation": false,
+        "can_bind": true,
+        "block_reason": null,
+        "marketplace": "wb",
+        "external_order_id": null,
+        "requires_honest_sign": true
+      },
+      "reprint_recovery": {
+        "status": "not_attempted"
+      },
+      "requires_honest_sign": true,
+      "qr_asset": {
+        "id": "47f6bed7-5f79-44d4-8ddc-f815ec896681",
+        "kind": "order_sticker",
+        "status": "ready",
+        "content_type": "image/png",
+        "width_mm": 58,
+        "height_mm": 40,
+        "preview_url": "/operations/fbs-print-assets/47f6bed7-5f79-44d4-8ddc-f815ec896681/content",
+        "download_url": "/operations/fbs-print-assets/47f6bed7-5f79-44d4-8ddc-f815ec896681/content",
+        "checksum": "sha256:bbc5a20f2bdcbb9efddcba8f5d1dce46a3d5c5e80ecb5d3e078d6e421d144b9f",
+        "applied_at": null,
+        "error": null
+      },
+      "codes": [
+        "010460043993125321KIZTAPE0000000000"
+      ],
+      "printed_codes": [
+        {
+          "marking_id": "6266b792-8d4f-41a7-ab7a-424f13680415",
+          "supply_id": "a654bc22-e015-4964-9f23-5b4697a93150",
+          "id": "e5d3a82c-75bf-43f2-bb32-33b8387753c4",
+          "cis_code": "010460043993125321KIZTAPE0000000000",
+          "has_label_artifact": false,
+          "order_product_id": null
+        }
+      ],
+      "shortage": 0,
+      "order_errors": [],
+      "chz_issued_by_scan": true
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-print-assets/47f6bed7-5f79-44d4-8ddc-f815ec896681/content",
+    "status": 200,
+    "bytes": 1088
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/37269375-1d11-44cc-a894-5bf92b572b24/print-claim",
+    "status": 200,
+    "bytes": 32
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/37269375-1d11-44cc-a894-5bf92b572b24/print-started",
+    "status": 200,
+    "bytes": 32
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/37269375-1d11-44cc-a894-5bf92b572b24/print-claim",
+    "status": 200,
+    "bytes": 32
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+    "status": 204,
+    "bytes": 0
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+    "status": 204,
+    "bytes": 0
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/37269375-1d11-44cc-a894-5bf92b572b24/print-started",
+    "status": 200,
+    "bytes": 32
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e",
+    "status": 200,
+    "bytes": 1265
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e/lines/2119f947-4510-46ac-b84f-118757873230/pack",
+    "status": 200,
+    "bytes": 2053
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e",
+    "status": 200,
+    "bytes": 1851
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/workspace",
+    "status": 200,
+    "bytes": 5003
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/workspace",
+    "status": 200,
+    "bytes": 5003
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print",
+    "status": 200,
+    "bytes": 1413,
+    "request": {
+      "barcode": "460666AUDIT",
+      "idempotency_key": "7828bd27-25e0-4074-be14-13aa5bac1d2f",
+      "print_qr": true,
+      "print_chz": true,
+      "reprint_chz": false,
+      "await_honest_sign": true
+    },
+    "response": {
+      "scan_id": "251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8",
+      "order_id": "52ee7ca5-480a-4570-b035-f609ce0502e6",
+      "wb_order_id": 800393,
+      "replayed": false,
+      "binding_target": {
+        "order_id": "52ee7ca5-480a-4570-b035-f609ce0502e6",
+        "wb_order_id": 800393,
+        "product": {
+          "name": "KIZ product 800392",
+          "image_url": null,
+          "barcode": "460666AUDIT",
+          "seller_article": "SKU-KIZ-1791413877144526000-800392"
+        },
+        "current_kiz": null,
+        "needs_confirmation": false,
+        "can_bind": true,
+        "block_reason": null,
+        "marketplace": "wb",
+        "external_order_id": null,
+        "requires_honest_sign": true
+      },
+      "reprint_recovery": {
+        "status": "not_attempted"
+      },
+      "requires_honest_sign": true,
+      "qr_asset": {
+        "id": "b98006cc-238b-464f-8188-68e6b6f070c4",
+        "kind": "order_sticker",
+        "status": "ready",
+        "content_type": "image/png",
+        "width_mm": 58,
+        "height_mm": 40,
+        "preview_url": "/operations/fbs-print-assets/b98006cc-238b-464f-8188-68e6b6f070c4/content",
+        "download_url": "/operations/fbs-print-assets/b98006cc-238b-464f-8188-68e6b6f070c4/content",
+        "checksum": "sha256:b21ddbe745ad7efb95dae99ff58aa9d685489e05c20558ea81e07f77d1181565",
+        "applied_at": null,
+        "error": null
+      },
+      "codes": [
+        "010460043993125321KIZTAPE0000000001"
+      ],
+      "printed_codes": [
+        {
+          "marking_id": "2204edad-ba0a-4f6b-b1f6-5441cf8031ea",
+          "supply_id": "a654bc22-e015-4964-9f23-5b4697a93150",
+          "id": "45966126-fa7d-4f4e-8ac5-74b953da50fd",
+          "cis_code": "010460043993125321KIZTAPE0000000001",
+          "has_label_artifact": false,
+          "order_product_id": null
+        }
+      ],
+      "shortage": 0,
+      "order_errors": [],
+      "chz_issued_by_scan": true
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-print-assets/b98006cc-238b-464f-8188-68e6b6f070c4/content",
+    "status": 200,
+    "bytes": 1058
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8/print-claim",
+    "status": 200,
+    "bytes": 32
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8/print-started",
+    "status": 200,
+    "bytes": 32
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8/print-claim",
+    "status": 200,
+    "bytes": 32
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+    "status": 204,
+    "bytes": 0
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+    "status": 204,
+    "bytes": 0
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8/print-started",
+    "status": 200,
+    "bytes": 32
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e",
+    "status": 200,
+    "bytes": 1851
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e/lines/2119f947-4510-46ac-b84f-118757873230/pack",
+    "status": 200,
+    "bytes": 2638
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e",
+    "status": 200,
+    "bytes": 2436
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/workspace",
+    "status": 200,
+    "bytes": 5191
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/workspace",
+    "status": 200,
+    "bytes": 5191
+  }
+]

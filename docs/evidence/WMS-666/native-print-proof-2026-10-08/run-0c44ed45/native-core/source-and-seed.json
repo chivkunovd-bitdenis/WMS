@@ -1,0 +1,13 @@
+{
+  "product_sha": "0c44ed45bf6b687899750ada2af2ac81d1e6b03e",
+  "runtime_checkout_sha": "0c44ed45bf6b687899750ada2af2ac81d1e6b03e",
+  "seed": {
+    "supply_id": "ea526efc-1b10-47c9-8dc1-d870066df9b2",
+    "order_ids": [
+      "5f755453-e727-4115-8d68-a7ce67609a3d",
+      "85c86840-9e1e-4ec5-98a4-15897a1e883e"
+    ],
+    "task_id": "0e61bc80-245a-40d3-a29d-c59fe04263c1",
+    "barcode": "460666AUDIT"
+  }
+}

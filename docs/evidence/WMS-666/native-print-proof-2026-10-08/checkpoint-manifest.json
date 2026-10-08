@@ -11,7 +11,7 @@
   ],
   "synthetic_database": "wms_test_666_native_print_final_0c44",
   "real_service_path": "React UI -> real test API/PostgreSQL -> actual WMS Print Direct Handler -> injected emulated Printer.submit -> saved PNG and receipt",
-  "native_injection_boundary": "Only Printer.submit is replaced. Handler HTTP validation, origin checks, SQLite idempotency and receipt response remain the candidate implementation.",
+  "native_injection_boundary": "Test harness adds one explicitly allowed synthetic UI origin, wraps HTTP to capture requests and optionally drop a reply for recovery evidence, and replaces Printer.submit with a PNG/receipt sink. Candidate Handler validation, origin checks, idempotency ledger, receipt handling and React/API code remain unmodified.",
   "physical_paper": "NOT_TESTED",
   "outbound_marketplace_ack": "NOT_PROVEN; test provider adapter acknowledgements are synthetic",
   "accepted_residual": "The narrow site-side interval between final server validation and external printer acceptance is not atomic and is accepted by the owner.",
@@ -38,9 +38,9 @@
     },
     {
       "id": "native-qr-only-product-scan",
-      "result": "PARTIAL_BOUNDARY",
+      "result": "PARTIAL_EXPLORATORY_BASELINE",
       "evidence": "run-b6d23148/qr-only-accepted2/native",
-      "note": "Actual order barcode selected the exact order and the Handler accepted/decoded its QR. Synthetic provider readback marked the KIZ accepted and PostgreSQL recorded packed state, but captured UI still warned to scan that same order barcode again; runner stopped later on a missing source-identity file. Not a clean whole-screen pass or outbound WB proof."
+      "note": "Preserved exploratory run. Its captured warning is followed by a separate exact-P continuation case; it is not the final verdict for the QR-only operator journey."
     },
     {
       "id": "native-exact-reprint-two-copies",
@@ -79,12 +79,25 @@
       "evidence": "run-b6d23148/reprint-qr-final3/flag-matrix/matrix.json"
     },
     {
+      "id": "native-qr-warning-continuation-a-then-b",
+      "result": "PASS_BOUNDED_SYNTHETIC_PROVIDER",
+      "evidence": "run-b6d23148/qr-only-continuity-native-api/native/continuation/decoded-continuity-contract.json",
+      "note": "A printed-sticker QR was scanned after the first A intent; no A replay job was submitted and the exact pool snapshot was unchanged across that rescan. Existing A marking/code/order binding identity stayed fixed; the explicit synthetic provider sync changed only its status unknown\u2192accepted. A subsequent true product barcode selected B; entering B full current CIS led to one B QR receipt and packed state. Both orders were packed. Final neutral DOM is after reload, not proven same-page during the earlier premature disabled-button wait. Provider acceptance/readback was synthetic; no outbound marketplace call is proven."
+    },
+    {
       "id": "grouped-manual-html-then-real-native-handler",
-      "result": "PENDING",
-      "evidence": null,
-      "note": "Waiting for coordinated exact-P grouped fixture/API window; earlier synthetic /print interception is not native proof."
+      "result": "SCOPED_PASS_WHOLE_CASE_FAIL",
+      "evidence": "run-b6d23148/group-manual-native-verified/group-native-evidence-join.json",
+      "note": "Scoped manual-HTML/native dispatch segment passed: 2 successful UI scans, 6 receipt/PNG joins, A exhausted probe 409 without mutation, stock/pool stable. Enclosing whole-process runner later failed a separate cargo-box action with HTTP 403 missing_marketplace_token; do not mark the grouped journey accepted."
+    },
+    {
+      "id": "native-qr-warning-continuation-a-then-b",
+      "result": "PASS_BOUNDED_SYNTHETIC_PROVIDER",
+      "evidence": "run-b6d23148/qr-only-continuity-native-api/native/continuation/decoded-continuity-contract.json",
+      "note": "A printed-sticker QR was scanned after the first A intent; no A replay job was submitted and the exact pool snapshot was unchanged across that rescan. Existing A marking/code/order binding identity stayed fixed; the explicit synthetic provider sync changed only its status unknown\u2192accepted. A subsequent true product barcode selected B; entering B full current CIS led to one B QR receipt and packed state. Both orders were packed. Final neutral DOM is after reload, not proven same-page during the earlier premature disabled-button wait. Provider acceptance/readback was synthetic; no outbound marketplace call is proven."
     }
   ],
   "evidence_directory": "run-b6d23148",
-  "scope_note": "The QR-only native payload result is not a whole-UI completion or marketplace-transfer claim. Manual HTML print and native Handler print are separate paths."
+  "scope_note": "The QR-only native payload result is not a whole-UI completion or marketplace-transfer claim. Manual HTML print and native Handler print are separate paths.",
+  "overall_scope_note": "Evidence is layered and bounded. The grouped native dispatch segment and QR continuation pass their stated assertions, while the grouped whole-process case still has a separate cargo-box HTTP 403 failure. This manifest is not whole-task acceptance, CI, deployment, physical-paper proof, or outbound marketplace acknowledgement."
 }

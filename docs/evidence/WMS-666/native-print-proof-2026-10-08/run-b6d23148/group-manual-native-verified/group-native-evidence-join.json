@@ -1,0 +1,367 @@
+{
+  "case": "grouped manual HTML tape -> actual native handler scan",
+  "database": "wms_test_666_browser_proof (isolated synthetic fixture)",
+  "manual_tape_html_outputs": [
+    {
+      "order_id": "cacb29b5-6c11-4e09-b756-94b0aca76b65",
+      "supply_id": "cacb29b5-6c11-4e09-b756-94b0aca76b65",
+      "copies_requested": 2,
+      "returned_marking": {
+        "marking_id": "2742ea8e-df03-42b7-8bed-c8cec5c3f99b",
+        "supply_id": "51ecfac5-4413-4021-9fe7-29c60a983d40",
+        "id": "2ca8cc81-ebd7-4856-be29-c5ae3c0ac3d2",
+        "cis_code": "010460043993125321KIZTAPE0000000000",
+        "has_label_artifact": false,
+        "order_product_id": null
+      },
+      "rendered_outputs": [
+        {
+          "decoded": "010460043993125321KIZTAPE0000000000",
+          "png_sha256": "9e7e7aa059f58fdda42cc5daa4fec4ba25f0e6dfcc31b695f3e350998f1d9135",
+          "bytes": 2173
+        },
+        {
+          "decoded": "010460043993125321KIZTAPE0000000000",
+          "png_sha256": "9e7e7aa059f58fdda42cc5daa4fec4ba25f0e6dfcc31b695f3e350998f1d9135",
+          "bytes": 2173
+        }
+      ]
+    },
+    {
+      "order_id": "c62c3d6f-24f8-4909-8f23-f4013788a5fb",
+      "supply_id": "c62c3d6f-24f8-4909-8f23-f4013788a5fb",
+      "copies_requested": 2,
+      "returned_marking": {
+        "marking_id": "731238d0-e835-46db-ba69-9e294e38f594",
+        "supply_id": "202a8db8-4fdb-478b-af3d-650af9bb4c70",
+        "id": "690b8216-26a0-4dc9-905d-453903ce9c53",
+        "cis_code": "010460043993125321KIZTAPE0000000003",
+        "has_label_artifact": false,
+        "order_product_id": null
+      },
+      "rendered_outputs": [
+        {
+          "decoded": "010460043993125321KIZTAPE0000000003",
+          "png_sha256": "5fb60548230f03e9107b419d4ee6875666acf5cbfabebcb3c5dc93ba27ddbd72",
+          "bytes": 2184
+        },
+        {
+          "decoded": "010460043993125321KIZTAPE0000000003",
+          "png_sha256": "5fb60548230f03e9107b419d4ee6875666acf5cbfabebcb3c5dc93ba27ddbd72",
+          "bytes": 2184
+        }
+      ]
+    }
+  ],
+  "manual_html_pdf_artifacts": [
+    {
+      "path": "supply_ids-bare-manual-1-render.pdf",
+      "sha256": "5dc87ee663510ee67bace149aafa012e03da49c753294b07691a4408de058ba5",
+      "bytes": 447819
+    },
+    {
+      "path": "supply_ids-bare-manual-after-task-render.pdf",
+      "sha256": "5ec91e26a3f8a47b9d93d1ba93ac8b5e648dbfd39ce0c82709001c3f9fb34023",
+      "bytes": 447274
+    }
+  ],
+  "provider_to_asset_to_handler_qr_joins": [
+    {
+      "marketplace_order_id": 800392,
+      "provider_barcode": "*WMS666-800392",
+      "provider_png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+      "provider_png_bytes": 1835,
+      "provider_png_regenerated_from_versioned_emulator_source": "fixtures/regenerated-provider-order-800392.png",
+      "provider_png_rebuild_sha256_matches_observed_http_response": true,
+      "provider_png_independent_qr_decode": "*WMS666-800392",
+      "persisted_asset_id": "d833aa72-7efd-4a77-a0d1-1cad7237993d",
+      "persisted_asset_sha256": "sha256:8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+      "human_readable_sticker_code": "AUDIT-800392 01",
+      "persisted_encoded_sticker_barcode": "*WMS666-800392",
+      "current_cis": "010460043993125321KIZTAPE0000000000",
+      "native_handler_outputs": [
+        {
+          "native_key": "b3e6b7b6-4ed3-40cd-885d-16fc25a47170",
+          "output_kind": "order QR",
+          "decoded_qr": "*WMS666-800392",
+          "png_sha256": "8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67",
+          "receipt": "emulator-0001-8ee34fda516b",
+          "sink_png": "sink/job-0001-8ee34fda516b.png",
+          "created_at_utc": "2026-10-08T01:34:08.423043+00:00"
+        },
+        {
+          "native_key": "b3e6b7b6-4ed3-40cd-885d-16fc25a47170:chz",
+          "output_kind": "current CIS copy",
+          "decoded_qr": "010460043993125321KIZTAPE0000000000",
+          "png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "receipt": "emulator-0002-f2f4c4632159",
+          "sink_png": "sink/job-0002-f2f4c4632159.png",
+          "created_at_utc": "2026-10-08T01:34:08.514167+00:00"
+        },
+        {
+          "native_key": "b3e6b7b6-4ed3-40cd-885d-16fc25a47170:chz:c2",
+          "output_kind": "current CIS copy",
+          "decoded_qr": "010460043993125321KIZTAPE0000000000",
+          "png_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+          "receipt": "emulator-0003-f2f4c4632159",
+          "sink_png": "sink/job-0003-f2f4c4632159.png",
+          "created_at_utc": "2026-10-08T01:34:08.565121+00:00"
+        }
+      ]
+    },
+    {
+      "marketplace_order_id": 800393,
+      "provider_barcode": "*WMS666-800393",
+      "provider_png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+      "provider_png_bytes": 1799,
+      "provider_png_regenerated_from_versioned_emulator_source": "fixtures/regenerated-provider-order-800393.png",
+      "provider_png_rebuild_sha256_matches_observed_http_response": true,
+      "provider_png_independent_qr_decode": "*WMS666-800393",
+      "persisted_asset_id": "5d7ff8af-0517-497d-b31b-f241165e0088",
+      "persisted_asset_sha256": "sha256:ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+      "human_readable_sticker_code": "AUDIT-800393 01",
+      "persisted_encoded_sticker_barcode": "*WMS666-800393",
+      "current_cis": "010460043993125321KIZTAPE0000000003",
+      "native_handler_outputs": [
+        {
+          "native_key": "9b5f18dd-3716-4b3c-9bf2-be87357fb7a4",
+          "output_kind": "order QR",
+          "decoded_qr": "*WMS666-800393",
+          "png_sha256": "ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55",
+          "receipt": "emulator-0004-ffebd4debcd7",
+          "sink_png": "sink/job-0004-ffebd4debcd7.png",
+          "created_at_utc": "2026-10-08T01:34:09.817663+00:00"
+        },
+        {
+          "native_key": "9b5f18dd-3716-4b3c-9bf2-be87357fb7a4:chz",
+          "output_kind": "current CIS copy",
+          "decoded_qr": "010460043993125321KIZTAPE0000000003",
+          "png_sha256": "d5b0dd700c564239fe04d8774cf76fbb1e0e6c56112367b99c7422c82670637b",
+          "receipt": "emulator-0005-d5b0dd700c56",
+          "sink_png": "sink/job-0005-d5b0dd700c56.png",
+          "created_at_utc": "2026-10-08T01:34:09.904167+00:00"
+        },
+        {
+          "native_key": "9b5f18dd-3716-4b3c-9bf2-be87357fb7a4:chz:c2",
+          "output_kind": "current CIS copy",
+          "decoded_qr": "010460043993125321KIZTAPE0000000003",
+          "png_sha256": "d5b0dd700c564239fe04d8774cf76fbb1e0e6c56112367b99c7422c82670637b",
+          "receipt": "emulator-0006-d5b0dd700c56",
+          "sink_png": "sink/job-0006-d5b0dd700c56.png",
+          "created_at_utc": "2026-10-08T01:34:09.962046+00:00"
+        }
+      ]
+    }
+  ],
+  "native_output_count": 6,
+  "scan_attempts": [
+    {
+      "captured_at": "2026-10-08T01:34:08.285Z",
+      "status": 200,
+      "supply_id": "51ecfac5-4413-4021-9fe7-29c60a983d40",
+      "order_id": "cacb29b5-6c11-4e09-b756-94b0aca76b65",
+      "error_code": null
+    },
+    {
+      "captured_at": "2026-10-08T01:34:09.622Z",
+      "status": 409,
+      "supply_id": "51ecfac5-4413-4021-9fe7-29c60a983d40",
+      "order_id": null,
+      "error_code": "scan_product_exhausted"
+    },
+    {
+      "captured_at": "2026-10-08T01:34:09.699Z",
+      "status": 200,
+      "supply_id": "202a8db8-4fdb-478b-af3d-650af9bb4c70",
+      "order_id": "c62c3d6f-24f8-4909-8f23-f4013788a5fb",
+      "error_code": null
+    }
+  ],
+  "physical_inputs": [
+    {
+      "scan_index": 1,
+      "barcode": "460666AUDIT",
+      "scanner_was_neutral_before_and_after": true,
+      "order_id": "cacb29b5-6c11-4e09-b756-94b0aca76b65",
+      "pack_status": "packed",
+      "api_attempts": 1,
+      "native_outputs": 3,
+      "api_idle_after_completion": true,
+      "visible_alerts": []
+    },
+    {
+      "scan_index": 2,
+      "barcode": "460666AUDIT",
+      "scanner_was_neutral_before_and_after": true,
+      "order_id": "c62c3d6f-24f8-4909-8f23-f4013788a5fb",
+      "pack_status": "packed",
+      "api_attempts": 2,
+      "native_outputs": 3,
+      "api_idle_after_completion": true,
+      "visible_alerts": []
+    }
+  ],
+  "stock_unchanged": true,
+  "final_database": {
+    "markings": [
+      {
+        "id": "2742ea8e-df03-42b7-8bed-c8cec5c3f99b",
+        "order_id": "cacb29b5-6c11-4e09-b756-94b0aca76b65",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "code_id": "2ca8cc81-ebd7-4856-be29-c5ae3c0ac3d2",
+        "status": "accepted"
+      },
+      {
+        "id": "731238d0-e835-46db-ba69-9e294e38f594",
+        "order_id": "c62c3d6f-24f8-4909-8f23-f4013788a5fb",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "code_id": "690b8216-26a0-4dc9-905d-453903ce9c53",
+        "status": "rejected"
+      }
+    ],
+    "codes": [
+      {
+        "id": "2ca8cc81-ebd7-4856-be29-c5ae3c0ac3d2",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "printed"
+      },
+      {
+        "id": "690b8216-26a0-4dc9-905d-453903ce9c53",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "printed"
+      },
+      {
+        "id": "b65f81de-aa48-4358-acc1-184a5ada3dff",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "b2ab21dc-8e07-409f-a4bd-2884fd887910",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      }
+    ],
+    "orders": [
+      {
+        "id": "cacb29b5-6c11-4e09-b756-94b0aca76b65",
+        "supply_id": "51ecfac5-4413-4021-9fe7-29c60a983d40",
+        "marketplace": "wb",
+        "external_order_id": null,
+        "pack_status": "packed",
+        "packed_at": "2026-10-08T04:34:08.634831+03:00",
+        "sticker_code": "AUDIT-800392 01",
+        "sticker_barcode": "*WMS666-800392",
+        "sticker_status": "print_opened"
+      },
+      {
+        "id": "c62c3d6f-24f8-4909-8f23-f4013788a5fb",
+        "supply_id": "202a8db8-4fdb-478b-af3d-650af9bb4c70",
+        "marketplace": "wb",
+        "external_order_id": null,
+        "pack_status": "packed",
+        "packed_at": "2026-10-08T04:34:10.038866+03:00",
+        "sticker_code": "AUDIT-800393 01",
+        "sticker_barcode": "*WMS666-800393",
+        "sticker_status": "print_opened"
+      }
+    ],
+    "supplies": [
+      {
+        "id": "202a8db8-4fdb-478b-af3d-650af9bb4c70",
+        "marketplace": "wb",
+        "packaging_task_id": "f510e0d5-1562-4357-a049-6c4ddadc09c7"
+      },
+      {
+        "id": "51ecfac5-4413-4021-9fe7-29c60a983d40",
+        "marketplace": "wb",
+        "packaging_task_id": "907e50ec-a7cb-455e-ab75-09cca0018f35"
+      }
+    ],
+    "task_lines": [
+      {
+        "id": "931b4008-53a9-48d2-a340-b98f80b1f1a7",
+        "task_id": "907e50ec-a7cb-455e-ab75-09cca0018f35",
+        "product_id": "701f8d8a-0129-4cc6-a6b8-f60251e29840",
+        "qty_marking_printed": 0,
+        "qty_marking_external": 0,
+        "qty_confirmed_packed": 0,
+        "qty_packed_in_task": 1
+      },
+      {
+        "id": "d42e4ee5-0a73-43df-b133-ed4bffae6b94",
+        "task_id": "f510e0d5-1562-4357-a049-6c4ddadc09c7",
+        "product_id": "4afa3811-1e87-420c-a497-74f4092868bc",
+        "qty_marking_printed": 1,
+        "qty_marking_external": 0,
+        "qty_confirmed_packed": 0,
+        "qty_packed_in_task": 1
+      }
+    ],
+    "print_assets": [
+      {
+        "id": "d833aa72-7efd-4a77-a0d1-1cad7237993d",
+        "order_id": "cacb29b5-6c11-4e09-b756-94b0aca76b65",
+        "supply_id": null,
+        "kind": "order_sticker",
+        "status": "ready",
+        "applied_at": null,
+        "print_opened_at": "2026-10-08T04:34:08.295280+03:00",
+        "checksum": "sha256:8ee34fda516b0f669eb7fec14463234f805f623745f2e415302c035935d7ca67"
+      },
+      {
+        "id": "5d7ff8af-0517-497d-b31b-f241165e0088",
+        "order_id": "c62c3d6f-24f8-4909-8f23-f4013788a5fb",
+        "supply_id": null,
+        "kind": "order_sticker",
+        "status": "ready",
+        "applied_at": null,
+        "print_opened_at": "2026-10-08T04:34:09.711577+03:00",
+        "checksum": "sha256:ffebd4debcd7e4fe6b94c65bdca3b442869921b819c1bfc66806c84e9c836d55"
+      }
+    ],
+    "positions": [],
+    "stock": {
+      "balances": [
+        {
+          "id": "2d17f692-d548-419b-b887-ef58aa8fda22",
+          "product_id": "701f8d8a-0129-4cc6-a6b8-f60251e29840",
+          "quantity": 3,
+          "quantity_unpacked": 3,
+          "quantity_packed": 0
+        },
+        {
+          "id": "4bc7f20c-927c-4df5-a94f-105672f47b59",
+          "product_id": "4afa3811-1e87-420c-a497-74f4092868bc",
+          "quantity": 3,
+          "quantity_unpacked": 3,
+          "quantity_packed": 0
+        }
+      ],
+      "reservations": [
+        {
+          "id": "218141b5-3ace-4b88-8dab-3894dc8df74d",
+          "fbs_order_id": "c62c3d6f-24f8-4909-8f23-f4013788a5fb",
+          "product_id": "4afa3811-1e87-420c-a497-74f4092868bc",
+          "warehouse_id": "030006d7-c36a-4800-82ef-011d2b784971",
+          "quantity": 1
+        },
+        {
+          "id": "5a6e1d58-b7a0-4e19-b459-552847d92d9a",
+          "fbs_order_id": "cacb29b5-6c11-4e09-b756-94b0aca76b65",
+          "product_id": "701f8d8a-0129-4cc6-a6b8-f60251e29840",
+          "warehouse_id": "030006d7-c36a-4800-82ef-011d2b784971",
+          "quantity": 1
+        }
+      ],
+      "inventory_movement_count": 0
+    }
+  },
+  "whole_runner_result": [
+    {
+      "id": "WMS666.whole-process.bare-group-manual-before-scan",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: group packing can create a box after the same manual/scan workflow\n\n0 !== 1\n"
+    }
+  ],
+  "note": "The whole-process runner later encounters an out-of-scope cargo-box POST 403 missing_marketplace_token. This evidence report validates the already-completed grouped manual/native scan segment independently and preserves that later failure separately."
+}

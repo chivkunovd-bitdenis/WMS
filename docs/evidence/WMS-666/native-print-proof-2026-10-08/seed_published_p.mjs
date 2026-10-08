@@ -34,7 +34,8 @@ for (const [index, text] of texts.entries()) {
   await writeFile(`${out}/${file}`, bytes)
   pngs.push({ text, file, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), base64: bytes.toString('base64') })
 }
-const response = await fetch('http://127.0.0.1:16692/seed', {
+const backend = process.env.WMS666_BACKEND || 'http://127.0.0.1:16692'
+const response = await fetch(`${backend}/seed`, {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ codes: 4, stickers: pngs.map(x => x.base64), sticker_codes: texts }),
 })

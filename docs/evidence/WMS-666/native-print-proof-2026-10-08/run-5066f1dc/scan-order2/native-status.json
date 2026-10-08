@@ -1,0 +1,10 @@
+{
+  "beforeNative": {
+    "drop_next_response": false,
+    "accepted_png_count": 3
+  },
+  "afterNative": {
+    "drop_next_response": false,
+    "accepted_png_count": 6
+  }
+}

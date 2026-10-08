@@ -1,0 +1,79 @@
+{
+  "product_input": {
+    "label": "product-barcode-B",
+    "value": "460666AUDIT",
+    "priorValue": "",
+    "at": "2026-10-08T01:57:23.202Z"
+  },
+  "ui_before_kiz": {
+    "text": "Заказы FBS\nОбновлено только что\nОбновить\nЗаказы\n0,0\nчаса\n\nсреднее время сборки: от поступления заказа до нажатия «Отгрузить»\n\nвсе продавцы\n\n0\nотгружено заказов\n0%\nуложились в 12 часов\n0%\nуложились в сутки\nНеделя\nМесяц\nСвой период\nПродавец\nВсе продавцы\nПродавец\nНовые\nВ работе\nВ доставке\nПросрочены\nЗавершённые\nОтменённые\nСеллер\nВсе селлеры\nСеллер\nМаркетплейс\nВсе\nМаркетплейс\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\n​\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\nНомер / название поставки\tСеллер\tСклад\tЗаказы / единицы\tКороба\tСтатус\tДата отгрузки\tПечать\n\n\nKIZ supply 1791423963215450000\n\nWB №WB-GI-KIZ-1791423963215450000-6aadb838\tTape race\t\n\nWB 99\n\nWMS: Tape race\t2 / 2\t0\t\nВ работе\n\t—\t\nQR\nKIZ supply 1791423963215450000\n\nTape race · № WB WB-GI-KIZ-1791423963215450000-6aadb838\n\nСклад WMS\n\nTape race\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 09.10.2026, 05:46:03\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\nПроверено в WB: подтверждено 1 из 1.\n​\nПечатать QR\nПечатать ЧЗ\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\n\nKIZ product 800392 · сканируйте ЧЗ\n\nУпаковка и маркировка\n\nНапечатано 1 из 2 · упаковано 1 из 2 · выбрано 0\n\nВыбрать всё\nПечать всего (2)\nПроверить в WB\nДействия с поставкой\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800393\nЧЗ не внесён\nДоступно ЧЗ\n\n3 · нужно 1\n\nСтикер\n\n*WMS666-FINAL-ORD ER-B\n\nЧЗ\n\nТЗ\nQR\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800392\nЧЗ принят WB\nДоступно ЧЗ\n\n3 · нужно 1\n\nСтикер\n\n*WMS666-FINAL-ORD ER-A\n\nЧЗ\n\n✓\n\nТЗ\nQR\nДалее: Короба →",
+    "alert": "Проверено в WB: подтверждено 1 из 1.",
+    "scanner": ""
+  },
+  "code_id": "2d245323-1fc2-4718-9b4c-de13410724f4",
+  "cis": "010460043993125321KIZTAPE0000000001",
+  "db_before": {
+    "markings": [
+      {
+        "id": "05f4e684-8732-464a-9a28-65f1d2344d36",
+        "order_id": "0d123296-e7d8-404a-bab4-193b32d1619b",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "code_id": "81d5cde6-5fd2-4122-b6ba-5a17dd42742f",
+        "status": "accepted"
+      }
+    ],
+    "codes": [
+      {
+        "id": "2d245323-1fc2-4718-9b4c-de13410724f4",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "b53dba16-4d7c-4c55-adcc-335aa10e9d1f",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "d9ad7a8d-83b0-43a8-8127-5814a30fe24e",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      },
+      {
+        "id": "81d5cde6-5fd2-4122-b6ba-5a17dd42742f",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "applied"
+      }
+    ],
+    "orders": [
+      {
+        "id": "0d123296-e7d8-404a-bab4-193b32d1619b",
+        "pack_status": "packed",
+        "sticker_code": "*WMS666-FINAL-ORDER-A",
+        "sticker_barcode": "*WMS666-FINAL-ORDER-A",
+        "supply_id": "b107afd3-543a-4ff6-9548-451f16f199b1",
+        "seller_id": "bff7f10b-5d06-4a66-96b3-b55f60418b77"
+      },
+      {
+        "id": "23d07ed8-d855-456c-9b81-7428cac4c6cd",
+        "pack_status": "pending",
+        "sticker_code": "*WMS666-FINAL-ORDER-B",
+        "sticker_barcode": "*WMS666-FINAL-ORDER-B",
+        "supply_id": "b107afd3-543a-4ff6-9548-451f16f199b1",
+        "seller_id": "bff7f10b-5d06-4a66-96b3-b55f60418b77"
+      }
+    ],
+    "stock": "([(UUID('ad1228c9-f32b-4df5-b90c-612009de3a9f'), 3, 3, 0)], [(UUID('849111f0-60b1-4520-8153-dafe99e05bdf'), 1), (UUID('fe15575f-d68e-4bc3-920c-aa07c975eb8a'), 1)], 0)",
+    "synthetic_provider_readbacks": [
+      {
+        "wb_order_id": 800392,
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "decision": "accepted"
+      },
+      {
+        "wb_order_id": 800392,
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "decision": "accepted"
+      }
+    ]
+  }
+}

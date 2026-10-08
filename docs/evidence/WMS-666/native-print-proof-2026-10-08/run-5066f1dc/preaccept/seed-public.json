@@ -1,0 +1,29 @@
+{
+  "candidate": "5066f1dc3c362935fe31292671ca6fad2a4205bf",
+  "supply_id": "e0a7e6e7-82d5-4b1f-be8a-bdc256123e5d",
+  "order_ids": [
+    "78638e84-576d-4e5c-8f6e-0d30f1f5f686",
+    "ed1a5247-381f-44f2-a780-d387b3f8ba05"
+  ],
+  "supply_ids": [
+    "e0a7e6e7-82d5-4b1f-be8a-bdc256123e5d"
+  ],
+  "task_id": "537c03fb-f825-4118-b021-2eac39078a8c",
+  "line_id": "9f754a51-4c0f-4ee2-9149-0d4e5c1f4897",
+  "barcode": "460666AUDIT",
+  "synthetic_order_stickers": [
+    {
+      "text": "*WMS666-P5066-ORDER-A",
+      "file": "fixtures/order-sticker-1.png",
+      "bytes": 1088,
+      "sha256": "bbc5a20f2bdcbb9efddcba8f5d1dce46a3d5c5e80ecb5d3e078d6e421d144b9f"
+    },
+    {
+      "text": "*WMS666-P5066-ORDER-B",
+      "file": "fixtures/order-sticker-2.png",
+      "bytes": 1058,
+      "sha256": "b21ddbe745ad7efb95dae99ff58aa9d685489e05c20558ea81e07f77d1181565"
+    }
+  ],
+  "auth_headers_persisted": false
+}

@@ -1,0 +1,116 @@
+[
+  {
+    "at": "2026-10-08T01:52:02.407Z",
+    "method": "GET",
+    "path": "/proxy/fbs/assembly-time?from=2026-10-01T01%3A52%3A02.390Z&to=2026-10-08T01%3A52%3A02.390Z",
+    "status": 200,
+    "response": {
+      "hours": 0,
+      "orders": 0,
+      "within_12_hours_percent": 0,
+      "within_24_hours_percent": 0
+    }
+  },
+  {
+    "at": "2026-10-08T01:52:02.411Z",
+    "method": "GET",
+    "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=new",
+    "status": 200,
+    "response": {
+      "total": null,
+      "items": [],
+      "next_cursor": null,
+      "server_now": "2026-10-08T01:52:02.400886+00:00",
+      "warehouse_options": []
+    }
+  },
+  {
+    "at": "2026-10-08T01:52:02.447Z",
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/610330ba-d78a-4e83-9aea-74218b402cf5/workspace",
+    "status": 404,
+    "response": {
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    }
+  },
+  {
+    "at": "2026-10-08T01:52:02.450Z",
+    "method": "GET",
+    "path": "/proxy/operations/fbs-assembly-tasks",
+    "status": 200,
+    "response": {
+      "items": []
+    }
+  },
+  {
+    "at": "2026-10-08T01:52:02.461Z",
+    "method": "GET",
+    "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=active",
+    "status": 200,
+    "response": {
+      "total": null,
+      "items": [],
+      "next_cursor": null,
+      "server_now": "2026-10-08T01:52:02.445355+00:00",
+      "warehouse_options": []
+    }
+  },
+  {
+    "at": "2026-10-08T01:52:02.472Z",
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/worklist?limit=500&status_group=active",
+    "status": 200,
+    "response": {
+      "total": null,
+      "items": [
+        {
+          "delivery_type": "warehouse_sc",
+          "delivery_route": null,
+          "id": "b107afd3-543a-4ff6-9548-451f16f199b1",
+          "marketplace": "wb",
+          "wb_supply_id": "WB-GI-KIZ-1791423963215450000-6aadb838",
+          "name": "KIZ supply 1791423963215450000",
+          "status": "assembling",
+          "seller": {
+            "id": "bff7f10b-5d06-4a66-96b3-b55f60418b77",
+            "name": "Tape race"
+          },
+          "wb_warehouse": {
+            "id": 99,
+            "name": null
+          },
+          "wms_warehouse": {
+            "id": "6c192ef4-a774-409e-912a-8b74bdd889f0",
+            "name": "Tape race"
+          },
+          "orders_count": 2,
+          "units_count": 2,
+          "picked_units_count": 0,
+          "boxes_count": 0,
+          "planned_shipment_date": null,
+          "can_add_orders": true
+        }
+      ],
+      "server_now": "2026-10-08T01:52:02.469635+00:00"
+    }
+  },
+  {
+    "at": "2026-10-08T01:52:17.485Z",
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/610330ba-d78a-4e83-9aea-74218b402cf5/workspace",
+    "status": 404,
+    "response": {
+      "detail": {
+        "code": "supply_not_found",
+        "message": "Поставка не найдена.",
+        "context": {},
+        "retryable": false
+      }
+    }
+  }
+]

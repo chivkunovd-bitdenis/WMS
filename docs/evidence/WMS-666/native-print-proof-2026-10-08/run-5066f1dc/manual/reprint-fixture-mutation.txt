@@ -1,0 +1,6 @@
+UPDATE 1
+                  id                  |  source  | meta_status |           marking_code_id            
+--------------------------------------+----------+-------------+--------------------------------------
+ 325e7dc5-d6d1-4f91-b904-7ed5e896a19a | operator | rejected    | 1c02519f-b80d-4b52-ac7e-180826ac802a
+(1 row)
+

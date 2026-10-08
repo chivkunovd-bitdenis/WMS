@@ -1,0 +1,608 @@
+{
+  "productP": "5066f1dc3c362935fe31292671ca6fad2a4205bf",
+  "runtimeCheckout": "a629bcc14740b7fd9db80d0c609a0a8f94b29e7f",
+  "case": "all print flags cleared => inert barcode scan; flags restored => two rapid product barcode scans",
+  "seed": {
+    "supply_id": "a654bc22-e015-4964-9f23-5b4697a93150",
+    "order_ids": [
+      "6ad37a5f-5fdd-4727-910e-08e82e06d036",
+      "52ee7ca5-480a-4570-b035-f609ce0502e6"
+    ],
+    "task_id": "99185366-aeec-4c7a-b9cb-1826669ec57e",
+    "barcode": "460666AUDIT"
+  },
+  "uiOff": {
+    "qr": false,
+    "chz": false,
+    "copies": null
+  },
+  "offResult": {
+    "ui": "Стикер не найден в этой поставке.",
+    "status": {
+      "drop_next_response": false,
+      "accepted_png_count": 0
+    },
+    "scanCalls": 0
+  },
+  "uiOn": {
+    "qr": true,
+    "chz": true,
+    "copies": "2"
+  },
+  "before": {
+    "drop_next_response": false,
+    "accepted_png_count": 0
+  },
+  "after": {
+    "drop_next_response": false,
+    "accepted_png_count": 6
+  },
+  "scanResponses": [
+    {
+      "idempotency_key": "4dad0051-36e3-4ed3-a54e-f0f0f8dcce45",
+      "order_id": "6ad37a5f-5fdd-4727-910e-08e82e06d036",
+      "scan_id": "37269375-1d11-44cc-a894-5bf92b572b24",
+      "printed_codes": [
+        {
+          "cis_code": "010460043993125321KIZTAPE0000000000",
+          "marking_id": "6266b792-8d4f-41a7-ab7a-424f13680415"
+        }
+      ],
+      "qr_asset": {
+        "preview_url": "/operations/fbs-print-assets/47f6bed7-5f79-44d4-8ddc-f815ec896681/content"
+      }
+    },
+    {
+      "idempotency_key": "7828bd27-25e0-4074-be14-13aa5bac1d2f",
+      "order_id": "52ee7ca5-480a-4570-b035-f609ce0502e6",
+      "scan_id": "251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8",
+      "printed_codes": [
+        {
+          "cis_code": "010460043993125321KIZTAPE0000000001",
+          "marking_id": "2204edad-ba0a-4f6b-b1f6-5441cf8031ea"
+        }
+      ],
+      "qr_asset": {
+        "preview_url": "/operations/fbs-print-assets/b98006cc-238b-464f-8188-68e6b6f070c4/content"
+      }
+    }
+  ],
+  "nativeReceipts": [
+    {
+      "accepted_at_utc": "2026-10-07T22:58:14.547454+00:00",
+      "bytes": 1088,
+      "job_key": "37269375-1d11-44cc-a894-5bf92b572b24",
+      "png": "sink/job-0001-bbc5a20f2bdc.png",
+      "receipt": "emulator-0001-bbc5a20f2bdc",
+      "sha256": "bbc5a20f2bdcbb9efddcba8f5d1dce46a3d5c5e80ecb5d3e078d6e421d144b9f"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T22:58:14.632364+00:00",
+      "bytes": 40498,
+      "job_key": "37269375-1d11-44cc-a894-5bf92b572b24:chz",
+      "png": "sink/job-0002-f2f4c4632159.png",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T22:58:14.653352+00:00",
+      "bytes": 40498,
+      "job_key": "37269375-1d11-44cc-a894-5bf92b572b24:chz:c2",
+      "png": "sink/job-0003-f2f4c4632159.png",
+      "receipt": "emulator-0003-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T22:58:14.982036+00:00",
+      "bytes": 1058,
+      "job_key": "251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8",
+      "png": "sink/job-0004-b21ddbe745ad.png",
+      "receipt": "emulator-0004-b21ddbe745ad",
+      "sha256": "b21ddbe745ad7efb95dae99ff58aa9d685489e05c20558ea81e07f77d1181565"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T22:58:15.034058+00:00",
+      "bytes": 40214,
+      "job_key": "251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8:chz",
+      "png": "sink/job-0005-cb9e8ba5ed4a.png",
+      "receipt": "emulator-0005-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T22:58:15.054172+00:00",
+      "bytes": 40214,
+      "job_key": "251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8:chz:c2",
+      "png": "sink/job-0006-cb9e8ba5ed4a.png",
+      "receipt": "emulator-0006-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a"
+    }
+  ],
+  "dbBefore": {
+    "markings": [],
+    "codes": [
+      {
+        "id": "e5d3a82c-75bf-43f2-bb32-33b8387753c4",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "available"
+      },
+      {
+        "id": "45966126-fa7d-4f4e-8ac5-74b953da50fd",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "4c15d88f-d9bb-47a1-84b6-79064788d6a2",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "da21bed2-8366-4cbf-8a7e-f25889a163e0",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      }
+    ],
+    "orders": [
+      {
+        "id": "6ad37a5f-5fdd-4727-910e-08e82e06d036",
+        "pack_status": "pending"
+      },
+      {
+        "id": "52ee7ca5-480a-4570-b035-f609ce0502e6",
+        "pack_status": "pending"
+      }
+    ],
+    "stock": "([(UUID('62d518a6-aa70-4ea1-a7b8-60e83bea1e30'), 3, 3, 0)], [(UUID('266708d6-ed24-4d9b-8710-336b9350c3c5'), 1), (UUID('2d97bc89-3683-4239-aed0-4be2bb10c022'), 1)], 0)"
+  },
+  "dbAfter": {
+    "markings": [
+      {
+        "id": "6266b792-8d4f-41a7-ab7a-424f13680415",
+        "order_id": "6ad37a5f-5fdd-4727-910e-08e82e06d036",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "code_id": "e5d3a82c-75bf-43f2-bb32-33b8387753c4",
+        "status": "unknown"
+      },
+      {
+        "id": "2204edad-ba0a-4f6b-b1f6-5441cf8031ea",
+        "order_id": "52ee7ca5-480a-4570-b035-f609ce0502e6",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "code_id": "45966126-fa7d-4f4e-8ac5-74b953da50fd",
+        "status": "unknown"
+      }
+    ],
+    "codes": [
+      {
+        "id": "4c15d88f-d9bb-47a1-84b6-79064788d6a2",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "da21bed2-8366-4cbf-8a7e-f25889a163e0",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      },
+      {
+        "id": "e5d3a82c-75bf-43f2-bb32-33b8387753c4",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "printed"
+      },
+      {
+        "id": "45966126-fa7d-4f4e-8ac5-74b953da50fd",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "printed"
+      }
+    ],
+    "orders": [
+      {
+        "id": "6ad37a5f-5fdd-4727-910e-08e82e06d036",
+        "pack_status": "packed"
+      },
+      {
+        "id": "52ee7ca5-480a-4570-b035-f609ce0502e6",
+        "pack_status": "packed"
+      }
+    ],
+    "stock": "([(UUID('62d518a6-aa70-4ea1-a7b8-60e83bea1e30'), 3, 3, 0)], [(UUID('266708d6-ed24-4d9b-8710-336b9350c3c5'), 1), (UUID('2d97bc89-3683-4239-aed0-4be2bb10c022'), 1)], 0)"
+  },
+  "task": {
+    "id": "99185366-aeec-4c7a-b9cb-1826669ec57e",
+    "document_number": null,
+    "display_number": null,
+    "warehouse_id": "11f30043-b8cf-4a5d-933b-35dad1b50cb6",
+    "warehouse_name": "Tape race",
+    "warehouse_code": "tape-race",
+    "seller_id": "323bd6e2-1a15-4a5b-b046-f112107468b7",
+    "seller_name": "Tape race",
+    "status": "in_progress",
+    "marketplace_unload_request_id": null,
+    "inbound_intake_request_id": null,
+    "is_complete": true,
+    "pick_resync_warning": false,
+    "created_at": "2026-10-08T01:57:57.449169+03:00",
+    "updated_at": "2026-10-08T01:58:15.129990+03:00",
+    "completed_at": null,
+    "completed_by_user_id": null,
+    "lines": [
+      {
+        "id": "2119f947-4510-46ac-b84f-118757873230",
+        "product_id": "343b080a-bd9a-4242-9115-72dad31a4f90",
+        "seller_id": "323bd6e2-1a15-4a5b-b046-f112107468b7",
+        "seller_name": "Tape race",
+        "sku_code": "SKU-KIZ-1791413877144526000-800392",
+        "product_name": "KIZ product 800392",
+        "size": null,
+        "color": null,
+        "storage_location_id": "a9494f5c-4944-48ba-a5bf-0263b30082ab",
+        "storage_location_code": "TAPE",
+        "packaging_instructions": null,
+        "requires_honest_sign": true,
+        "qty_total": 2,
+        "qty_suggested_packed": 0,
+        "qty_confirmed_packed": 0,
+        "qty_need_pack": 2,
+        "qty_packed_in_task": 2,
+        "qty_done": 2,
+        "qty_marking_printed": 2,
+        "qty_marking_external": 0,
+        "qty_product_label_printed": 0,
+        "marking_available_count": 2,
+        "is_complete": true
+      }
+    ],
+    "events": [
+      {
+        "id": "9043ee22-47d9-507d-977c-1e4d5fcdd1bc",
+        "event_sequence": 1,
+        "action": "manual_pack",
+        "line_id": "2119f947-4510-46ac-b84f-118757873230",
+        "product_id": "343b080a-bd9a-4242-9115-72dad31a4f90",
+        "product_name": "KIZ product 800392",
+        "storage_location_id": "a9494f5c-4944-48ba-a5bf-0263b30082ab",
+        "storage_location_code": "TAPE",
+        "quantity": 1,
+        "note": null,
+        "created_by_user_id": "a6cd6199-cd6d-4e96-8508-81e72cc1752b",
+        "created_by_user_email": "fbs-kiz-1791413877144526000@example.com",
+        "created_by_user_name": "ФИО не указано",
+        "created_at": "2026-10-08T01:58:14.693842+03:00",
+        "reversed_at": null
+      },
+      {
+        "id": "28992d50-6e90-5a26-9137-af4c3af30f1e",
+        "event_sequence": 2,
+        "action": "manual_pack",
+        "line_id": "2119f947-4510-46ac-b84f-118757873230",
+        "product_id": "343b080a-bd9a-4242-9115-72dad31a4f90",
+        "product_name": "KIZ product 800392",
+        "storage_location_id": "a9494f5c-4944-48ba-a5bf-0263b30082ab",
+        "storage_location_code": "TAPE",
+        "quantity": 1,
+        "note": null,
+        "created_by_user_id": "a6cd6199-cd6d-4e96-8508-81e72cc1752b",
+        "created_by_user_email": "fbs-kiz-1791413877144526000@example.com",
+        "created_by_user_name": "ФИО не указано",
+        "created_at": "2026-10-08T01:58:15.096171+03:00",
+        "reversed_at": null
+      }
+    ]
+  },
+  "api": [
+    {
+      "method": "GET",
+      "path": "/proxy/fbs/assembly-time?from=2026-09-30T22%3A58%3A13.146Z&to=2026-10-07T22%3A58%3A13.146Z",
+      "status": 200,
+      "bytes": 80
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "status": 200,
+      "bytes": 115
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-assembly-tasks",
+      "status": 200,
+      "bytes": 12
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "status": 200,
+      "bytes": 115
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "status": 200,
+      "bytes": 623
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/workspace",
+      "status": 200,
+      "bytes": 4815
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e",
+      "status": 200,
+      "bytes": 1265
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-orders/kiz/lookup?supply_id=a654bc22-e015-4964-9f23-5b4697a93150&sticker=460666AUDIT",
+      "status": 200,
+      "bytes": 361
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print",
+      "status": 200,
+      "bytes": 1413,
+      "response": {
+        "scan_id": "37269375-1d11-44cc-a894-5bf92b572b24",
+        "order_id": "6ad37a5f-5fdd-4727-910e-08e82e06d036",
+        "wb_order_id": 800392,
+        "replayed": false,
+        "binding_target": {
+          "order_id": "6ad37a5f-5fdd-4727-910e-08e82e06d036",
+          "wb_order_id": 800392,
+          "product": {
+            "name": "KIZ product 800392",
+            "image_url": null,
+            "barcode": "460666AUDIT",
+            "seller_article": "SKU-KIZ-1791413877144526000-800392"
+          },
+          "current_kiz": null,
+          "needs_confirmation": false,
+          "can_bind": true,
+          "block_reason": null,
+          "marketplace": "wb",
+          "external_order_id": null,
+          "requires_honest_sign": true
+        },
+        "reprint_recovery": {
+          "status": "not_attempted"
+        },
+        "requires_honest_sign": true,
+        "qr_asset": {
+          "id": "47f6bed7-5f79-44d4-8ddc-f815ec896681",
+          "kind": "order_sticker",
+          "status": "ready",
+          "content_type": "image/png",
+          "width_mm": 58,
+          "height_mm": 40,
+          "preview_url": "/operations/fbs-print-assets/47f6bed7-5f79-44d4-8ddc-f815ec896681/content",
+          "download_url": "/operations/fbs-print-assets/47f6bed7-5f79-44d4-8ddc-f815ec896681/content",
+          "checksum": "sha256:bbc5a20f2bdcbb9efddcba8f5d1dce46a3d5c5e80ecb5d3e078d6e421d144b9f",
+          "applied_at": null,
+          "error": null
+        },
+        "codes": [
+          "010460043993125321KIZTAPE0000000000"
+        ],
+        "printed_codes": [
+          {
+            "marking_id": "6266b792-8d4f-41a7-ab7a-424f13680415",
+            "supply_id": "a654bc22-e015-4964-9f23-5b4697a93150",
+            "id": "e5d3a82c-75bf-43f2-bb32-33b8387753c4",
+            "cis_code": "010460043993125321KIZTAPE0000000000",
+            "has_label_artifact": false,
+            "order_product_id": null
+          }
+        ],
+        "shortage": 0,
+        "order_errors": [],
+        "chz_issued_by_scan": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-print-assets/47f6bed7-5f79-44d4-8ddc-f815ec896681/content",
+      "status": 200,
+      "bytes": 1088
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/37269375-1d11-44cc-a894-5bf92b572b24/print-claim",
+      "status": 200,
+      "bytes": 32
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/37269375-1d11-44cc-a894-5bf92b572b24/print-started",
+      "status": 200,
+      "bytes": 32
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/37269375-1d11-44cc-a894-5bf92b572b24/print-claim",
+      "status": 200,
+      "bytes": 32
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+      "status": 204,
+      "bytes": 0
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+      "status": 204,
+      "bytes": 0
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/37269375-1d11-44cc-a894-5bf92b572b24/print-started",
+      "status": 200,
+      "bytes": 32
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e",
+      "status": 200,
+      "bytes": 1265
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e/lines/2119f947-4510-46ac-b84f-118757873230/pack",
+      "status": 200,
+      "bytes": 2053
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e",
+      "status": 200,
+      "bytes": 1851
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/workspace",
+      "status": 200,
+      "bytes": 5003
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/workspace",
+      "status": 200,
+      "bytes": 5003
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print",
+      "status": 200,
+      "bytes": 1413,
+      "response": {
+        "scan_id": "251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8",
+        "order_id": "52ee7ca5-480a-4570-b035-f609ce0502e6",
+        "wb_order_id": 800393,
+        "replayed": false,
+        "binding_target": {
+          "order_id": "52ee7ca5-480a-4570-b035-f609ce0502e6",
+          "wb_order_id": 800393,
+          "product": {
+            "name": "KIZ product 800392",
+            "image_url": null,
+            "barcode": "460666AUDIT",
+            "seller_article": "SKU-KIZ-1791413877144526000-800392"
+          },
+          "current_kiz": null,
+          "needs_confirmation": false,
+          "can_bind": true,
+          "block_reason": null,
+          "marketplace": "wb",
+          "external_order_id": null,
+          "requires_honest_sign": true
+        },
+        "reprint_recovery": {
+          "status": "not_attempted"
+        },
+        "requires_honest_sign": true,
+        "qr_asset": {
+          "id": "b98006cc-238b-464f-8188-68e6b6f070c4",
+          "kind": "order_sticker",
+          "status": "ready",
+          "content_type": "image/png",
+          "width_mm": 58,
+          "height_mm": 40,
+          "preview_url": "/operations/fbs-print-assets/b98006cc-238b-464f-8188-68e6b6f070c4/content",
+          "download_url": "/operations/fbs-print-assets/b98006cc-238b-464f-8188-68e6b6f070c4/content",
+          "checksum": "sha256:b21ddbe745ad7efb95dae99ff58aa9d685489e05c20558ea81e07f77d1181565",
+          "applied_at": null,
+          "error": null
+        },
+        "codes": [
+          "010460043993125321KIZTAPE0000000001"
+        ],
+        "printed_codes": [
+          {
+            "marking_id": "2204edad-ba0a-4f6b-b1f6-5441cf8031ea",
+            "supply_id": "a654bc22-e015-4964-9f23-5b4697a93150",
+            "id": "45966126-fa7d-4f4e-8ac5-74b953da50fd",
+            "cis_code": "010460043993125321KIZTAPE0000000001",
+            "has_label_artifact": false,
+            "order_product_id": null
+          }
+        ],
+        "shortage": 0,
+        "order_errors": [],
+        "chz_issued_by_scan": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-print-assets/b98006cc-238b-464f-8188-68e6b6f070c4/content",
+      "status": 200,
+      "bytes": 1058
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8/print-claim",
+      "status": 200,
+      "bytes": 32
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8/print-started",
+      "status": 200,
+      "bytes": 32
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8/print-claim",
+      "status": 200,
+      "bytes": 32
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+      "status": 204,
+      "bytes": 0
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+      "status": 204,
+      "bytes": 0
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/scan-auto-print/251b8f1d-cd1a-4adb-b86d-ea744eb1e8f8/print-started",
+      "status": 200,
+      "bytes": 32
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e",
+      "status": 200,
+      "bytes": 1851
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e/lines/2119f947-4510-46ac-b84f-118757873230/pack",
+      "status": 200,
+      "bytes": 2638
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/99185366-aeec-4c7a-b9cb-1826669ec57e",
+      "status": 200,
+      "bytes": 2436
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/workspace",
+      "status": 200,
+      "bytes": 5191
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/a654bc22-e015-4964-9f23-5b4697a93150/workspace",
+      "status": 200,
+      "bytes": 5191
+    }
+  ],
+  "uiAfter": "99\n\nWMS: Tape race\t2 / 2\t0\t\nВ работе\n\t—\t\nQR\nKIZ supply 1791413877144526000\n\nTape race · № WB WB-GI-KIZ-1791413877144526000-d732fc54\n\nСклад WMS\n\nTape race\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 09.10.2026, 02:57:57\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\n\n2\n\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\nУпаковка и маркировка\n\nНапечатано 0 из 2 · упаковано 2 из 2 · выбрано 0\n\nВыбрать всё\nПечать всего (2)\nПроверить в WB\nДействия с поставкой\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800393\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n2 · нужно 2\n\nСтикер\n\nAUDIT-STICK ER-1\n\nЧЗ\n\nТЗ\nQR\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800392\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n2 · нужно 2\n\nСтикер\n\nAUDIT-STICK ER-0\n\nЧЗ\n\nТЗ\nQR\nДалее: Короба →"
+}

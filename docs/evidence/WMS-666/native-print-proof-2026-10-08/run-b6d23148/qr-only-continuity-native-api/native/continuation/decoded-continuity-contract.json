@@ -1,0 +1,135 @@
+{
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "runtime_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "source_and_runtime": "The browser UI and real WMS Print Direct Handler were pinned to the same immutable product P; only the Handler printer-submit boundary was replaced by a PNG/receipt sink.",
+  "fixture_boundary": "Synthetic fixture and synthetic accepting readback via the explicit UI button «Проверить в WB»; no outbound marketplace request or physical paper is proven.",
+  "physical_inputs": [
+    {
+      "kind": "output QR barcode",
+      "value": "*WMS666-FINAL-ORDER-A",
+      "order_id": "0d123296-e7d8-404a-bab4-193b32d1619b",
+      "result": "A selected again; handler receipt count stayed 1 at that step; no A replay job was submitted."
+    },
+    {
+      "kind": "product barcode",
+      "value": "460666AUDIT",
+      "order_id": "23d07ed8-d855-456c-9b81-7428cac4c6cd",
+      "scan_id": "82f2e047-a2e6-4ca3-a518-5241757074c3",
+      "result": "B selected; operator entered its current pool CIS in B row; one B QR job accepted and order packed."
+    }
+  ],
+  "png_and_receipt_joins": [
+    {
+      "order_id": "0d123296-e7d8-404a-bab4-193b32d1619b",
+      "scan_id": "7dbcfdfd-f073-4fe7-97ee-4ebfa119dde7",
+      "receipt": "emulator-0001-976f95677ac0",
+      "source_png_sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "handler_input_sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "sink_png_sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "decoded": {
+        "seed_asset": "*WMS666-FINAL-ORDER-A",
+        "handler_input": "*WMS666-FINAL-ORDER-A",
+        "sink_output": "*WMS666-FINAL-ORDER-A"
+      }
+    },
+    {
+      "order_id": "23d07ed8-d855-456c-9b81-7428cac4c6cd",
+      "scan_id": "82f2e047-a2e6-4ca3-a518-5241757074c3",
+      "receipt": "emulator-0002-c2a439551dfe",
+      "source_png_sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07",
+      "handler_input_sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07",
+      "sink_png_sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07",
+      "decoded": {
+        "seed_asset": "*WMS666-FINAL-ORDER-B",
+        "handler_input": "*WMS666-FINAL-ORDER-B",
+        "sink_output": "*WMS666-FINAL-ORDER-B"
+      }
+    }
+  ],
+  "pool_before_after_A_rescan": {
+    "before": [
+      {
+        "id": "2d245323-1fc2-4718-9b4c-de13410724f4",
+        "status": "available"
+      },
+      {
+        "id": "81d5cde6-5fd2-4122-b6ba-5a17dd42742f",
+        "status": "applied"
+      },
+      {
+        "id": "b53dba16-4d7c-4c55-adcc-335aa10e9d1f",
+        "status": "available"
+      },
+      {
+        "id": "d9ad7a8d-83b0-43a8-8127-5814a30fe24e",
+        "status": "available"
+      }
+    ],
+    "after": [
+      {
+        "id": "2d245323-1fc2-4718-9b4c-de13410724f4",
+        "status": "available"
+      },
+      {
+        "id": "81d5cde6-5fd2-4122-b6ba-5a17dd42742f",
+        "status": "applied"
+      },
+      {
+        "id": "b53dba16-4d7c-4c55-adcc-335aa10e9d1f",
+        "status": "available"
+      },
+      {
+        "id": "d9ad7a8d-83b0-43a8-8127-5814a30fe24e",
+        "status": "available"
+      }
+    ],
+    "unchanged": true,
+    "before_snapshot": "after-A.json",
+    "after_snapshot": "continuation/before-B-after-reload.json"
+  },
+  "markings_before_after_A_rescan": {
+    "bindings_before": [
+      {
+        "id": "05f4e684-8732-464a-9a28-65f1d2344d36",
+        "order_id": "0d123296-e7d8-404a-bab4-193b32d1619b",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "code_id": "81d5cde6-5fd2-4122-b6ba-5a17dd42742f"
+      }
+    ],
+    "bindings_after": [
+      {
+        "id": "05f4e684-8732-464a-9a28-65f1d2344d36",
+        "order_id": "0d123296-e7d8-404a-bab4-193b32d1619b",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "code_id": "81d5cde6-5fd2-4122-b6ba-5a17dd42742f"
+      }
+    ],
+    "binding_identity_unchanged": true,
+    "observed_status_changes": [
+      {
+        "marking_id": "05f4e684-8732-464a-9a28-65f1d2344d36",
+        "from": "unknown",
+        "to": "accepted"
+      }
+    ],
+    "note": "The synthetic provider sync advanced the existing A marking from unknown to accepted; it did not change marking/code identity."
+  },
+  "stock_before_after": {
+    "before": "([(UUID('ad1228c9-f32b-4df5-b90c-612009de3a9f'), 3, 3, 0)], [(UUID('849111f0-60b1-4520-8153-dafe99e05bdf'), 1), (UUID('fe15575f-d68e-4bc3-920c-aa07c975eb8a'), 1)], 0)",
+    "after": "([(UUID('ad1228c9-f32b-4df5-b90c-612009de3a9f'), 3, 3, 0)], [(UUID('849111f0-60b1-4520-8153-dafe99e05bdf'), 1), (UUID('fe15575f-d68e-4bc3-920c-aa07c975eb8a'), 1)], 0)",
+    "unchanged": true
+  },
+  "final_post_reload_dom": {
+    "active_row": [],
+    "active_target": null,
+    "scanner": {
+      "value": "",
+      "placeholder": "Сканируйте штрихкод товара"
+    },
+    "undo_disabled": true,
+    "kiz_message": null,
+    "both_orders_packed": true
+  },
+  "handler_total_receipts": 2,
+  "chronology_note": "A fresh rescan creates a distinct operator scan attempt. Intermediate failure/undo evidence is preserved; the final captured state is after a successful undo followed by reload, which restored an idle product-barcode input. Do not describe the intermediate «undo disabled» wait as proof of same-page quiescence."
+}

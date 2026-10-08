@@ -1,0 +1,27 @@
+{
+  "expectedCis": "010460043993125321KIZTAPE0000000000",
+  "htmlCisOccurrences": 0,
+  "embeddedImageCount": 2,
+  "copiesShownByPdf": 2,
+  "decodedImages": [
+    {
+      "index": 1,
+      "sha256": "9e7e7aa059f58fdda42cc5daa4fec4ba25f0e6dfcc31b695f3e350998f1d9135",
+      "bytes": 2173,
+      "width": 192,
+      "height": 192,
+      "dataMatrix": "010460043993125321KIZTAPE0000000000",
+      "qr": null
+    },
+    {
+      "index": 2,
+      "sha256": "9e7e7aa059f58fdda42cc5daa4fec4ba25f0e6dfcc31b695f3e350998f1d9135",
+      "bytes": 2173,
+      "width": 192,
+      "height": 192,
+      "dataMatrix": "010460043993125321KIZTAPE0000000000",
+      "qr": null
+    }
+  ],
+  "boundary": "HTML saved by actual application printMarkingCodeTape after beforeDispatch validation; PDF rendered by headless Chromium, not a physical printer"
+}

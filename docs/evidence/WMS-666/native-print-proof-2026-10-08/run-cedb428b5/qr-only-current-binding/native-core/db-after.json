@@ -1,0 +1,44 @@
+{
+  "markings": [
+    {
+      "id": "5ce5bcc4-078d-4bf4-a33d-fb79ced4329e",
+      "order_id": "57a5634d-4ad7-4d32-b2fb-7d568bfd79c9",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "code_id": "8804b308-6cea-49b4-9ef7-d338487bed80",
+      "status": "unknown"
+    }
+  ],
+  "codes": [
+    {
+      "id": "5a1ea5a7-d864-4744-a65d-07e58733ed29",
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "status": "available"
+    },
+    {
+      "id": "d9f3030e-aae2-46bb-91d4-292c290b0ca0",
+      "cis": "010460043993125321KIZTAPE0000000002",
+      "status": "available"
+    },
+    {
+      "id": "bac68aaa-13a6-4b4d-8d6d-a4607f989930",
+      "cis": "010460043993125321KIZTAPE0000000003",
+      "status": "available"
+    },
+    {
+      "id": "8804b308-6cea-49b4-9ef7-d338487bed80",
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "status": "applied"
+    }
+  ],
+  "orders": [
+    {
+      "id": "f17b3a2d-3de9-4704-b7fa-cee6b3032d09",
+      "pack_status": "pending"
+    },
+    {
+      "id": "57a5634d-4ad7-4d32-b2fb-7d568bfd79c9",
+      "pack_status": "packed"
+    }
+  ],
+  "stock": "([(UUID('928cf31f-9afc-4414-b9d8-94b4c89cda06'), 3, 3, 0)], [(UUID('4780fdfd-cbd9-4c68-b2bd-44a92c0b3ce1'), 1), (UUID('a3454fb6-5232-4540-8b74-9d2246320fd8'), 1)], 0)"
+}

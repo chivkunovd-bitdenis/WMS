@@ -1,0 +1,41 @@
+{
+  "product_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+  "runtime_checkout_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+  "physicalPaper": "NOT_TESTED",
+  "sink": [
+    {
+      "accepted_at_utc": "2026-10-07T23:54:03.239621+00:00",
+      "bytes": 1069,
+      "job_key": "7ea8f23d-91e3-45a7-9c8b-19afde7bb7d5",
+      "png": "sink/job-0001-976f95677ac0.png",
+      "receipt": "emulator-0001-976f95677ac0",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "width": 150,
+      "height": 150,
+      "hasTransparent": false,
+      "qrText": "*WMS666-FINAL-ORDER-A",
+      "cis": null,
+      "whiteCompositedCis": null,
+      "input": {
+        "key": "7ea8f23d-91e3-45a7-9c8b-19afde7bb7d5",
+        "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+        "bytes": 1069,
+        "qrText": "*WMS666-FINAL-ORDER-A",
+        "cis": null,
+        "widthMm": 60,
+        "heightMm": 80
+      }
+    }
+  ],
+  "inputChecks": [
+    {
+      "key": "7ea8f23d-91e3-45a7-9c8b-19afde7bb7d5",
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a",
+      "bytes": 1069,
+      "qrText": "*WMS666-FINAL-ORDER-A",
+      "cis": null,
+      "widthMm": 60,
+      "heightMm": 80
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "product_sha": "0c44ed45bf6b687899750ada2af2ac81d1e6b03e",
+  "runtime_checkout_sha": "0c44ed45bf6b687899750ada2af2ac81d1e6b03e",
+  "product_tree_paths_compared": [
+    "backend/app",
+    "frontend/src",
+    "tools/print-agent"
+  ],
+  "product_tree_matches": true,
+  "source_blobs": {
+    "tools/print-agent/wms_print_direct.py": "81ebff2bb9c638f1d6d41e2f22f618282a5ba476",
+    "frontend/src/utils/printDirectQr.ts": "0a8ceaf8b7018ef1be3278b8d9f2806630f04050",
+    "frontend/src/utils/printPreparedQr.ts": "e62caa36019cca656716a9947bbab487713a1f5b",
+    "frontend/src/screens/v2/fbsSequentialPacking.ts": "82a6ad9f4584532c85b763b8d409a29d4ffd93a2",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": "722bd56cc9c53cbbc68eaa1063ccdbe20ec75278",
+    "backend/app/services/fbs_print_binding_service.py": "490d1676b3239044943e4ce678c66f4d988d8f64",
+    "backend/app/services/fbs_order_tape_print_service.py": "ffb243c952640c4111b652ba07c76336f277fc0c",
+    "backend/app/api/fbs_kiz.py": "edbac0cdc3ab9243dc93c60d5d084933d2cd0911"
+  }
+}

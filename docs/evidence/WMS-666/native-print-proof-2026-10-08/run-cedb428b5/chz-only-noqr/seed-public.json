@@ -1,0 +1,33 @@
+{
+  "product_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+  "supply_id": "3457a546-f2ff-4ca4-9746-302c1118e618",
+  "order_ids": [
+    "781937d7-4c4d-434c-a521-305473528258",
+    "c6df36e4-f373-4e5c-8c60-982e9bee6664"
+  ],
+  "supply_ids": [
+    "3457a546-f2ff-4ca4-9746-302c1118e618"
+  ],
+  "task_id": "33da6445-8afa-4ef7-aa20-ceb5bdb22690",
+  "line_id": "b7453bec-8cc5-4f01-8b50-4c1126326b1c",
+  "barcode": "460666AUDIT",
+  "order_sticker_barcodes": [
+    "*AUDIT0",
+    "*AUDIT1"
+  ],
+  "synthetic_order_stickers": [
+    {
+      "text": "*WMS666-FINAL-ORDER-A",
+      "file": "fixtures/order-sticker-1.png",
+      "bytes": 1069,
+      "sha256": "976f95677ac0784f6312c16c445f167a52bbddaa2073b06f16c1b045acf45c0a"
+    },
+    {
+      "text": "*WMS666-FINAL-ORDER-B",
+      "file": "fixtures/order-sticker-2.png",
+      "bytes": 1072,
+      "sha256": "c2a439551dfe6ebb725cb1f1ddbd30ea63e8b2b4527b7b0d14c38d4568a79c07"
+    }
+  ],
+  "auth_headers_persisted": false
+}

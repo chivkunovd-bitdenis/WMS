@@ -1,0 +1,19 @@
+{
+  "sha": "d0aa36d0ae228caacc7c82dd5692143f049bbc03",
+  "cases": [
+    {
+      "id": "WMS666.whole-process.bare-group-manual-before-scan",
+      "status": "FAIL",
+      "failure": "Error: UI timeout: document.querySelector('[data-order-id=\"5bdbda17-0a73-43bb-a69c-1b4ca21e286e\"]')&&document.querySelector('[data-packing-scan]')"
+    },
+    {
+      "id": "WMS666.whole-process.bare-group-manual-before-scan",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: ordinary/group workspace contains two real orders\n\n1 !== 2\n"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC_WB;REAL_LOCAL_API_POSTGRES_AND_NATIVE_HANDLER_EMULATED_PRINTER",
+  "currentCase": "WMS666.whole-process.bare-group-manual-before-scan",
+  "productSha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc"
+}

@@ -1,0 +1,11 @@
+{
+  "url": "http://127.0.0.1:16696/app/ff/fbs?supply_id=8ca55c42-6d50-4bfa-b1b8-40f9fd223015",
+  "scanner": "<input aria-invalid=\"false\" autocomplete=\"off\" id=\"_r_1b_\" placeholder=\"Сканируйте штрихкод товара\" data-packing-scan=\"true\" class=\"MuiInputBase-input MuiOutlinedInput-input css-1pzfmz2-MuiInputBase-input-MuiOutlinedInput-input\" type=\"text\" value=\"\">",
+  "qr": true,
+  "chz": true,
+  "copies": "2",
+  "orders": [
+    "f8ce269d-3c2a-4785-aa48-9067490cc7bc",
+    "de099ba6-9f80-4b6b-ac7e-d818df38bf64"
+  ]
+}

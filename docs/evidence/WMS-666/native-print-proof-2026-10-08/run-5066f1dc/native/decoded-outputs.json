@@ -1,0 +1,146 @@
+{
+  "candidate": "5066f1dc3c362935fe31292671ca6fad2a4205bf",
+  "physicalPaper": "NOT_TESTED",
+  "sink": [
+    {
+      "accepted_at_utc": "2026-10-07T22:51:49.477968+00:00",
+      "bytes": 1088,
+      "job_key": "acb33b3f-5141-4560-ae9f-9992f3c72c20",
+      "png": "sink/job-0001-bbc5a20f2bdc.png",
+      "receipt": "emulator-0001-bbc5a20f2bdc",
+      "sha256": "bbc5a20f2bdcbb9efddcba8f5d1dce46a3d5c5e80ecb5d3e078d6e421d144b9f",
+      "width": 150,
+      "height": 150,
+      "hasTransparent": false,
+      "qrText": "*WMS666-P5066-ORDER-A",
+      "cis": null,
+      "whiteCompositedCis": null
+    },
+    {
+      "accepted_at_utc": "2026-10-07T22:51:49.637372+00:00",
+      "bytes": 40498,
+      "job_key": "acb33b3f-5141-4560-ae9f-9992f3c72c20:chz",
+      "png": "sink/job-0002-f2f4c4632159.png",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "width": 720,
+      "height": 960,
+      "hasTransparent": false,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "whiteCompositedCis": "010460043993125321KIZTAPE0000000000"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T22:51:49.666951+00:00",
+      "bytes": 40498,
+      "job_key": "acb33b3f-5141-4560-ae9f-9992f3c72c20:chz:c2",
+      "png": "sink/job-0003-f2f4c4632159.png",
+      "receipt": "emulator-0003-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "width": 720,
+      "height": 960,
+      "hasTransparent": false,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "whiteCompositedCis": "010460043993125321KIZTAPE0000000000"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T22:52:09.632414+00:00",
+      "bytes": 1058,
+      "job_key": "9d5d2b0c-8043-4e05-8afa-4701b6529881",
+      "png": "sink/job-0004-b21ddbe745ad.png",
+      "receipt": "emulator-0004-b21ddbe745ad",
+      "sha256": "b21ddbe745ad7efb95dae99ff58aa9d685489e05c20558ea81e07f77d1181565",
+      "width": 150,
+      "height": 150,
+      "hasTransparent": false,
+      "qrText": "*WMS666-P5066-ORDER-B",
+      "cis": null,
+      "whiteCompositedCis": null
+    },
+    {
+      "accepted_at_utc": "2026-10-07T22:52:09.790114+00:00",
+      "bytes": 40214,
+      "job_key": "9d5d2b0c-8043-4e05-8afa-4701b6529881:chz",
+      "png": "sink/job-0005-cb9e8ba5ed4a.png",
+      "receipt": "emulator-0005-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "width": 720,
+      "height": 960,
+      "hasTransparent": false,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "whiteCompositedCis": "010460043993125321KIZTAPE0000000001"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T22:52:09.828493+00:00",
+      "bytes": 40214,
+      "job_key": "9d5d2b0c-8043-4e05-8afa-4701b6529881:chz:c2",
+      "png": "sink/job-0006-cb9e8ba5ed4a.png",
+      "receipt": "emulator-0006-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "width": 720,
+      "height": 960,
+      "hasTransparent": false,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "whiteCompositedCis": "010460043993125321KIZTAPE0000000001"
+    }
+  ],
+  "inputChecks": [
+    {
+      "key": "acb33b3f-5141-4560-ae9f-9992f3c72c20",
+      "sha256": "bbc5a20f2bdcbb9efddcba8f5d1dce46a3d5c5e80ecb5d3e078d6e421d144b9f",
+      "bytes": 1088,
+      "qrText": "*WMS666-P5066-ORDER-A",
+      "cis": null,
+      "widthMm": 60,
+      "heightMm": 80
+    },
+    {
+      "key": "acb33b3f-5141-4560-ae9f-9992f3c72c20:chz",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "bytes": 40498,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "widthMm": 60,
+      "heightMm": 80
+    },
+    {
+      "key": "acb33b3f-5141-4560-ae9f-9992f3c72c20:chz:c2",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "bytes": 40498,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000000",
+      "widthMm": 60,
+      "heightMm": 80
+    },
+    {
+      "key": "9d5d2b0c-8043-4e05-8afa-4701b6529881",
+      "sha256": "b21ddbe745ad7efb95dae99ff58aa9d685489e05c20558ea81e07f77d1181565",
+      "bytes": 1058,
+      "qrText": "*WMS666-P5066-ORDER-B",
+      "cis": null,
+      "widthMm": 60,
+      "heightMm": 80
+    },
+    {
+      "key": "9d5d2b0c-8043-4e05-8afa-4701b6529881:chz",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "bytes": 40214,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "widthMm": 60,
+      "heightMm": 80
+    },
+    {
+      "key": "9d5d2b0c-8043-4e05-8afa-4701b6529881:chz:c2",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "bytes": 40214,
+      "qrText": null,
+      "cis": "010460043993125321KIZTAPE0000000001",
+      "widthMm": 60,
+      "heightMm": 80
+    }
+  ]
+}

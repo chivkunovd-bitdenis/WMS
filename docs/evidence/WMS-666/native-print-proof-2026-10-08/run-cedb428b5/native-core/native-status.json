@@ -1,0 +1,14 @@
+{
+  "beforeNative": {
+    "drop_next_response": false,
+    "accepted_png_count": 0,
+    "product_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+    "runtime_checkout_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd"
+  },
+  "afterNative": {
+    "drop_next_response": false,
+    "accepted_png_count": 3,
+    "product_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd",
+    "runtime_checkout_sha": "cedb428b5585b0214e27b390c93ef1a3665dbbbd"
+  }
+}

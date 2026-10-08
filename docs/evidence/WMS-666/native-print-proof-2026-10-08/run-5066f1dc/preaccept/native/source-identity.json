@@ -1,0 +1,27 @@
+{
+  "product_sha": "5066f1dc3c362935fe31292671ca6fad2a4205bf",
+  "actual_runtime_checkout_sha": "a629bcc14740b7fd9db80d0c609a0a8f94b29e7f",
+  "backend_asgi_loaded_from_checkout_sha": "5066f1dc3c362935fe31292671ca6fad2a4205bf",
+  "runtime_product_tree_equal_to_product_sha": true,
+  "tree_comparison_paths": [
+    "backend/app",
+    "frontend/src",
+    "tools/print-agent"
+  ],
+  "tree_diff_exit_code": 0,
+  "runtime_source_blobs_from_product_sha": {
+    "tools/print-agent/wms_print_direct.py": "81ebff2bb9c638f1d6d41e2f22f618282a5ba476",
+    "frontend/src/utils/printDirectQr.ts": "0a8ceaf8b7018ef1be3278b8d9f2806630f04050",
+    "frontend/src/utils/printPreparedQr.ts": "e62caa36019cca656716a9947bbab487713a1f5b",
+    "frontend/src/screens/v2/fbsSequentialPacking.ts": "82a6ad9f4584532c85b763b8d409a29d4ffd93a2",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": "2757a6fadbda3bd182633e16740bf995ebf40fbc",
+    "backend/app/services/fbs_print_binding_service.py": "490d1676b3239044943e4ce678c66f4d988d8f64",
+    "backend/app/services/fbs_order_tape_print_service.py": "ffb243c952640c4111b652ba07c76336f277fc0c",
+    "backend/app/api/fbs_kiz.py": "edbac0cdc3ab9243dc93c60d5d084933d2cd0911"
+  },
+  "native_handler_process_started_with_actual_checkout_sha": "a629bcc14740b7fd9db80d0c609a0a8f94b29e7f",
+  "actual_wms_print_direct_handler": "same source checkout; only Printer.submit injected",
+  "api_server": "real FastAPI handlers via ASGITransport and isolated PostgreSQL fixture",
+  "browser_api_transport": "React requests forwarded by CDP from http://127.0.0.1:16696 to http://127.0.0.1:16692/proxy",
+  "physical_printer": "not called"
+}
