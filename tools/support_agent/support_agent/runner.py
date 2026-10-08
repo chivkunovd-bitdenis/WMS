@@ -281,10 +281,10 @@ class Agent:
                 log.warning("telegram poll failed: %s", exc.code)
                 time.sleep(min(5, tg_timeout))
         if self.cfg.agent.intake_only or self.cfg.agent.visible_moderator:
-            if self.cfg.agent.visible_moderator:
-                from .case_journal import CaseJournal
-                from .media import archive_pending, archive_root
+            from .case_journal import CaseJournal
+            from .media import archive_pending, archive_root
 
+            if self.cfg.agent.visible_moderator:
                 if self.cfg.agent.enabled and self.pipe.agent is not None:
                     dispatcher = self.pipe.agent.dispatcher
                     for message in self.store.rows(
@@ -310,15 +310,15 @@ class Agent:
                     dispatcher.tick()
                     dispatcher.recover_visible_card_projections()
                     self._flush_visible_realtime_outbox()
-                self.pipe.transcribe_pending()
-                self.pipe.pool.submit("media-archive", lambda: archive_pending(self.pipe))
-                if now - float(self.store.kv_get("native_archive_at", 0)) >= 15:
-                    def archive_chats() -> None:
-                        journal = CaseJournal(self.store, archive_root(self.cfg))
-                        for row in self.store.rows("SELECT DISTINCT chat_id FROM messages"):
-                            journal.sync_chat(int(row["chat_id"]))
-                        self.store.kv_set("native_archive_at", self.clock())
-                    self.pipe.pool.submit("conversation-archive", archive_chats)
+            self.pipe.transcribe_pending()
+            self.pipe.pool.submit("media-archive", lambda: archive_pending(self.pipe))
+            if now - float(self.store.kv_get("native_archive_at", 0)) >= 15:
+                def archive_chats() -> None:
+                    journal = CaseJournal(self.store, archive_root(self.cfg))
+                    for row in self.store.rows("SELECT DISTINCT chat_id FROM messages"):
+                        journal.sync_chat(int(row["chat_id"]))
+                    self.store.kv_set("native_archive_at", self.clock())
+                self.pipe.pool.submit("conversation-archive", archive_chats)
             self.store.kv_set("heartbeat", self.clock())
             return
         if now - self.last_form_poll >= self.cfg.wms.poll_interval_sec:
