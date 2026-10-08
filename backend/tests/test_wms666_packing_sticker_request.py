@@ -156,17 +156,32 @@ async def test_creation_preserves_completed_sticker_chunk_after_timeout_and_retr
     second_chunk_cancelled = False
     second_chunk_completed = False
     assert fbs_supply_service.CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS == 8.0
-    deadline_seconds = 2.0
-    fetch_seconds = 1.2
+    deadline_seconds = 60.0
     monkeypatch.setattr(
         fbs_supply_service, "CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS", deadline_seconds
     )
+    original_timeout = asyncio.timeout
+    original_reschedule = asyncio.Timeout.reschedule
+    creation_timeouts: list[asyncio.Timeout] = []
+    rearmed_deadlines: list[float | None] = []
+
+    def record_timeout(delay: float | None) -> asyncio.Timeout:
+        timeout = original_timeout(delay)
+        if delay == deadline_seconds:
+            creation_timeouts.append(timeout)
+        return timeout
+
+    def record_reschedule(timeout: asyncio.Timeout, when: float | None) -> None:
+        if creation_timeouts and timeout is creation_timeouts[0]:
+            rearmed_deadlines.append(when)
+        original_reschedule(timeout, when)
+
+    monkeypatch.setattr(asyncio, "timeout", record_timeout)
+    monkeypatch.setattr(asyncio.Timeout, "reschedule", record_reschedule)
 
     async def stickers(client, *, api_token, order_ids, **kwargs):
         nonlocal second_chunk_cancelled, second_chunk_completed
         calls.append(list(order_ids))
-        if len(calls) == 1:
-            await asyncio.sleep(fetch_seconds)
         if len(calls) == 2:
             # Persisting the previous chunk must not leave a writer locked
             # while the next WB request is pending.
@@ -178,9 +193,10 @@ async def test_creation_preserves_completed_sticker_chunk_after_timeout_and_retr
                 ))
                 await independent.commit()
             try:
-                # Each fetch fits a fresh budget, but their combined duration
-                # exceeds the one deadline shared by all creation chunks.
-                await asyncio.sleep(fetch_seconds)
+                # Expire the real timeout only after the independent write.
+                # Bypass the spy: this is test control, not a production rearm.
+                original_reschedule(creation_timeouts[0], asyncio.get_running_loop().time())
+                await asyncio.Event().wait()
             except asyncio.CancelledError:
                 second_chunk_cancelled = True
                 raise
@@ -206,7 +222,12 @@ async def test_creation_preserves_completed_sticker_chunk_after_timeout_and_retr
         "/operations/fbs-supplies/from-orders", headers=headers, json=body
     )
     assert response.status_code == 201, response.text
-    assert not second_chunk_completed, "The second chunk received a renewed deadline"
+    # Entering the timeout and rearming it for each WB chunk must all use
+    # the same captured absolute deadline, regardless of DB processing speed.
+    armed_deadlines = [when for when in rearmed_deadlines if when is not None]
+    assert len(armed_deadlines) == 3
+    assert armed_deadlines == [armed_deadlines[0]] * 3, "A chunk received a renewed deadline"
+    assert not second_chunk_completed
     assert second_chunk_cancelled
     assert [len(chunk) for chunk in calls] == [100, 1]
     result = response.json()
