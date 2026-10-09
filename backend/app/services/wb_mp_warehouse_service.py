@@ -243,12 +243,24 @@ async def run_daily_wb_mp_warehouses_sync_all_tenants() -> None:
         tenant_ids = list(await session.scalars(select(Seller.tenant_id).distinct()
                                                 .order_by(Seller.tenant_id)))
     sweep = _DailySweep()
-    for tenant_id in tenant_ids:
+
+    async def sync_one(tenant_id: uuid.UUID) -> None:
         try:
             await run_daily_wb_mp_warehouses_sync_for_tenant(tenant_id, _sweep=sweep)
         except Exception as exc:
             # Do not log exception messages or SQL parameters containing secrets.
             logger.warning("wb mp warehouses tenant %s failed: %s", tenant_id, type(exc).__name__)
+
+    visited: list[uuid.UUID] = []
+    for tenant_id in tenant_ids:
+        was_disabled = sweep.method_disabled
+        await sync_one(tenant_id)
+        if sweep.method_disabled and not was_disabled:
+            # Earlier key failures did not prove a global outage. Now they must
+            # also receive the known FBW list; the shared flag prevents any HTTP.
+            for earlier_tenant_id in visited:
+                await sync_one(earlier_tenant_id)
+        visited.append(tenant_id)
 
 
 async def list_cached_mp_warehouses(
