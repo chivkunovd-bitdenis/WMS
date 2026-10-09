@@ -671,7 +671,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         }
         const [suppliesPage, ordersPage, assemblyTasksPage] = await Promise.all([
           fetchFbsSupplyWorklist(token, authHeaders, params),
-          fetchFbsWorklist(token, authHeaders, params),
+          // «Отгруженные» — только поставки Ozon без своих статусов заказов: бэкенд
+          // отклоняет status_group=shipped для списка заказов (400), поэтому не спрашиваем.
+          statusGroup === 'shipped'
+            ? Promise.resolve({ items: [] })
+            : fetchFbsWorklist(token, authHeaders, params),
           statusGroup === 'active'
             ? fetchFbsAssemblyTasks(token, authHeaders, {
               marketplace: marketplace === '__all__' ? null : marketplace,
