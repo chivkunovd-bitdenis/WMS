@@ -953,7 +953,7 @@ export function FfFbsSupplyWorkspace({
         return next
       } catch (cause) {
         // WMS-712 R6: тихое обновление ошибку не показывает, но снимок на экране уже устарел.
-        if (write.isCurrent()) setStaleWorkspace(workspaceSnapshotRef.current)
+        if (write.isCurrent() && write.isLatest()) setStaleWorkspace(workspaceSnapshotRef.current)
         if (write.isCurrent() && !silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
       } finally {
         if (write.isCurrent() && !silent) setBusy(false)
