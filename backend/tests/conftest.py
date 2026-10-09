@@ -113,9 +113,6 @@ os.environ["DATABASE_URL"] = os.environ.get(
 )
 os.environ["WMS_DATA_DIR"] = os.environ.get("WMS_TEST_DATA_DIR", str(_TEST_DATA_DIR))
 
-# Imported boundary fixtures need their dependencies registered for all consumers.
-from test_wms517_sales_report_singleflight_contract import redis_ownership_io  # noqa: F401
-
 from app.db.session import SessionLocal, engine, get_db
 from app.main import create_app
 from app.models import Base

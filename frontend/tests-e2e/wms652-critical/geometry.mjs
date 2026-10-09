@@ -93,9 +93,6 @@ export async function geometryContracts(ctx){
     const qrIntent=logs().requestLog.filter(r=>r.path.endsWith('/print-assets')).at(-1);
     assert(qrIntent&&qrIntent.path===`/operations/fbs-supplies/${row.id.replace(/-order$/,'')}/print-assets`);
     assert.deepEqual(qrIntent.body,{kind:'order_sticker',order_ids:[row.id],retry_missing:false});
-    // The request is logged before its response adds the no-asset alert above
-    // the scan bar. Wait for the action to finish before measuring pointer bounds.
-    await until(`document.body.innerText.includes('WB не вернул готовых этикеток заказов. Печать не открыта.')&&[...document.querySelectorAll('[data-order-id="${row.id}"] button')].some(e=>e.textContent==='QR'&&!e.disabled)`);
    }
   }
   if(m.rows.length>1){for(const key of ['size','marking','sticker','cis','actions'])assert(Math.max(...m.rows.map(r=>r.columns[key].x))-Math.min(...m.rows.map(r=>r.columns[key].x))<=1,`mixed/common ${key} columns stay aligned`);}

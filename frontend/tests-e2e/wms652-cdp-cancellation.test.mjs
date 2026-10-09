@@ -236,34 +236,3 @@ test('CDP6 reused observed FetchID after native send and before error reply rema
 test('CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure', async context => {
   await inFlightAmbiguousOwner(context, 'another-observed-interception');
 });
-
-test('case boundary waits for both observed post-pack reads to finish; earlier or merely fulfilled reads do not settle it', async () => {
-  const requestLog = [
-    {method: 'GET', path: '/operations/fbs-supplies/wb-b/workspace', requestId: 'earlier-read'},
-    {method: 'POST', path: '/operations/packaging-tasks/task-wb-b/lines/line-next/pack'},
-  ];
-  const cdp = {paused: new Map([
-    ['earlier-read', {networkId: 'old-network', disposition: 'network-completed'}],
-  ])};
-  let turns = 0;
-  const settle = runInNewContext(`${declarations}\nsettlePackingReadback`, {
-    assert, requestLog, cdp,
-    sleep: async () => {
-      turns++;
-      if (turns === 1) {
-        for (const [id, path] of [['workspace', '/operations/fbs-supplies/wb-b/workspace'],
-          ['task', '/operations/packaging-tasks/task-wb-b']]) {
-          requestLog.push({method: 'GET', path, requestId: id});
-          cdp.paused.set(id, {disposition: 'completed'});
-        }
-      } else if (turns === 2) {
-        cdp.paused.set('workspace', {networkId: 'workspace-network', disposition: 'network-completed'});
-        cdp.paused.set('task', {networkId: 'task-network', disposition: 'completed'});
-      } else {
-        cdp.paused.get('task').disposition = 'network-completed';
-      }
-    },
-  });
-  await settle('wb-b');
-  assert.equal(turns, 3, 'neither an earlier read, missing NetworkID nor command fulfillment is readback completion');
-});

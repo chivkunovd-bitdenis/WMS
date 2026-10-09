@@ -1,4 +1,3 @@
-import { ensureFbsStickers } from './fbsStickerPrefetch'
 import { OzonDocumentsAbsence } from './OzonDocumentsAbsence'
 import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
