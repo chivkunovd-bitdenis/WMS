@@ -2167,7 +2167,8 @@
         "CDP4 native fulfillment success after navigation preserves the exact valid response and one command",
         "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry",
         "CDP6 reused observed FetchID after native send and before error reply remains a strict failure",
-        "CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure"
+        "CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure",
+        "case boundary waits for both observed post-pack reads to finish; earlier or merely fulfilled reads do not settle it"
       ]
     },
     "postgres-wms662-batch": {
