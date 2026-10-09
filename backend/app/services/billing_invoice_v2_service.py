@@ -409,11 +409,25 @@ async def _selected_shipment_charge(
                 source_id=order.id,
                 service_code=service_code,
             )
+            original_charge_moment = await session.scalar(
+                select(BillingLedgerEntry.occurred_at).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.seller_id == seller_id,
+                    BillingLedgerEntry.source_type == "fbs_order",
+                    BillingLedgerEntry.source_id == order.id,
+                    BillingLedgerEntry.service_code == service_code,
+                    BillingLedgerEntry.entry_type == "charge",
+                ).order_by(BillingLedgerEntry.occurred_at, BillingLedgerEntry.id).limit(1)
+            )
             # An early invoice is not proof that a cancelled order was handed over.
             if (fact_moment is None and moment is None
                     and order.status in {"cancelled", "defect"}):
                 raise BillingInvoiceV2Error("selected_source_not_found")
-            moment = fact_moment or (existing.occurred_at if existing is not None else moment)
+            # Reissuing a reversed early charge stays in the period of its first
+            # accrual, even when Ozon's handover fact arrived in a later period.
+            moment = original_charge_moment or (
+                existing.occurred_at if existing is not None else fact_moment or moment
+            )
         if order.id in work_dates:
             # The first saved service fixes the work date for both services.
             moment = work_dates[order.id]
@@ -545,7 +559,7 @@ async def _preview_selected_operations(
                     FbsOrder.tenant_id == tenant_id,
                     FbsOrder.seller_id == seller_id,
                     FbsOrder.id.in_(order_ids),
-                )
+                ).with_for_update().execution_options(populate_existing=True)
             )
         }
         if order_ids

@@ -780,6 +780,36 @@ async def _legacy_entries(
             BillingLedgerEntry.id.in_({entry.reversal_of_id for entry, _ in rows if entry.reversal_of_id}),
         ))).all()
     }
+    ozon_fbs_document_ids = {
+        original.source_id
+        for entry, _ in rows
+        for original in [originals.get(entry.reversal_of_id) or entry]
+        if entry.service_code == FBS_ORDER_DOCUMENT_TYPE
+        and original.source_type == FBS_ORDER_DOCUMENT_TYPE
+        and original.source_id in ozon_order_ids
+    }
+    ozon_handover_moments: dict[uuid.UUID, datetime] = {}
+    ozon_packing_fact_documents: set[uuid.UUID] = set()
+    if ozon_fbs_document_ids:
+        ozon_facts = await session.execute(
+            select(
+                OperationFact.document_id,
+                OperationFact.operation_code,
+                OperationFact.billable_service_code,
+                OperationFact.occurred_at,
+            ).where(
+                OperationFact.tenant_id == tenant_id,
+                OperationFact.marketplace == "ozon",
+                OperationFact.document_type == FBS_ORDER_DOCUMENT_TYPE,
+                OperationFact.document_id.in_(ozon_fbs_document_ids),
+            ).order_by(OperationFact.occurred_at, OperationFact.id)
+        )
+        for fact in ozon_facts:
+            if (fact.operation_code == FBS_ORDER_DOCUMENT_TYPE
+                    and fact.billable_service_code == FBS_ORDER_DOCUMENT_TYPE):
+                ozon_handover_moments.setdefault(fact.document_id, fact.occurred_at)
+            if fact.billable_service_code in {"packing", "packaging"}:
+                ozon_packing_fact_documents.add(fact.document_id)
     packing: dict[uuid.UUID, list[BillingLedgerEntry]] = defaultdict(list)
     shipment_ids = {
         (originals.get(entry.reversal_of_id) or entry).source_id
@@ -825,10 +855,19 @@ async def _legacy_entries(
         product_names = [str(snapshot[key]) for snapshot in snapshots for key in ("name", "product_name", "product_name_snapshot") if snapshot.get(key)]
         skus = [str(snapshot[key]) for snapshot in snapshots for key in ("sku", "sku_code", "sku_snapshot") if snapshot.get(key)]
         finance_result = "unpriced" if entry.amount is None else "completed"
+        item_quantity = int(entry.quantity) if entry.unit == "item" else None
+        handover_moment = ozon_handover_moments.get(original.source_id)
+        if (entry.entry_type == "charge" and entry.service_code == FBS_ORDER_DOCUMENT_TYPE
+                and original.source_type == FBS_ORDER_DOCUMENT_TYPE
+                and handover_moment is not None
+                and _as_moscow(original.occurred_at) < _as_moscow(handover_moment)):
+            # The early invoice can keep its money in the accrual period, but
+            # physical FBS units are counted by the later Ozon handover fact.
+            item_quantity = 0
         row: dict[str, Any] = {
             "id": f"legacy_billing:{entry.id}", "kind": "legacy_billing", "seller_id": str(entry.seller_id),
             "seller_name": seller_name or "Не указан", "occurred_at": _as_moscow(entry.occurred_at).isoformat(),
-            "service_code": entry.service_code, "item_quantity": int(entry.quantity) if entry.unit == "item" else None,
+            "service_code": entry.service_code, "item_quantity": item_quantity,
             "source_type": entry.source_type, "source_id": str(entry.source_id),
             "document_number": None,
             "product_name": ", ".join(dict.fromkeys(product_names)) or None,
@@ -852,7 +891,21 @@ async def _legacy_entries(
                 )
             )
         )
-        if entry.service_code in {"marketplace_outbound", "fbs_order"} and not is_ozon_assembly_ledger_entry:
+        has_ozon_packing_record = is_ozon_assembly_ledger_entry and (
+            original.source_id in ozon_packing_fact_documents
+            or any(
+                packing_entry.service_code in {"packing", "packaging"}
+                and packing_entry.entry_type == "charge"
+                for packing_entry in packing[original.source_id]
+            )
+        )
+        show_legacy_ozon_packing = (
+            is_ozon_assembly_ledger_entry
+            and entry.entry_type == "charge"
+            and not has_ozon_packing_record
+        )
+        if (entry.service_code in {"marketplace_outbound", "fbs_order"}
+                and (not is_ozon_assembly_ledger_entry or show_legacy_ozon_packing)):
             key = (original.source_id, entry.entry_type)
             if original.source_type in {"marketplace_unload", "fbs_order"} and key not in packed_documents:
                 packed_documents.add(key)
