@@ -9,6 +9,7 @@ import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import distinct, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_effective_seller_id, require_fbs_operator_access
@@ -1173,6 +1174,7 @@ def _raise_from_service(exc: supply_svc.FbsSupplyError) -> None:
         "order_warehouse_unmapped",
         "invalid_delivery_type",
         "supply_not_editable",
+        "supply_not_empty",
         "order_incompatible",
         "idempotency_key_reused",
     }:
@@ -1997,6 +1999,20 @@ async def create_fbs_packing_boxes(
     return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
 
 
+@router.delete("/{supply_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_empty_fbs_supply(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    try:
+        await supply_svc.delete_empty_supply(session, user.tenant_id, supply_id)
+    except supply_svc.FbsSupplyError as exc:
+        _raise_from_service(exc)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post(
     "/{supply_id}/boxes/{box_id}/orders",
     response_model=FbsWorkspaceOut,
@@ -2019,9 +2035,16 @@ async def assign_orders_to_fbs_packing_box(
             actor_user_id=user.id,
             order_product_ids=body.order_product_ids,
         )
+        await session.commit()
     except packing_box_svc.FbsPackingBoxError as exc:
         _raise_from_packing_box_service(exc)
-    await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        # Only the membership uniqueness conflict is an expected concurrent
+        # refusal. Unrelated integrity defects must still surface as errors.
+        if "uq_fbs_packing_box_items_order_position" not in str(exc.orig):
+            raise
+        _raise_from_packing_box_service(packing_box_svc.FbsPackingBoxError("order_already_in_box"))
     return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
 
 

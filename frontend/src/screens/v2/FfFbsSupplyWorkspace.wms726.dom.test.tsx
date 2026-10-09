@@ -99,7 +99,7 @@ it('C6 after rejected print the next selection uses current ids and current layo
 it('C7 reread and another card use only current ids without automatically adding checkboxes', async () => {
   let tick!: () => void
   const interval = window.setInterval.bind(window)
-  vi.spyOn(window, 'setInterval').mockImplementation(((callback: () => void, ms: number) => { tick = callback; return interval(callback, ms) }) as any)
+  vi.spyOn(window, 'setInterval').mockImplementation(((callback: () => void, ms: number) => { if (ms === 15_000) tick = callback; return interval(callback, ms) }) as any)
   f.current = workspace('wb', [order('o1'), marked('o2')])
   await f.render('packing'); await choose()
   f.current.orders = [order('o3'), marked('o4')]

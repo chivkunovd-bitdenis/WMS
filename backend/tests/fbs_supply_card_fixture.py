@@ -11,6 +11,8 @@ from app.models import Base
 from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import FbsSupply
 from app.models.warehouse_box import WarehouseBox
+from app.services.fbs_stock_publish_service import drain_background_stock_publish_tasks
+from app.services.fbs_stock_sync_service import drain_zero_publish_background_tasks
 from tests.test_fbs_picking import (
     _create_product,
     _create_seller_and_warehouse,
@@ -53,6 +55,10 @@ async def seed(client, marketplace="wb", count=2):
         row = await session.get(FbsSupply, supply)
         row.status = "assembling"
         await session.commit()
+    # Setup may enqueue stock publication via catalog API. Finish those tasks
+    # before a contract snapshots records so setup does not race its assertions.
+    await drain_background_stock_publish_tasks()
+    await drain_zero_publish_background_tasks()
     return headers, tenant, supply, orders
 
 
@@ -137,6 +143,10 @@ async def ready_wb_supply(client, monkeypatch):
     )
     assert response.status_code == 201, response.text
     supply = uuid.UUID(response.json()["supply"]["id"])
+    # Setup may enqueue stock publication via catalog API. Finish those tasks
+    # before a contract snapshots records so setup does not race its assertions.
+    await drain_background_stock_publish_tasks()
+    await drain_zero_publish_background_tasks()
     return headers, tenant, supply, orders
 
 
