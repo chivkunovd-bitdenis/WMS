@@ -117,6 +117,7 @@ const TABS = [
 type FbsStatusGroup = (typeof TABS)[number]['key']
 
 const NEW_ORDERS_PAGE_LIMIT = 500
+const MIN_TABLE_HEIGHT = 128
 
 // HANDOFF-POLISH.md пул 1 п.4 (решение П3): «В работе», «В доставке» и «Завершённые» —
 // это работа с уже собранным документом (поставкой) целиком, не с отдельными заказами.
@@ -682,6 +683,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   const loadingRef = useRef(false)
   const loadSequence = useRef(0)
   const countsContext = JSON.stringify([token, sellerId, marketplace, statusGroup, wbWarehouseId, activeSearch])
+  const countsRequestRef = useRef<{ context: string; promise: Promise<FbsOrderCounts> } | null>(null)
   const [countsResult, setCountsResult] = useState<{ context: string; value: FbsOrderCounts } | null>(null)
   const counts = countsResult?.context === countsContext ? countsResult.value : null
   const tableContainerRef = useRef<HTMLDivElement | null>(null)
@@ -702,7 +704,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
     if (node.parentElement) observer?.observe(node.parentElement)
     window.addEventListener('resize', measure)
-    return () => { observer?.disconnect(); window.removeEventListener('resize', measure) }
+    window.addEventListener('scroll', measure, { capture: true, passive: true })
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
   })
 
   // A successful server commit whose reply was lost is safe to replay under
@@ -720,12 +727,29 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
     loadingRef.current = true
     setBusy(true)
     setError(null)
-    void fetchFbsOrderCounts(token, authHeaders, {
-      seller_id: sellerId === '__all__' ? null : sellerId,
-      marketplace: marketplace === '__all__' ? null : marketplace,
-      status_group: statusGroup, search: activeSearch,
-      wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
-    }).then((value) => {
+    // Быстрый список можно обновлять, пока подсчёт ещё выполняется. В том же
+    // контексте новый цикл принимает его результат, не создавая второй запрос.
+    // При смене фильтров запускается новый подсчёт; loadSequence по-прежнему
+    // не позволяет старому контексту заменить числа и ошибки нового.
+    let countsRequest = countsRequestRef.current
+    if (!countsRequest || countsRequest.context !== countsContext) {
+      const nextRequest = {
+        context: countsContext,
+        promise: fetchFbsOrderCounts(token, authHeaders, {
+          seller_id: sellerId === '__all__' ? null : sellerId,
+          marketplace: marketplace === '__all__' ? null : marketplace,
+          status_group: statusGroup, search: activeSearch,
+          wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
+        }),
+      }
+      countsRequestRef.current = nextRequest
+      const releaseRequest = () => {
+        if (countsRequestRef.current === nextRequest) countsRequestRef.current = null
+      }
+      void nextRequest.promise.then(releaseRequest, releaseRequest)
+      countsRequest = nextRequest
+    }
+    void countsRequest.promise.then((value) => {
       if (sequence === loadSequence.current) setCountsResult({ context: countsContext, value })
     }).catch((cause: unknown) => {
       if (sequence === loadSequence.current) setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
@@ -1623,7 +1647,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
       ) : null}
 
       {isFbsSupplyGroup(statusGroup) ? (
-        <TableContainer ref={tableContainerRef} component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: `calc(100vh - ${tableTop + 24}px)`, overflowY: 'auto' }}>
+        <TableContainer ref={tableContainerRef} component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: `calc(100vh - ${tableTop + 24}px)`, minHeight: MIN_TABLE_HEIGHT, overflowY: 'auto' }}>
           <Table stickyHeader size="small" data-testid="fbs-18-supplies-table">
             <TableHead>
               <TableRow>
@@ -1683,9 +1707,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
           maxHeight: hasNewSelection
             ? `calc(100vh - ${tableTop + 24}px - ${selectionBarHeight + 30}px)`
             : `calc(100vh - ${tableTop + 24}px)`,
-          // Если фильтры и панель заняли всё окно, оставляем шапку и строку:
+          // Если верхние блоки заняли всё окно, оставляем шапку и строку:
           // до них можно дойти прокруткой страницы, не схлопывая список.
-          minHeight: hasNewSelection ? 128 : undefined,
+          minHeight: MIN_TABLE_HEIGHT,
           overflowY: 'auto',
         }}
       >

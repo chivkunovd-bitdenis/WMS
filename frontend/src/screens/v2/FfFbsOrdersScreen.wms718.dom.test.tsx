@@ -170,6 +170,37 @@ describe('WMS-718 applied header styles and DOM state, without layout claims', (
     // No requirement to add an overdue tab when WMS-692 removes it.
   })
 
+  it.each(['Новые', 'В работе', 'В доставке', 'Завершённые', 'Отменённые'])('R2-R4 retains a usable minimum and recalculates after page scroll in a short window on %s', async (label) => {
+    const originalHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight')!
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 600 })
+    let top = 632
+    const originalRect = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('MuiTableContainer-root')
+        ? new DOMRect(0, top, 800, 128) : originalRect.call(this)
+    })
+    try {
+      await open([order()]); if (label !== 'Новые') await tab(label)
+      const area = container()
+      const header = table().tHead
+      expect(document.querySelector('[data-testid="fbs-selection-bar"]')).toBeNull()
+      expect(getComputedStyle(area).maxHeight).toContain('656px')
+      expect(Number.parseFloat(getComputedStyle(area).minHeight)).toBeGreaterThanOrEqual(128)
+      assertStickyStructure()
+      // Controlled input to the scroll listener; jsdom does not lay out or
+      // scroll a page. Actual header visibility is still a browser check.
+      top = 100
+      await act(async () => window.dispatchEvent(new Event('scroll'))); await flush()
+      expect(getComputedStyle(area).maxHeight).toContain('124px')
+      expect(table().tHead).toBe(header)
+      assertStickyStructure()
+      await act(async () => area.dispatchEvent(new Event('scroll'))); await flush()
+      expect(getComputedStyle(area).maxHeight).toContain('124px')
+      expect(Number.parseFloat(getComputedStyle(area).minHeight)).toBeGreaterThanOrEqual(128)
+      assertStickyStructure()
+    } finally { Object.defineProperty(window, 'innerHeight', originalHeight) }
+  })
+
   it('C6 ignores the old list response after switching context and preserves the new header on retry', async () => {
     let reads = 0
     let resolve!: (value: Response) => void

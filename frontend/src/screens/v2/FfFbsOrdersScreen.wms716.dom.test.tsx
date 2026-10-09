@@ -140,6 +140,45 @@ describe('WMS-716 real FBS counts and refresh lifecycle', () => {
     fail = false; await refresh(); badges(initial.tabs)
   })
 
+  it('R5 accepts 35-second counts across background and manual refreshes without overlapping reads', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(SERVER_NOW)
+    const originalHidden = Object.getOwnPropertyDescriptor(document, 'hidden')
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false })
+    let current = structuredClone(initial)
+    let countReads = 0
+    const fetch = network(() => {
+      countReads += 1
+      const snapshot = structuredClone(current)
+      return new Promise<Response>((resolve) => window.setTimeout(() => resolve(json(snapshot)), 35_000))
+    })
+    const advance = async (ms: number) => {
+      await act(async () => { await vi.advanceTimersByTimeAsync(ms) }); await flush()
+    }
+    const listReads = () => fetch.mock.calls.filter(([input]) => String(input).includes('/fbs-orders/worklist?')).length
+    try {
+      dispose = await mount(fetch)
+      expect(document.querySelector('[data-testid="fbs-order-one"]')).toBeTruthy()
+      expect(tabElement('Новые')!.textContent).not.toMatch(/\d/)
+      await advance(30_000)
+      expect(listReads()).toBe(2)
+      expect(countReads).toBe(1)
+      await refresh()
+      expect(listReads()).toBe(3)
+      expect(countReads).toBe(1)
+      await advance(5_000); badges(initial.tabs)
+      current = { ...initial, tabs: { new: 7, active: 8, delivery: 9 } }
+      await advance(25_000)
+      expect(countReads).toBe(2)
+      await advance(30_000)
+      await refresh()
+      expect(countReads).toBe(2)
+      await advance(5_000); badges(current.tabs)
+    } finally {
+      if (originalHidden) Object.defineProperty(document, 'hidden', originalHidden)
+      else delete (document as unknown as Record<string, unknown>).hidden
+    }
+  })
+
   it('C7 refreshes changed counts manually, on the background tick and on visibility return', async () => {
     vi.useFakeTimers(); vi.setSystemTime(SERVER_NOW)
     const originalHidden = Object.getOwnPropertyDescriptor(document, 'hidden')
