@@ -1123,7 +1123,8 @@
         "tests.test_wms666_workspace_marking_pool::test_bare_workspace_reports_current_pool_per_product_and_seller",
         "tests.test_wms666_workspace_marking_pool::test_bare_supply_manual_tape_allocates_pool_cis_without_packaging_task",
         "tests.test_wms666_workspace_marking_pool::test_task_with_missing_product_line_manual_tape_allocates_pool_cis",
-        "tests.test_wms666_workspace_marking_pool::test_current_order_kiz_can_be_allocated_when_task_line_has_no_remaining_need",
+        "tests.test_wms666_workspace_marking_pool::test_current_order_kiz_can_be_allocated_when_task_line_has_no_remaining_need[packaging-need-zero]",
+        "tests.test_wms666_workspace_marking_pool::test_current_order_kiz_can_be_allocated_when_task_line_has_no_remaining_need[accounting-already-records-print]",
         "tests.test_wms666_workspace_marking_pool::test_taskless_print_assignment_conflict_does_not_spend_unbound_pool_code"
       ]
     },
