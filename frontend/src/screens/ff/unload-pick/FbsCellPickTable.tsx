@@ -311,12 +311,11 @@ export function FbsCellPickTable({
       minWidth: 0,
       width: '100%',
       containerType: 'inline-size',
+      '& > .MuiTableContainer-root': { minWidth: minimumTableWidth },
       '& > .MuiTableContainer-root > .MuiTable-root': { minWidth: minimumTableWidth },
-      // Только узкая таблица становится собственным скролл-контейнером.
-      // На широкой форме шапка по-прежнему прилипает к скроллу документа.
-      [`@container (max-width: ${minimumTableWidth - 1}px)`]: {
-        '& > .MuiTableContainer-root': { overflowX: 'auto' },
-      },
+      // Обе оси прокручивает внешний DialogContent (либо сама страница).
+      // overflow у таблицы остаётся visible по pageStickyHeader: внутренний
+      // overflow-x: auto перехватил бы sticky-шапку у вертикальной прокрутки.
     }}
   >
     <DataTable
