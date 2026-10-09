@@ -304,6 +304,12 @@ function LazyProductPhotoThumb({
   )
 }
 
+// Название не уже этой ширины. Без неё высокая строка (много позиций, длинный текст) даёт
+// широкое фото, фото съедает ширину текста, текст переносится уже и строка становится ещё выше.
+// Минимум задан самому блоку текста, а место под фото — внешний отступ: ширина фото
+// блок не сужает, и высоту строки определяет только текст.
+const FBS_PRODUCT_TEXT_MIN_WIDTH = 300
+
 // Фото исключено из расчёта высоты строки: её задают текст и действия.
 // Измерение лишь резервирует такую же ширину рядом с текстом, без роста по кругу.
 function OrderProductCell({ order, children }: { order: FbsWorklistOrder; children: React.ReactNode }) {
@@ -342,7 +348,7 @@ function OrderProductCell({ order, children }: { order: FbsWorklistOrder; childr
           testId={`fbs-product-photo-${order.id}`}
         />
       </Box>
-      <Box sx={{ pl: `${photoWidth + 10}px`, minWidth: 220 }}>{children}</Box>
+      <Box sx={{ ml: `${photoWidth + 10}px`, minWidth: FBS_PRODUCT_TEXT_MIN_WIDTH }}>{children}</Box>
     </TableCell>
   )
 }
@@ -355,11 +361,13 @@ function OrderPositionText({ index, children, ...props }: React.ComponentProps<t
   </Typography>
 }
 
+// break-word (не anywhere): слово размера не даёт точек разрыва при расчёте ширины колонки,
+// поэтому «Универсальный» остаётся целым; разрыв внутри слова возможен только сверх maxWidth.
 function OrderSizeCell({ order }: { order: FbsWorklistOrder }) {
   const sizes = order.marketplace === 'ozon' && order.positions.length > 0
     ? order.positions.map((position) => position.size) : [order.product.size]
   return <TableCell sx={{ minWidth: 80, maxWidth: 170 }}>
-    {sizes.map((size, index) => <OrderPositionText index={index} key={index} variant="body2" sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
+    {sizes.map((size, index) => <OrderPositionText index={index} key={index} variant="body2" sx={{ whiteSpace: 'normal', overflowWrap: 'break-word' }}>
       {size?.trim() || '—'}
     </OrderPositionText>)}
   </TableCell>
@@ -430,7 +438,7 @@ const NewOrderRow = memo(function NewOrderRow({
         />
       </TableCell>
       <OrderProductCell order={order}>
-        <Box sx={{ minWidth: 220 }}>
+        <Box>
           {ozonPositions ? ozonPositions.map((position, index) => (
             <OrderPositionText index={index} key={position.id ?? position.sku ?? position.name} variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
               {position.name}
@@ -1813,7 +1821,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                   <TableCell padding="checkbox" />
                     <>
                       <OrderProductCell order={order}>
-                        <Box sx={{ minWidth: 220 }}>
+                        <Box>
                           {ozonPositions ? ozonPositions.map((position, index) => (
                             <OrderPositionText index={index} key={position.id ?? position.sku ?? position.name} variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
                               {position.name}
