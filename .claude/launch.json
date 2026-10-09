@@ -4,8 +4,1460 @@
     {
       "name": "wms-frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--port", "5199", "--strictPort"],
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5199",
+        "--strictPort"
+      ],
       "port": 5199
+    },
+    {
+      "name": "audit-etalon-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/bbe7244a-d8ed-45f7-afe3-837e99740e52/scratchpad/stand/audit.db",
+        "JWT_SECRET_KEY=local-audit-jwt-secret-key-minimum-32-characters",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_ORDERS=1",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/audit-etalon-20260916/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18316"
+      ],
+      "port": 18316
+    },
+    {
+      "name": "audit-etalon-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18316",
+        "E2E_SELLER_PATH_PREFIX=/seller",
+        "VITE_SELLER_PORTAL_URL=http://127.0.0.1:5316/seller/",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/audit-etalon-20260916/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5316",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5316
+    },
+    {
+      "name": "night-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18317",
+        "E2E_SELLER_PATH_PREFIX=/seller",
+        "VITE_SELLER_PORTAL_URL=http://127.0.0.1:5317/seller/",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms454-night/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5317",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5317
+    },
+    {
+      "name": "night-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/bbe7244a-d8ed-45f7-abe3-837e99740e52/scratchpad/stand/audit.db",
+        "JWT_SECRET_KEY=local-audit-jwt-secret-key-minimum-32-characters",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_ORDERS=1",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms454-night/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18317"
+      ],
+      "port": 18317
+    },
+    {
+      "name": "n2-stand",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/9137ab0b-a4d6-449b-b787-1aca88b9f706/scratchpad/stand/run-stand.sh"
+      ],
+      "port": 5318
+    },
+    {
+      "name": "wms435-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=postgresql+psycopg://deniscivkunov@localhost:5432/wms435_stand",
+        "JWT_SECRET_KEY=local-audit-jwt-secret-key-minimum-32-characters",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_ORDERS=1",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms435-lock/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18319"
+      ],
+      "port": 18319
+    },
+    {
+      "name": "wms435-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18319",
+        "E2E_SELLER_PATH_PREFIX=/seller",
+        "VITE_SELLER_PORTAL_URL=http://127.0.0.1:5319/seller/",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms435-lock/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5319",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5319
+    },
+    {
+      "name": "wms469-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=postgresql+psycopg://deniscivkunov@localhost:5432/wms469_stand",
+        "JWT_SECRET_KEY=local-audit-jwt-secret-key-minimum-32-characters",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_ORDERS=1",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms469-intake-scan/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18320",
+        "--reload",
+        "--reload-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms469-intake-scan/backend/app"
+      ],
+      "port": 18320
+    },
+    {
+      "name": "wms469-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18320",
+        "E2E_SELLER_PATH_PREFIX=/seller",
+        "VITE_SELLER_PORTAL_URL=http://127.0.0.1:5320/seller/",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms469-intake-scan/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5320",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5320
+    },
+    {
+      "name": "wms477-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/bbe7244a-d8ed-45f7-abe3-837e99740e52/scratchpad/stand/wms477.db",
+        "JWT_SECRET_KEY=local-audit-jwt-secret-key-minimum-32-characters",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_ORDERS=1",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "E2E_MOCK_WB_MARKETPLACE_MARKING=1",
+        "PYTHONPATH=/Users/deniscivkunov/Projects/WMS/.worktrees/wms477/backend",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "api477_rig:app",
+        "--app-dir",
+        "/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/bbe7244a-d8ed-45f7-abe3-837e99740e52/scratchpad/stand/wms477",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18321"
+      ],
+      "port": 18321
+    },
+    {
+      "name": "wms477-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18321",
+        "E2E_SELLER_PATH_PREFIX=/seller",
+        "VITE_SELLER_PORTAL_URL=http://127.0.0.1:5321/seller/",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms477/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5321",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5321
+    },
+    {
+      "name": "wms477-rig",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/bbe7244a-d8ed-45f7-abe3-837e99740e52/scratchpad/stand/wms477.db",
+        "JWT_SECRET_KEY=local-audit-jwt-secret-key-minimum-32-characters",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_ORDERS=1",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "E2E_MOCK_WB_MARKETPLACE_MARKING=1",
+        "PYTHONPATH=/Users/deniscivkunov/Projects/WMS/.worktrees/wms477/backend",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "api477_rig:app",
+        "--app-dir",
+        "/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/bbe7244a-d8ed-45f7-abe3-837e99740e52/scratchpad/stand/wms477",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18321"
+      ],
+      "port": 18321
+    },
+    {
+      "name": "wms477-prod-proxy",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/bbe7244a-d8ed-45f7-abe3-837e99740e52/scratchpad/readonly-prod-proxy.mjs"
+      ],
+      "port": 18399
+    },
+    {
+      "name": "wms477-web-prod",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18399",
+        "E2E_SELLER_PATH_PREFIX=/seller",
+        "VITE_SELLER_PORTAL_URL=http://127.0.0.1:5322/seller/",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms477/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5322",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5322
+    },
+    {
+      "name": "wms484-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/bbe7244a-d8ed-45f7-abe3-837e99740e52/scratchpad/stand/wms484.db",
+        "JWT_SECRET_KEY=local-audit-jwt-secret-key-minimum-32-characters",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_ORDERS=1",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "E2E_MOCK_WB_MARKETPLACE_MARKING=1",
+        "PYTHONPATH=/Users/deniscivkunov/Projects/WMS/.worktrees/wms484/backend",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "api477_rig:app",
+        "--app-dir",
+        "/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/bbe7244a-d8ed-45f7-abe3-837e99740e52/scratchpad/stand/wms477",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18323"
+      ],
+      "port": 18323
+    },
+    {
+      "name": "wms484-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18323",
+        "E2E_SELLER_PATH_PREFIX=/seller",
+        "VITE_SELLER_PORTAL_URL=http://127.0.0.1:5323/seller/",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms484/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5323",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5323
+    },
+    {
+      "name": "wms469sd-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=postgresql+psycopg://deniscivkunov@localhost:5432/wms469sd_stand",
+        "JWT_SECRET_KEY=local-audit-jwt-secret-key-minimum-32-characters",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_ORDERS=1",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms469-stock-dialog/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18321",
+        "--reload",
+        "--reload-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms469-stock-dialog/backend/app"
+      ],
+      "port": 18321
+    },
+    {
+      "name": "wms469sd-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18321",
+        "E2E_SELLER_PATH_PREFIX=/seller",
+        "VITE_SELLER_PORTAL_URL=http://127.0.0.1:5321/seller/",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms469-stock-dialog/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5321",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5321
+    },
+    {
+      "name": "wms487-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/bbe7244a-d8ed-45f7-abe3-837e99740e52/scratchpad/stand/wms487.db",
+        "JWT_SECRET_KEY=local-audit-jwt-secret-key-minimum-32-characters",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_ORDERS=1",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "E2E_MOCK_WB_MARKETPLACE_MARKING=1",
+        "PYTHONPATH=/Users/deniscivkunov/Projects/WMS/.worktrees/wms487/backend",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "api477_rig:app",
+        "--app-dir",
+        "/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/bbe7244a-d8ed-45f7-abe3-837e99740e52/scratchpad/stand/wms477",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18324"
+      ],
+      "port": 18324
+    },
+    {
+      "name": "wms487-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18324",
+        "E2E_SELLER_PATH_PREFIX=/seller",
+        "VITE_SELLER_PORTAL_URL=http://127.0.0.1:5324/seller/",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms487/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5324",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5324
+    },
+    {
+      "name": "wms525-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=postgresql+psycopg://deniscivkunov@127.0.0.1:5432/wms525_ui",
+        "JWT_SECRET_KEY=wms525-local-only-secret-key-0123456789",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms525-ozon-auto-boxes/backend",
+        "--port",
+        "18525"
+      ],
+      "port": 18525
+    },
+    {
+      "name": "wms525-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18525",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms525-ozon-auto-boxes/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5525",
+        "--strictPort"
+      ],
+      "port": 5525
+    },
+    {
+      "name": "wms526-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=postgresql+psycopg://deniscivkunov@127.0.0.1:5432/wms526_ui",
+        "JWT_SECRET_KEY=wms525-local-only-secret-key-0123456789",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms525-ozon-auto-boxes/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18526"
+      ],
+      "port": 18526
+    },
+    {
+      "name": "wms526-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18526",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms525-ozon-auto-boxes/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5526",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5526
+    },
+    {
+      "name": "wms528-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/a6f1b631-7c62-432e-8032-64b93a11dfe3/scratchpad/stand/wms528.db",
+        "JWT_SECRET_KEY=local-wms528-jwt-secret-key-minimum-32-characters",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms528-picklist/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18528"
+      ],
+      "port": 18528
+    },
+    {
+      "name": "wms528-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18528",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms528-picklist/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5528",
+        "--strictPort"
+      ],
+      "port": 5528
+    },
+    {
+      "name": "wms529-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/a6f1b631-7c62-432e-8032-64b93a11dfe3/scratchpad/stand/wms529.db",
+        "JWT_SECRET_KEY=local-wms529-jwt-secret-key-minimum-32-characters",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms529-report/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18529"
+      ],
+      "port": 18529
+    },
+    {
+      "name": "wms529-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18529",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms529-report/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5529",
+        "--strictPort"
+      ],
+      "port": 5529
+    },
+    {
+      "name": "wms534-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/a6f1b631-7c62-432e-8032-64b93a11dfe3/scratchpad/stand/wms534.db",
+        "JWT_SECRET_KEY=local-wms534-jwt-secret-key-minimum-32-characters",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms534-intake-box/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18534"
+      ],
+      "port": 18534
+    },
+    {
+      "name": "wms534-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18534",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms534-intake-box/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5534",
+        "--strictPort"
+      ],
+      "port": 5534
+    },
+    {
+      "name": "wms541-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18542",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/artmaks-cells-view/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5542",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5542
+    },
+    {
+      "name": "wms542-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18543",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms542-inventory-scan/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5543",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5543
+    },
+    {
+      "name": "wms543-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18543",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms543-tare-cell/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5544",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5544
+    },
+    {
+      "name": "wms537-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/b1ecdc14-76b1-45b0-95d1-fdbac439a333/scratchpad/stand537/wms537.db",
+        "WMS_DATA_DIR=/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/b1ecdc14-76b1-45b0-95d1-fdbac439a333/scratchpad/stand537/data",
+        "JWT_SECRET_KEY=local-wms537-jwt-secret-key-minimum-32-characters",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms537-draft-stickers/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18537"
+      ],
+      "port": 18537
+    },
+    {
+      "name": "wms537-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18537",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms537-draft-stickers/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5537",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5537
+    },
+    {
+      "name": "wms490d5-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms490-d5/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18570"
+      ],
+      "port": 18570
+    },
+    {
+      "name": "wms490d5-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18570",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms490-d5/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5570",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5570
+    },
+    {
+      "name": "wms490d6-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms490-d6/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18571"
+      ],
+      "port": 18571
+    },
+    {
+      "name": "wms490d6-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18571",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms490-d6/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5571",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5571
+    },
+    {
+      "name": "wms549-front-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms549-front/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18563"
+      ],
+      "port": 18563
+    },
+    {
+      "name": "wms549-front-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18563",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms549-front/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5563",
+        "--strictPort"
+      ],
+      "port": 5563
+    },
+    {
+      "name": "wms491d1-f2-web",
+      "url": "http://127.0.0.1:25566",
+      "port": 25566
+    },
+    {
+      "name": "psp2-clickable",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5601",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/psp2-clickable/frontend/dist-psp2-mockup"
+      ],
+      "port": 5601
+    },
+    {
+      "name": "wms634-mockup",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5634",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms634-mockup/mockup-dist"
+      ],
+      "port": 5634
+    },
+    {
+      "name": "kizwd-api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "set -a; [ -f /private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/29eed0ce-543f-490f-a552-9eab40aba47a/scratchpad/stand/env ] && . /private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/29eed0ce-543f-490f-a552-9eab40aba47a/scratchpad/stand/env; set +a; exec env WMS_AUTO_CREATE_SCHEMA=1 WMS_ALLOW_PUBLIC_REGISTRATION=1 DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/29eed0ce-543f-490f-a552-9eab40aba47a/scratchpad/stand/kizwd.db JWT_SECRET_KEY=local-kizwd-jwt-secret-key-minimum-32-characters /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -m uvicorn app.main:app --app-dir /Users/deniscivkunov/Projects/WMS/.worktrees/kiz-withdraw-tab-20260928/backend --host 127.0.0.1 --port 18320"
+      ],
+      "port": 18320
+    },
+    {
+      "name": "kizwd-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18320",
+        "E2E_SELLER_PATH_PREFIX=/seller",
+        "VITE_SELLER_PORTAL_URL=http://127.0.0.1:5320/seller/",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/kiz-withdraw-tab-20260928/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5320",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5320
+    },
+    {
+      "name": "multisupply-mockup-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/mockup-fbs-multi-supply/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5610",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5610
+    },
+    {
+      "name": "wms568-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/8fcc8d80-ea17-49fe-b6da-80d6cebec197/scratchpad/wms568.db",
+        "JWT_SECRET_KEY=local-wms568-jwt-secret-key-minimum-32-characters",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms568-billing-returns/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18568"
+      ],
+      "port": 18568
+    },
+    {
+      "name": "wms568-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18568",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms568-billing-returns/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5568",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5568
+    },
+    {
+      "name": "wms574-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/293bb0e7-db31-4f22-b6af-3665c27fe58f/scratchpad/wms574-stand.db",
+        "JWT_SECRET_KEY=local-wms574-jwt-secret-key-minimum-32-characters",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_ORDERS=1",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "E2E_MOCK_WB_MARKETPLACE_MARKING=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/stand-wb-mock/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18574"
+      ],
+      "port": 18574
+    },
+    {
+      "name": "wms574-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18574",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/night-candidate/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5574",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5574
+    },
+    {
+      "name": "wms575-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18574",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms575-scanner/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5575",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5575
+    },
+    {
+      "name": "fix534566-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/293bb0e7-db31-4f22-b6af-3665c27fe58f/scratchpad/stand-fix534566/fix534566.db",
+        "JWT_SECRET_KEY=local-fix534566-jwt-secret-key-minimum-32-characters",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/fix-inbound-534-566/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18580"
+      ],
+      "port": 18580
+    },
+    {
+      "name": "fix534566-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18580",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/fix-inbound-534-566/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5580",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5580
+    },
+    {
+      "name": "wms586-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/8fcc8d80-ea17-49fe-b6da-80d6cebec197/scratchpad/wms586.db",
+        "JWT_SECRET_KEY=local-wms586-jwt-secret-key-minimum-32-characters",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms584-inbound-waybill/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18586"
+      ],
+      "port": 18586
+    },
+    {
+      "name": "wms586-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18586",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms584-inbound-waybill/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5586",
+        "--strictPort",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 5586
+    },
+    {
+      "name": "pc-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18380",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms643/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5380",
+        "--strictPort"
+      ],
+      "port": 5380
+    },
+    {
+      "name": "pc-emulator",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "PYTHONPATH=/Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002",
+        "WB_EMULATOR_DB_PATH=/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/ee1de9f2-5b1d-4881-a8fc-8a618ce5877f/scratchpad/stand/wb_emulator2.sqlite",
+        "WB_EMULATOR_ADMIN_TOKEN=fbs-e2e-admin",
+        "WB_EMULATOR_TOKEN_MAP_FILE=/Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/wb_emulator/seed/tokens.json",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "wb_emulator.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18381"
+      ],
+      "port": 18381
+    },
+    {
+      "name": "pc-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=postgresql+psycopg_async://postgres@localhost:5432/wms_prodcheck_20261002",
+        "JWT_SECRET_KEY=local-prodcheck-jwt-secret-key-minimum-32-characters",
+        "WILDBERRIES_MARKETPLACE_API_BASE=http://127.0.0.1:18382",
+        "WMS_DATA_DIR=/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/ee1de9f2-5b1d-4881-a8fc-8a618ce5877f/scratchpad/stand/data2",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms642/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18380"
+      ],
+      "port": 18380
+    },
+    {
+      "name": "pc-wbmix",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/ee1de9f2-5b1d-4881-a8fc-8a618ce5877f/scratchpad/stand/wbmix.sh"
+      ],
+      "port": 18382
+    },
+    {
+      "name": "wms650-mockup",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        ".worktrees/wms650-sorting-mockup/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5650",
+        "--strictPort"
+      ],
+      "port": 5650
+    },
+    {
+      "name": "prod-readonly-replay",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/1a1e94ff-372d-46e0-a2af-d3265def9a88/scratchpad/replay/server.py"
+      ],
+      "port": 8799
+    },
+    {
+      "name": "wms716-base-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/3cd31572-3b02-460d-835d-7551bc1e432a/scratchpad/stand/base.db",
+        "JWT_SECRET_KEY=local-stand-jwt-secret-key-minimum-32-characters-716",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_ORDERS=1",
+        "E2E_MOCK_WB_MARKETPLACE_SUPPLIES=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms716-732-owner-list/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18716"
+      ],
+      "port": 18716
+    },
+    {
+      "name": "wms716-base-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18716",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms716-732-owner-list/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5716",
+        "--strictPort"
+      ],
+      "port": 5716,
+      "url": "http://localhost:5716"
+    },
+    {
+      "name": "wms731-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/3cd31572-3b02-460d-835d-7551bc1e432a/scratchpad/stand/s731.db",
+        "JWT_SECRET_KEY=local-stand-jwt-secret-key-minimum-32-characters-731",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms731-fbo-pick-list/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18731"
+      ],
+      "port": 18731
+    },
+    {
+      "name": "wms731-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18731",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms731-fbo-pick-list/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5731",
+        "--strictPort"
+      ],
+      "port": 5731,
+      "url": "http://localhost:5731"
+    },
+    {
+      "name": "wms716-l1-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/3cd31572-3b02-460d-835d-7551bc1e432a/scratchpad/stand/l1.db",
+        "JWT_SECRET_KEY=local-stand-jwt-secret-key-minimum-32-characters-716",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms716-720-orders-list/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18717"
+      ],
+      "port": 18717
+    },
+    {
+      "name": "wms716-l1-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18717",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms716-720-orders-list/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5717",
+        "--strictPort"
+      ],
+      "port": 5717,
+      "url": "http://localhost:5717"
+    },
+    {
+      "name": "wms721-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/3cd31572-3b02-460d-835d-7551bc1e432a/scratchpad/stand/l2.db",
+        "JWT_SECRET_KEY=local-stand-jwt-secret-key-minimum-32-characters-716",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms721-732-ozon-wh/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18721"
+      ],
+      "port": 18721
+    },
+    {
+      "name": "wms721-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18721",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms721-732-ozon-wh/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5721",
+        "--strictPort"
+      ],
+      "port": 5721,
+      "url": "http://localhost:5721"
+    },
+    {
+      "name": "wms736-tsd-mockup",
+      "runtimeExecutable": "/Users/deniscivkunov/Projects/WMS/.worktrees/tsd-artmaks-analysis/docs/mockups/WMS-736/open.sh",
+      "runtimeArgs": [],
+      "port": 16736
+    },
+    {
+      "name": "wms725-l4-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "WMS_AUTO_CREATE_SCHEMA=1",
+        "WMS_ALLOW_PUBLIC_REGISTRATION=1",
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/332a9a49-638a-49bf-a7b9-ff8dfcb0b256/scratchpad/stand/l4.db",
+        "JWT_SECRET_KEY=local-stand-jwt-secret-key-minimum-32-characters-716",
+        "E2E_MOCK_WB_CARDS=1",
+        "E2E_MOCK_WB_SUPPLIES=1",
+        "E2E_MOCK_WB_WAREHOUSES=1",
+        "E2E_MOCK_WB_MARKETPLACE_WAREHOUSES=1",
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--app-dir",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms725-730-print-menu/backend",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18725"
+      ],
+      "port": 18725
+    },
+    {
+      "name": "wms725-l4-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "VITE_API_PROXY=http://127.0.0.1:18725",
+        "npm",
+        "--prefix",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms725-730-print-menu/frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5725",
+        "--strictPort"
+      ],
+      "port": 5725,
+      "url": "http://localhost:5725"
     }
   ]
 }

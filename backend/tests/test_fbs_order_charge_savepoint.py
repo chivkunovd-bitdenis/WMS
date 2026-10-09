@@ -56,3 +56,40 @@ async def test_charge_failure_keeps_outer_transaction_alive(
         await session.commit()
         saved = await session.scalar(select(Seller).where(Seller.id == seller.id))
         assert saved is not None
+
+
+@pytest.mark.asyncio
+async def test_charge_happens_on_handover_not_on_marketplace_status() -> None:
+    """Начисляем с момента передачи заказа, а не когда маркетплейс дошёл до своих
+    статусов.
+
+    Раньше условие включало только `sorted` и `done` — их ставит уже сам
+    маркетплейс, и до них заказ может не дойти вовсе. На стенде из-за этого
+    висели 43 переданных заказа без начислений, восемь из них — уже доставленные
+    покупателям. Передача заказа необратима (те же статусы перечислены в
+    NON_CANCELLABLE_STATUSES), значит работа склада выполнена и оплачивается.
+    """
+    from app.models.fbs_order import (
+        FBS_ORDER_STATUS_ASSEMBLING,
+        FBS_ORDER_STATUS_DONE,
+        FBS_ORDER_STATUS_IN_DELIVERY,
+        FBS_ORDER_STATUS_IN_SUPPLY,
+        FBS_ORDER_STATUS_NEW,
+        FBS_ORDER_STATUS_PACKED,
+        FBS_ORDER_STATUS_SORTED,
+    )
+    from app.services.fbs_order_billing_service import CONFIRMED_STATUSES
+
+    # Передано маркетплейсу — начисляем.
+    assert FBS_ORDER_STATUS_IN_DELIVERY in CONFIRMED_STATUSES
+    assert FBS_ORDER_STATUS_SORTED in CONFIRMED_STATUSES
+    assert FBS_ORDER_STATUS_DONE in CONFIRMED_STATUSES
+
+    # Ещё у нас на складе — не начисляем.
+    for status in (
+        FBS_ORDER_STATUS_NEW,
+        FBS_ORDER_STATUS_IN_SUPPLY,
+        FBS_ORDER_STATUS_ASSEMBLING,
+        FBS_ORDER_STATUS_PACKED,
+    ):
+        assert status not in CONFIRMED_STATUSES

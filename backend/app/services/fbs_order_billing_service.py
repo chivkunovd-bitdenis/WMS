@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_DONE,
+    FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_SORTED,
     FbsOrder,
     FbsOrderProduct,
@@ -39,7 +40,14 @@ from app.services.operation_fact_service import OperationFactError, line_input, 
 logger = logging.getLogger(__name__)
 
 FBS_ORDER_SERVICE_CODE = "fbs_order"
-CONFIRMED_STATUSES = frozenset({FBS_ORDER_STATUS_SORTED, FBS_ORDER_STATUS_DONE})
+# Начисляем с момента, когда заказ передан маркетплейсу: работа склада сделана и
+# отменить её уже нельзя (те же статусы стоят в NON_CANCELLABLE_STATUSES отмены).
+# Раньше здесь были только `sorted` и `done` — статусы, которые ставит уже сам
+# маркетплейс, и до них заказ может не дойти вовсе: на стенде 43 переданных
+# заказа висели без начислений, восемь из них уже доставлены покупателям.
+CONFIRMED_STATUSES = frozenset(
+    {FBS_ORDER_STATUS_IN_DELIVERY, FBS_ORDER_STATUS_SORTED, FBS_ORDER_STATUS_DONE}
+)
 SOURCE_TYPE = "fbs_order"
 
 
