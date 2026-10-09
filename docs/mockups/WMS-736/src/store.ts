@@ -51,6 +51,16 @@ export const freshWorld = (): World => ({
 
 export type ScanHint = { code: string; label: string };
 
+/** WMS-707: закреплённое положение экрана, хранится на устройстве. */
+export type Orientation = "portrait" | "landscape" | "portrait-rev" | "landscape-rev";
+export const orientationLabel: Record<Orientation, string> = {
+  "portrait": "Вертикально",
+  "landscape": "Горизонтально",
+  "portrait-rev": "Вертикально, перевёрнуто",
+  "landscape-rev": "Горизонтально, перевёрнуто",
+};
+export const isLandscape = (o: Orientation) => o.startsWith("landscape");
+
 export type Store = {
   w: World;
   update: (fn: (w: World) => World) => void;
@@ -70,6 +80,8 @@ export type Store = {
   setHints: (h: ScanHint[]) => void;
   /** Экран поставки: «variant» — действия закреплены внизу, состав свёрнут; «r8» — вид WMS-584 R8. */
   supplyLayout: "variant" | "r8";
+  orientation: Orientation;
+  setOrientation: (o: Orientation) => void;
   scanHandler: React.MutableRefObject<((code: string) => void) | null>;
   backHandler: React.MutableRefObject<(() => boolean) | null>;
 };

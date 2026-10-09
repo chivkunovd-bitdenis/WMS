@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Box, Order, SORTING, productById, sellerById } from "./data";
 import { fmtFull, notPickedVerb, pieceWord, underpicks } from "./logic";
 import { DeliveryDialog } from "./screensFbs";
-import { newId, useScan, useStore } from "./store";
+import { isLandscape, newId, useScan, useStore } from "./store";
 import { Btn, ConfirmSheet, Dialog, Field, Icon, Photo, Scaffold, Sheet } from "./ui";
 
 const isKiz = (v: string) => v.startsWith("]d2") || v.startsWith("(01)") || (/^01\d{14}21/.test(v) && v.length >= 20);
@@ -43,6 +43,7 @@ export function PackScreen({ supplyId }: { supplyId: string }) {
   const openBox = boxes.find((b) => b.id === openBoxId) ?? null;
   const packed = orders.filter((o) => o.packed).length;
   const editable = !sup.delivered;
+  const land = isLandscape(s.orientation);
   const boxOf = (o: Order) => boxes.find((b) => b.orderIds.includes(o.id)) ?? null;
 
   const assign = (box: Box, o: Order) => {
@@ -126,14 +127,18 @@ export function PackScreen({ supplyId }: { supplyId: string }) {
       title="Упаковка FBS"
       onExit={s.back}
       actions={<button className="icon-btn" aria-label="Печать" title="Печать" style={{ margin: 0 }} onClick={() => setPrintSheet(true)}><Icon name="print" color="var(--primary)" /></button>}
-      primary={editable ? { label: "Передать поставку в WB", onClick: () => setDeliver(true) } : null}
+      primary={editable && !land ? { label: "Передать поставку в WB", onClick: () => setDeliver(true) } : null}
     >
+      {(() => {
+        const scanPart = (<>
       <div className="scanline">
         {!sup.delivered ? <div style={{ fontWeight: 700 }}>{kizLine}</div> : null}
         {kizResult ? <div style={{ color: "var(--success)" }}>{kizResult}</div> : null}
         {sup.delivered ? <div style={{ color: "var(--success)", fontWeight: 700 }}>Поставка передана в WB</div> : null}
       </div>
-      <div className="scroll" style={{ flex: 1, paddingBottom: 8 }}>
+        </>);
+        const boxesPart = (<>
+
         <UnderpickBlock supplyId={supplyId} />
 
         <div className="boxes-card" data-testid="boxes">
@@ -180,6 +185,8 @@ export function PackScreen({ supplyId }: { supplyId: string }) {
           })}
         </div>
 
+        </>);
+        const ordersPart = (<>
         <div className="orders-head">Заказы · упаковано {packed} из {orders.length}</div>
         {orders.map((o) => {
           const p = productById(o.productId);
@@ -202,7 +209,17 @@ export function PackScreen({ supplyId }: { supplyId: string }) {
             </div>
           );
         })}
-      </div>
+        </>);
+        if (!land) return (<>{scanPart}<div className="scroll" style={{ flex: 1, paddingBottom: 8 }}>{boxesPart}{ordersPart}</div></>);
+        // WMS-707: в альбоме тот же столбец, но «Передать» — справа в строке скана, чтобы списку осталась высота.
+        return (<>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--surface)", borderBottom: "1px solid #e6e6e6", paddingRight: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>{scanPart}</div>
+            {editable ? <Btn h={48} fs={16} onClick={() => setDeliver(true)}>Передать поставку в WB</Btn> : null}
+          </div>
+          <div className="scroll" style={{ flex: 1, paddingBottom: 8 }}>{boxesPart}{ordersPart}</div>
+        </>);
+      })()}
 
       {printSheet ? (
         <Sheet onDismiss={() => setPrintSheet(false)}>

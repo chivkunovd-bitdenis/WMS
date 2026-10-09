@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Order } from "./data";
-import { Route, ScanHint, Store, StoreCtx, World, freshWorld } from "./store";
+import { Orientation, Route, ScanHint, Store, StoreCtx, World, freshWorld, isLandscape, orientationLabel } from "./store";
 import { HomeScreen, InboundDocScreen, InboundListScreen } from "./screensInbound";
 import { FbsOrdersScreen, PackGroupScreen, SupplyScreen, TODAY } from "./screensFbs";
 import { PickScreen } from "./screenPick";
@@ -38,7 +38,7 @@ function pickAllExcept(w: World, except: string[]): World {
   return { ...w, orders, placements };
 }
 
-type Scenario = { id: string; title: string; tasks: string; steps: string[]; start: () => { w: World; stack: Route[] } };
+type Scenario = { id: string; title: string; tasks: string; steps: string[]; start: () => { w: World; stack: Route[] }; orientation?: Orientation };
 
 const scenarios: Scenario[] = [
   {
@@ -87,6 +87,11 @@ const scenarios: Scenario[] = [
       return { w, stack: [{ name: "home" }, { name: "fbs" }, { name: "pack-group", supplyIds: [SUP_A, SUP_B] }, { name: "pack", supplyId: SUP_A, groupIds: [SUP_A, SUP_B] }] };
     },
   },
+  {
+    id: "orient", title: "Положение экрана", tasks: "WMS-707", orientation: "portrait",
+    steps: ["На главном внизу «Вертикально» → выбрать «Горизонтально»: экран сразу горизонтальный, плитки 2×2", "Обновить страницу браузера (как перезапуск приложения) — положение то же", "FBS → «В работе» → задание → подбор: слева место и товар, справа маршрут; сканы как обычно", "«К упаковке» → поставка → упаковка; приёмка и окна фильтров — ничего не наезжает, кнопка внизу видна", "«Горизонтально, перевёрнуто» / «Вертикально, перевёрнуто» — метка «▲ сканер» на корпусе с другой стороны, изображение прямое"],
+    start: () => ({ w: withSupplies(freshWorld()), stack: [{ name: "home" }] }),
+  },
 ];
 
 // ---------------- звук ----------------
@@ -116,15 +121,24 @@ export default function App() {
   const [scenario, setScenario] = useState<string>("all");
   const [sound, setSound] = useState(true);
   const [supplyLayout, setSupplyLayout] = useState<"variant" | "r8">("variant");
+  // WMS-707: положение сохраняется «на устройстве» — в макете в localStorage, переживает перезагрузку страницы.
+  const [orientation, setOrientationState] = useState<Orientation>(() => {
+    try { return (localStorage.getItem("wms707-orientation") as Orientation) || "portrait"; } catch { return "portrait"; }
+  });
+  const setOrientation = (o: Orientation) => {
+    setOrientationState(o);
+    try { localStorage.setItem("wms707-orientation", o); } catch { /* нет хранилища — только на сеанс */ }
+  };
   const [scale, setScale] = useState<number | "auto">("auto");
   const [vh, setVh] = useState(window.innerHeight);
+  const [vw, setVw] = useState(window.innerWidth);
   const [scanText, setScanText] = useState("");
   const scanHandler = useRef<((c: string) => void) | null>(null);
   const backHandler = useRef<(() => boolean) | null>(null);
   const timers = useRef<{ f?: number; s?: number }>({});
   const soundRef = useRef(sound); soundRef.current = sound;
 
-  useEffect(() => { const h = () => setVh(window.innerHeight); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []);
+  useEffect(() => { const h = () => { setVh(window.innerHeight); setVw(window.innerWidth); }; window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []);
 
   const log = useCallback((m: string) => {
     const t = new Date(); const p = (x: number) => String(x).padStart(2, "0");
@@ -158,9 +172,11 @@ export default function App() {
     log,
     setHints,
     supplyLayout,
+    orientation,
+    setOrientation: (o) => { setOrientation(o); log(`Положение экрана закреплено: ${orientationLabel[o]} (сохранено на устройстве)`); },
     scanHandler,
     backHandler,
-  }), [w, stack, showFlash, snack, log, supplyLayout]);
+  }), [w, stack, showFlash, snack, log, supplyLayout, orientation]);
   // Плашка ошибки относится к экрану, на котором случилась: переход на другой экран её убирает.
   useEffect(() => { setBanner(null); }, [stack.length, stack[stack.length - 1]?.name]);
 
@@ -174,6 +190,7 @@ export default function App() {
 
   const startScenario = (sc: Scenario) => {
     const { w: nw, stack: ns } = sc.start();
+    if (sc.orientation) setOrientation(sc.orientation);
     setW(nw); setStack(ns); setScenario(sc.id); setFlash(null); setSnack(null); setBanner(null);
     setLogs([]); log(`Сценарий «${sc.title}»: исходное состояние загружено`);
   };
@@ -192,16 +209,24 @@ export default function App() {
     }
   })();
 
-  const autoScale = Math.max(0.7, Math.min(1.5, (vh - 60) / 690));
+  const land = isLandscape(orientation);
+  const rev = orientation.endsWith("-rev");
+  const devH = land ? 410 : 690;
+  const devW = land ? 664 : 384;
+  const autoScale = Math.max(0.6, Math.min(1.5, (vh - 60) / devH, (vw - 500) / devW));
   const k = scale === "auto" ? autoScale : scale;
 
   return (
     <StoreCtx.Provider value={store}>
       <div className="stand">
-        <div className="device-wrap" style={{ transform: `scale(${k})`, marginBottom: (k - 1) * 690 }}>
-          <div className="device">
-            <div className="screen" data-testid="tsd-screen">
+        <div style={{ width: devW * k, height: (devH + 24) * k, flex: "none" }}>
+        <div className="device-wrap" style={{ transform: `scale(${k})`, transformOrigin: "top left", width: devW }}>
+          <div className={`device${land ? " land" : ""}`}>
+            {/* Метка «верх корпуса» (окно сканера): у перевёрнутых положений корпус повёрнут, а картинка на экране — нет. */}
+            <div className={`hw-mark ${land ? (rev ? "hw-right" : "hw-left") : (rev ? "hw-bottom" : "hw-top")}`}>▲ сканер</div>
+            <div className={`screen${land ? " land" : ""}`} data-testid="tsd-screen">
               <div className="statusbar"><span>21:00</span><span>Wi-Fi ▾ 87%</span></div>
+              <div className="screen-body">
               <div className="app" onPointerDownCapture={() => banner && setBanner(null)}>
                 {screen}
                 {flash ? (
@@ -217,9 +242,11 @@ export default function App() {
                 <button onClick={() => setStack([{ name: "home" }])} aria-label="Домой">○</button>
                 <button aria-label="Недавние">□</button>
               </div>
+              </div>
             </div>
           </div>
-          <div className="device-caption">ТСД 360 × 640 dp, портрет · масштаб {Math.round(k * 100)}%</div>
+          <div className="device-caption">ТСД {land ? "640 × 360" : "360 × 640"} dp · {orientationLabel[orientation].toLowerCase()} · масштаб {Math.round(k * 100)}%</div>
+        </div>
         </div>
 
         <aside className="panel">

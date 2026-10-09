@@ -3,7 +3,7 @@ import { InboundDoc, InboundStatus, productById, sellerById, sellers } from "./d
 import {
   InboundFilters, activeFilterCount, filterInbound, inboundOpenMode, inboundStatusColor, inboundStatusRu, noFilters, ruPlural,
 } from "./logic";
-import { useScan, useStore } from "./store";
+import { Orientation, isLandscape, orientationLabel, useScan, useStore } from "./store";
 import { Btn, Field, Icon, Photo, Scaffold, Sheet } from "./ui";
 
 // ---------------- Главный экран (A2), без изменений ----------------
@@ -20,25 +20,57 @@ export function HomeScreen() {
     { label: "Отгрузка FBO", icon: "truck", count: 2, go: () => s.snack("Макет: экран отгрузки FBO в этом пакете не меняется") },
     { label: "FBS", icon: "truck", count: null, go: () => s.push({ name: "fbs" }) },
   ];
+  const [orientSheet, setOrientSheet] = React.useState(false);
+  const land = isLandscape(s.orientation);
   return (
-    <div className="scaffold" style={{ padding: 16 }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+    <div className="scaffold" style={{ padding: land ? "10px 16px" : 16 }}>
+      <div style={land
+        ? { flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gridAutoRows: "1fr", gap: 8, minHeight: 0 }
+        : { flex: 1, display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
         {tiles.map((t) => (
-          <button key={t.label} className="tile" style={{ flex: 1 }} onClick={t.go}>
-            <Icon name={t.icon} size={44} color="var(--primary)" />
-            <span className="lbl">{t.label}</span>
+          <button key={t.label} className="tile" style={land ? { flexDirection: "row", gap: 12 } : { flex: 1 }} onClick={t.go}>
+            <Icon name={t.icon} size={land ? 36 : 44} color="var(--primary)" />
+            <span className="lbl" style={land ? { fontSize: 24 } : undefined}>{t.label}</span>
             {t.count ? <span className="cnt">{t.count}</span> : null}
           </button>
         ))}
       </div>
-      <Btn kind="text" block h={48} fs={18} onClick={() => s.snack("Макет: обновление приложения не показывается")}>Обновление приложения</Btn>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 }}>
-        <div>
-          <div style={{ fontSize: 16 }}>Ирина Соколова</div>
-          <div style={{ fontSize: 13, color: "var(--text2)" }}>Кладовщик</div>
-        </div>
-        <Btn kind="text" fs={16} onClick={() => s.snack("Макет: смена сотрудника не показывается")}>Сменить</Btn>
+      {/* WMS-707: закрепить положение экрана — одна кнопка на главном экране, выбор хранится на устройстве. */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
+        <Btn kind="tonal" h={48} fs={16} style={{ flex: land ? "none" : 1, padding: "0 14px", whiteSpace: "nowrap" }} onClick={() => setOrientSheet(true)} testId="orientation-open">
+          <Icon name="rotate" size={20} />Экран: {orientationLabel[s.orientation].toLowerCase()}
+        </Btn>
+        {land ? <Btn kind="text" h={48} fs={16} style={{ whiteSpace: "nowrap" }} onClick={() => s.snack("Макет: обновление приложения не показывается")}>Обновление приложения</Btn> : null}
       </div>
+      {land ? (
+        <div style={{ display: "flex", alignItems: "center", height: 48 }}>
+          <span className="ellipsis" style={{ fontSize: 16, flex: 1 }}>Ирина Соколова · Кладовщик</span>
+          <Btn kind="text" h={48} fs={16} onClick={() => s.snack("Макет: смена сотрудника не показывается")}>Сменить</Btn>
+        </div>
+      ) : null}
+      {!land ? (
+        <>
+          <Btn kind="text" block h={48} fs={18} onClick={() => s.snack("Макет: обновление приложения не показывается")}>Обновление приложения</Btn>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 }}>
+            <div>
+              <div style={{ fontSize: 16 }}>Ирина Соколова</div>
+              <div style={{ fontSize: 13, color: "var(--text2)" }}>Кладовщик</div>
+            </div>
+            <Btn kind="text" fs={16} onClick={() => s.snack("Макет: смена сотрудника не показывается")}>Сменить</Btn>
+          </div>
+        </>
+      ) : null}
+      {orientSheet ? (
+        <Sheet onDismiss={() => setOrientSheet(false)}>
+          <div style={{ fontSize: 22, fontWeight: 600, margin: "2px 0 6px" }}>Положение экрана</div>
+          {(["portrait", "landscape", "portrait-rev", "landscape-rev"] as Orientation[]).map((o) => (
+            <div key={o} className={`radio${s.orientation === o ? " on" : ""}`} onClick={() => { s.setOrientation(o); setOrientSheet(false); }} data-testid={`orientation-${o}`}>
+              <span className="dot" /><span style={{ flex: 1 }}>{orientationLabel[o]}</span>
+            </div>
+          ))}
+          <div style={{ fontSize: 16, color: "var(--text2)", margin: "8px 0 12px" }}>Сохраняется на этом устройстве</div>
+        </Sheet>
+      ) : null}
     </div>
   );
 }
@@ -149,7 +181,9 @@ export function InboundListScreen() {
           <Btn kind="outlined" h={48} fs={16} onClick={() => setF(noFilters)}>Сбросить</Btn>
         </div>
       ) : (
-        <div className="scroll" style={{ flex: 1, padding: "8px 16px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="scroll" style={isLandscape(s.orientation)
+          ? { flex: 1, padding: "8px 16px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, alignContent: "start" }
+          : { flex: 1, padding: "8px 16px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
           {list.map((d) => <TaskCard key={d.id} d={d} onClick={() => open(d)} />)}
         </div>
       )}

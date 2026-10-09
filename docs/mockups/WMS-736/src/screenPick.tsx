@@ -4,7 +4,7 @@ import {
   RouteRow, Source, findSourceByCode, locLabel, placementLabel, plannedOf, remainingOf, routePlacements, routeRows,
   sourceMatches, sourceRowKey, supplyOrders, takeAt,
 } from "./logic";
-import { World, useScan, useStore } from "./store";
+import { World, isLandscape, useScan, useStore } from "./store";
 import { Btn, Dialog, Field, Icon, Photo, Scaffold } from "./ui";
 
 /** Короткое имя для сообщений: первые слова до ~18 знаков, без висящих предлогов. */
@@ -32,6 +32,7 @@ export function PickScreen({ supplyIds, single }: { supplyIds: string[]; single:
   const [manual, setManual] = useState<null | { productId: string; choices: Placement[]; chosen: Placement | null }>(null);
   const [qty, setQty] = useState("1");
   const listRef = useRef<HTMLDivElement>(null);
+  const land = isLandscape(s.orientation);
 
   const route = useMemo(() => routePlacements(w.placements, w.orders, supplyIds), [w.placements, w.orders, supplyIds]);
   const rows = useMemo(() => routeRows(route), [route]);
@@ -156,6 +157,8 @@ export function PickScreen({ supplyIds, single }: { supplyIds: string[]; single:
       progress={[picked, total]}
       actions={<button className="icon-btn" aria-label="Отменить последний" title="Отменить последний" disabled={!lastPick} onClick={undo} style={{ opacity: lastPick ? 1 : 0.35, margin: 0 }} data-testid="undo"><Icon name="undo" color="var(--primary)" /></button>}
     >
+      {(() => {
+        const topPart = (<>
       <div className="cellbar" style={{ background: source ? "var(--success)" : "var(--text2)" }}>
         <span className="lbl ellipsis">{srcLabel}</span>
         {source ? <Btn kind="text" h={48} fs={16} onClick={() => setSource(null)}>Сменить место</Btn> : null}
@@ -177,6 +180,8 @@ export function PickScreen({ supplyIds, single }: { supplyIds: string[]; single:
           <div className="next-row" data-testid="place-block" style={{ color: "var(--text2)", fontSize: 16 }}>Отсюда больше ничего брать не нужно</div>
         )
       ) : null}
+        </>);
+        const routePart = (
       <div className="scroll" ref={listRef} style={{ flex: 1, position: "relative", background: "var(--surface)" }} data-testid="route">
         {rows.map((r: RouteRow) => {
           if (r.type === "loc") {
@@ -223,6 +228,8 @@ export function PickScreen({ supplyIds, single }: { supplyIds: string[]; single:
         {/* Запас внизу: любое место можно поставить к верху списка, без полуобрезанной строки над ним. */}
         <div style={{ height: "calc(100% - 96px)" }} />
       </div>
+        );
+        if (!land) return (<>{topPart}{routePart}
       {complete ? (
         <div style={{ display: "flex", gap: 8, padding: "8px 12px 10px", background: "var(--surface)", flex: "none", boxShadow: "0 -1px 3px rgba(0,0,0,.12)" }}>
           <Btn kind="filled" h={56} fs={19} style={{ flex: 3 }} onClick={() => single ? s.replace({ name: "pack", supplyId: supplyIds[0] }) : s.push({ name: "pack-group", supplyIds })}>К упаковке</Btn>
@@ -230,6 +237,44 @@ export function PickScreen({ supplyIds, single }: { supplyIds: string[]; single:
         </div>
       ) : null}
 
+        </>);
+        // WMS-707: в альбоме — слева место и товар (и кнопки в конце), справа маршрут на всю высоту.
+        return (
+          <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+            <div style={{ width: 232, flex: "none", display: "flex", flexDirection: "column", borderRight: "1px solid #ddd", background: "var(--bg)" }}>
+              <div className="cellbar" style={{ background: source ? "var(--success)" : "var(--text2)" }}>
+                <span className="lbl clamp2" style={{ fontSize: 17 }}>{srcLabel}</span>
+              </div>
+              {source ? <Btn kind="text" h={48} fs={16} onClick={() => setSource(null)}>Сменить место</Btn> : null}
+              {source && !complete ? (nextHere ? (() => {
+                const pr = productById(nextHere.productId);
+                const take = takeAt(nextHere, w.orders, supplyIds);
+                return (
+                  <div className="next-card" data-testid="place-block">
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <Photo p={pr} w={36} h={44} />
+                      <div className="clamp2" style={{ fontSize: 16, fontWeight: 600, lineHeight: "20px" }}>р. {pr.size} · {pr.name}</div>
+                    </div>
+                    <div className="nums">
+                      <div className="n"><small>Остаток</small><b>{nextHere.qty}</b></div>
+                      <div className={`n take${take === 0 ? " zero" : ""}`}><small>Взять</small><b>{take}</b></div>
+                      <div className="n"><small>Собрано</small><b>{nextHere.pickedHere}</b></div>
+                    </div>
+                  </div>
+                );
+              })() : <div className="next-card" style={{ color: "var(--text2)", fontSize: 16 }}>Отсюда больше ничего брать не нужно</div>) : null}
+              <div style={{ flex: 1 }} />
+              {complete ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 8 }}>
+                  <Btn kind="filled" h={56} fs={19} block onClick={() => single ? s.replace({ name: "pack", supplyId: supplyIds[0] }) : s.push({ name: "pack-group", supplyIds })}>К упаковке</Btn>
+                  <Btn kind="outlined" h={48} fs={16} block onClick={() => { s.update((x) => ({ ...x, fbsTab: "work" })); s.resetTo([{ name: "home" }, { name: "fbs" }]); }}>Завершить подбор</Btn>
+                </div>
+              ) : null}
+            </div>
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>{routePart}</div>
+          </div>
+        );
+      })()}
       {chooser ? (
         <Dialog title="Откуда подобрать товар" onDismiss={() => setChooser(null)} actions={<Btn kind="text" h={48} fs={16} onClick={() => setChooser(null)}>Отмена</Btn>}>
           <div style={{ marginBottom: 6 }}>{productById(chooser.productId).name}</div>

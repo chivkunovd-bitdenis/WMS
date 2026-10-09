@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Order, Supply, productById, sellerById } from "./data";
 import { fmtFull, fmtShort, isDeadlineNear, ordersLabel, ruPlural, underpicks } from "./logic";
-import { World, newId, useScan, useStore } from "./store";
+import { World, isLandscape, newId, useScan, useStore } from "./store";
 import { Btn, Chip, Dialog, Icon, Photo, Scaffold } from "./ui";
 import { UnderpickBlock } from "./screenPack";
 
@@ -234,14 +234,15 @@ export function FbsOrdersScreen() {
             </>}
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
               <div>Название: FBS {TODAY}</div>
-              <div style={{ display: "flex", gap: 16 }}>
                 {(["warehouse_sc", "pvz"] as const).map((dv) => (
                   <div key={dv} className={`radio${dialog.delivery === dv ? " on" : ""}`} style={{ opacity: dialog.busy || anyCreated ? 0.5 : 1 }} onClick={() => { if (!dialog.busy && !anyCreated && dialog.delivery !== dv) runChecks(dialog.groups.map((g) => ({ ...g, status: "checking", error: undefined })), dv); }}>
                     <span className="dot" />{dv === "pvz" ? "ПВЗ" : "Склад / СЦ"}
                   </div>
                 ))}
               </div>
+              <div style={isLandscape(s.orientation) ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, alignItems: "start" } : { display: "flex", flexDirection: "column", gap: 6 }}>
               {dialog.groups.map((g) => (
                 <div key={g.key} style={{ background: "var(--bg)", borderRadius: 8, padding: "8px 10px", fontSize: 16 }}>
                   <div style={{ fontWeight: 600 }}>{sellerById(g.sellerId).name} · {ordersLabel(g.orderIds.length)}</div>
@@ -254,6 +255,7 @@ export function FbsOrdersScreen() {
                   ) : null}
                 </div>
               ))}
+              </div>
             </div>
           </Dialog>
         );
