@@ -118,7 +118,7 @@ describe('WMS-719 size replaces SKU in the real FBS screen', () => {
     }
     for (const label of ['В работе', 'В доставке', 'Завершённые']) {
       await tab(label)
-      expect(headers()).toEqual(['Номер / название поставки', 'Селлер', 'Склад', 'Заказы / единицы', 'Короба', 'Статус', 'Дата отгрузки', 'Печать'])
+      expect(headers()).toEqual(['Номер / название поставки', 'Селлер', 'Склад', 'Заказы / единицы', 'Короба', 'Статус', 'Печать'])
     }
     // Do not assert an overdue tab: its removal belongs to WMS-692.
   })
