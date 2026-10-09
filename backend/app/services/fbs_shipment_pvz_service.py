@@ -889,9 +889,7 @@ async def _reconcile_pending_cargo_delete_operation(
             supply_id=supply.wb_supply_id,
         )
     except WildberriesClientError as exc:
-        raise FbsShipmentPvzError(
-            "wb_timeout" if exc.code == "transport_error" else _wb_error_code(exc)
-        ) from exc
+        raise FbsShipmentPvzError("wb_pending_confirmation") from exc
 
     still_after = [wb_id for wb_id in requested_ids if wb_id in set(current_after)]
     if still_after:
