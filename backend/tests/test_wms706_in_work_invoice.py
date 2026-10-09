@@ -787,3 +787,117 @@ async def test_c30_cancelled_early_invoice_can_be_reissued_for_original_period_a
         f"после сентябрьской передачи; ответ {retried.status_code}: {retried.text}"
     )
     assert retried.json()["total_amount_kopecks"] == 1000
+
+
+@pytest.mark.asyncio
+async def test_c31_new_ozon_handover_charge_can_be_invoiced_in_its_own_month(async_client):
+    """C31, R5/R9/R10: новая третья штука сохраняет сентябрьскую дату, а не дату раннего счёта."""
+    headers, tenant_id = await _tenant(async_client)
+    seller_id = await _seller(async_client, headers, "Селлер C31")
+    warehouse_id = await _warehouse(tenant_id)
+    await _seed_tariffs(tenant_id, seller_id)
+    order_id = await _in_work_order(
+        tenant_id, seller_id, warehouse_id, number=708101, marketplace="ozon", quantities=(1, 1),
+    )
+    early = await _create(async_client, headers, _body(seller_id, _sources(order_id)), "c31-early")
+    assert early.status_code == 201, f"предпосылка C31: ранний счёт не создан: {early.text}"
+    assert early.json()["total_amount_kopecks"] == 4000
+    early_charges = [row for row in await _charges(order_id) if row["entry_type"] == "charge"]
+    assert len(early_charges) == 2 and {row["service_code"] for row in early_charges} == set(SERVICES)
+    assert all(row["quantity"] == 2 and row["occurred_at"] == WORK_DAY for row in early_charges)
+    early_ids = {row["id"] for row in early_charges}
+    assert await _invoice_source_ids(early.json()["id"]) == early_ids
+
+    async with SessionLocal() as session:
+        positions = list(await session.scalars(
+            select(FbsOrderProduct).where(FbsOrderProduct.order_id == order_id).order_by(FbsOrderProduct.position_index)
+        ))
+        first_product, second_product = positions[0].product_id, positions[1].product_id
+        positions[0].quantity = 2
+        await session.commit()
+
+    # Как в grown-piece C14: два накопительных подтверждения передачи; начисление
+    # за третью штуку возникает только при втором, уже в сентябре.
+    additional_day = msk(2026, 9, 2, 12)
+    for moment, quantities in (
+        (msk(2026, 9, 1, 12), {first_product: 1}),
+        (additional_day, {first_product: 2, second_product: 1}),
+    ):
+        async with SessionLocal() as session:
+            order = await session.get(FbsOrder, order_id)
+            await charge_handed_over_orders(
+                session, [order], occurred_at=moment,
+                quantities_by_order={order_id: quantities},
+            )
+            await session.commit()
+
+    charges = [row for row in await _charges(order_id) if row["entry_type"] == "charge"]
+    new_charges = [row for row in charges if row["id"] not in early_ids]
+    assert len(new_charges) == 2 and {row["service_code"] for row in new_charges} == set(SERVICES), (
+        f"предпосылка C31: ожидались отдельные доначисления за третью штуку: {charges}"
+    )
+    assert all(
+        row["quantity"] == 1 and row["amount"] == 1000 and row["occurred_at"] == additional_day
+        for row in new_charges
+    ), f"предпосылка C31: доначисления должны быть за одну новую штуку на 2 сентября: {new_charges}"
+    body = {
+        **_body(seller_id, []),
+        "date_from": "2026-09-01", "date_to": "2026-09-30",
+        "selected_root_ids": [str(row["id"]) for row in new_charges],
+    }
+    september = await _create(async_client, headers, body, "c31-september")
+    assert september.status_code == 201, (
+        "новые сентябрьские начисления за третью штуку должны входить в сентябрьский счёт; "
+        "дата первого августовского начисления не должна подменять их собственную дату: "
+        f"ответ {september.status_code}: {september.text}"
+    )
+    assert september.json()["total_amount_kopecks"] == 2000
+    assert await _invoice_source_ids(september.json()["id"]) == {row["id"] for row in new_charges}
+    reread = await async_client.get(f"/billing/invoices-v2/{early.json()['id']}", headers=headers)
+    assert reread.status_code == 200 and reread.json()["total_amount_kopecks"] == 4000
+    after = {row["id"]: row for row in await _charges(order_id)}
+    assert after == {row["id"]: row for row in charges}, "выбор в счёт не должен менять даты или добавлять начисления"
+
+
+@pytest.mark.asyncio
+async def test_c32_early_ozon_packing_is_counted_once_across_invoice_and_handover_months(async_client):
+    """C32, R6/R10: «Упаковано» не удваивает одну штуку между августом и сентябрём."""
+    headers, tenant_id = await _tenant(async_client)
+    seller_id = await _seller(async_client, headers, "Селлер C32")
+    warehouse_id = await _warehouse(tenant_id)
+    async with SessionLocal() as session:
+        for service in SERVICES:
+            session.add(_tariff(tenant_id, seller_id, service, 1000))
+        session.add(OperationFactCutover(id=1, occurred_at=msk(2026, 8, 26)))
+        await session.commit()
+    order_id = await _in_work_order(
+        tenant_id, seller_id, warehouse_id, number=708201, marketplace="ozon", packed=WORK_DAY,
+    )
+    early = await _create(async_client, headers, _body(seller_id, _sources(order_id)), "c32-early")
+    assert early.status_code == 201, f"предпосылка C32: ранний счёт не создан: {early.text}"
+    assert early.json()["total_amount_kopecks"] == 2000
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        order.status = "sorted"
+        await charge_handed_over_orders(session, [order], occurred_at=msk(2026, 9, 1, 12))
+        await session.commit()
+
+    reports = [
+        await _details(async_client, headers, seller_id, period=period)
+        for period in (
+            PERIOD,
+            {"date_from": "2026-09-01", "date_to": "2026-09-30"},
+            {"date_from": "2026-08-01", "date_to": "2026-09-30"},
+        )
+    ]
+    august, september, combined = [report["totals"]["packing_items"] for report in reports]
+    packing_rows = [
+        [row for row in _rows_of(report["entries"], order_id) if row["service_code"] == "packing"]
+        for report in reports
+    ]
+    assert august + september == combined == 1, (
+        "одна упакованная штука Ozon не должна отображаться в обоих месяцах: "
+        f"август={august}, сентябрь={september}, сумма месяцев={august + september}, "
+        f"общий период={combined}; item_quantity строк packing="
+        f"{[[row['item_quantity'] for row in rows] for rows in packing_rows]}"
+    )
