@@ -32,6 +32,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { plural } from '../../utils/plural'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FfFbsAssemblyPick } from './FfFbsAssemblyPick'
+import { imperiyaSourceGroups, usesTabOrderPickList } from './imperiyaPickListOrder'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
   fetchFbsWorkspace,
@@ -278,8 +279,10 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
       }
     }))
     let rows = fbsAssemblyPickingRows(printable)
+    let allOptions: FbsPickOptionProduct[] = []
     try {
       const optionLists = await Promise.all(ordered.map((one) => getFbsPickOptions(token, authHeaders, one.supply.id)))
+      allOptions = optionLists.flat()
       const byProduct = new Map<string, FbsPickOptionProduct[]>()
       for (const list of optionLists) {
         for (const option of list) byProduct.set(option.product_id, [...(byProduct.get(option.product_id) ?? []), option])
@@ -314,6 +317,17 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
         const item = context.get(row.key)
         return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies, sourceGroups: item.source_groups } : row
       })
+      // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: места в составе и порядке вкладки «Подбор»
+      // (сумма группы). Остальные клиенты печатают как раньше. См. imperiyaPickListOrder.ts.
+      if (usesTabOrderPickList(token) && allOptions.length) {
+        const allContexts = lists.flat()
+        rows = rows.map((row) => ({
+          ...row,
+          locations: [],
+          inboundSupplies: [],
+          sourceGroups: imperiyaSourceGroups(row.key, allOptions, allContexts, row.required),
+        }))
+      }
     } catch {
       setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')
       printWindow.close()

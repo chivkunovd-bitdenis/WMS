@@ -71,6 +71,7 @@ import { DeliveryCheckGroupList } from './FbsDeliveryCheckGroups'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FbsTransferSupplyDialog, makeFbsTransferSupplyDeps } from './FbsTransferSupplyDialog'
 import { FbsAssemblySupplyFrame, type FbsAssemblyFrameControl } from './FbsAssemblySupplyFrame'
+import { imperiyaSourceGroups, usesTabOrderPickList } from './imperiyaPickListOrder'
 import { fbsAssemblySupplyTitle, fbsCodeBelongsToSupply } from './fbsSupplyAssembly'
 import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStage'
 import { fbsMenuReprintRequest, hasOperatorKiz } from './fbsMenuReprint'
@@ -125,6 +126,7 @@ import {
   fetchFbsWorklist,
   fetchFbsWorkspace,
   getFbsPickOptions,
+  type FbsPickOptionProduct,
   getFbsPickingContext,
   lookupFbsOrderBySticker,
   markFbsDirectKizPrintStarted,
@@ -3204,10 +3206,11 @@ export function FfFbsSupplyWorkspace({
       setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
     }
     let rows: typeof pickingRows = printableRows
+    let optionList: FbsPickOptionProduct[] = []
     try {
       // Подобранное берём из того же свежего ответа, что и места: экран мог не перечитаться после подбора.
-      const options = new Map((await getFbsPickOptions(token, authHeaders, workspace.supply.id))
-        .map((option) => [option.product_id, option]))
+      optionList = await getFbsPickOptions(token, authHeaders, workspace.supply.id)
+      const options = new Map(optionList.map((option) => [option.product_id, option]))
       rows = printableRows.map((row) => {
         const option = options.get(row.key)
         if (!option) return row
@@ -3219,12 +3222,22 @@ export function FfFbsSupplyWorkspace({
       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
     }
     try {
-      const context = new Map((await getFbsPickingContext(token, authHeaders, workspace.supply.id))
-        .map((item) => [item.product_id, item]))
+      const contextList = await getFbsPickingContext(token, authHeaders, workspace.supply.id)
+      const context = new Map(contextList.map((item) => [item.product_id, item]))
       rows = rows.map((row) => {
         const item = context.get(row.key)
         return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies, sourceGroups: item.source_groups } : row
       })
+      // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: места в составе и порядке вкладки «Подбор».
+      // Остальные клиенты печатают как раньше. См. imperiyaPickListOrder.ts.
+      if (usesTabOrderPickList(token) && optionList.length) {
+        rows = rows.map((row) => ({
+          ...row,
+          locations: [],
+          inboundSupplies: [],
+          sourceGroups: imperiyaSourceGroups(row.key, optionList, contextList, row.required),
+        }))
+      }
     } catch {
       setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')
       printWindow.close()
