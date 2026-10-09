@@ -341,7 +341,7 @@ function expectSources(doc: Document, selected = server.docs.get(currentId)!.sou
   for (const source of selected) {
     const product = PRODUCTS.find((p) => p.id === source.product)!
     const found = actual.filter((row) => row.product.includes(product.sku) && row.cell.includes(source.cell) &&
-      (source.path.length ? source.path.every((step) => row.container.includes(step.code)) : /Россыпью/i.test(row.container)))
+      row.container === (source.path.length ? source.path.map((step) => step.label).join(' → ') : 'Россыпью'))
     expect(found, `${product.sku}: ${source.cell}, ${source.path.map((s) => s.code).join(' → ') || 'Россыпью'}`).toHaveLength(1)
     expect(found[0].qty).toBe(source.qty)
   }
