@@ -1192,6 +1192,144 @@ async def test_pvz_delete_reconcile_read_failure_stays_retryable(
         assert operation.state == WB_OPERATION_STATE_CONFIRMED
 
 
+# TC-NEW-FBS-PVZ-DELETE-005 — failed control read after retrying delete stays pending
+@pytest.mark.asyncio
+async def test_pvz_delete_control_read_failure_after_retry_stays_retryable(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    supply, _ = await _prepare_pvz_supply(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[971301, 971302],
+        supply_name="PVZ delete control read failure",
+    )
+
+    create = await _create_cargo_places(async_client, headers, supply["id"], count=2)
+    assert create.status_code == 201, create.text
+    places = create.json()["cargo_places"]
+    delete_target = places[0]["wb_trbx_id"]
+    keep_target = places[1]["wb_trbx_id"]
+    idem_key = str(uuid.uuid4())
+
+    import app.services.fbs_shipment_pvz_service as pvz_mod
+
+    delete_calls: list[list[str]] = []
+    real_delete = pvz_mod.delete_marketplace_supply_trbx
+
+    async def lose_first_response_then_delete(
+        client: object,
+        *,
+        api_token: str,
+        supply_id: str,
+        trbx_ids: list[str],
+        marketplace_api_base: str | None = None,
+    ) -> None:
+        delete_calls.append(list(trbx_ids))
+        if len(delete_calls) == 1:
+            raise WildberriesClientError("transport_error")
+        await real_delete(
+            client,  # type: ignore[arg-type]
+            api_token=api_token,
+            supply_id=supply_id,
+            trbx_ids=trbx_ids,
+            marketplace_api_base=marketplace_api_base,
+        )
+
+    real_fetch = pvz_mod.fetch_marketplace_supply_trbx_list
+    fetch_calls = 0
+
+    async def fail_control_read(
+        client: object,
+        *,
+        api_token: str,
+        supply_id: str,
+        marketplace_api_base: str | None = None,
+    ) -> list[str]:
+        nonlocal fetch_calls
+        fetch_calls += 1
+        if fetch_calls == 2:
+            raise WildberriesClientError("upstream_error", status_code=503)
+        return await real_fetch(
+            client,  # type: ignore[arg-type]
+            api_token=api_token,
+            supply_id=supply_id,
+            marketplace_api_base=marketplace_api_base,
+        )
+
+    monkeypatch.setattr(pvz_mod, "delete_marketplace_supply_trbx", lose_first_response_then_delete)
+    monkeypatch.setattr(pvz_mod, "fetch_marketplace_supply_trbx_list", fail_control_read)
+
+    first = await _delete_cargo_places(
+        async_client,
+        headers,
+        supply["id"],
+        wb_trbx_ids=[delete_target],
+        idempotency_key=idem_key,
+    )
+    assert first.status_code == 504, first.text
+    assert first.json()["detail"]["code"] == "wb_timeout"
+    assert delete_calls == [[delete_target]]
+
+    retry_control_read_failed = await _delete_cargo_places(
+        async_client,
+        headers,
+        supply["id"],
+        wb_trbx_ids=[delete_target],
+        idempotency_key=idem_key,
+    )
+    assert retry_control_read_failed.status_code == 504, retry_control_read_failed.text
+    assert retry_control_read_failed.json()["detail"] == {
+        "code": "wb_pending_confirmation",
+        "message": "WB пока не подтвердил создание грузомест; выполняется сверка.",
+        "context": {"operation_state": "pending_confirmation"},
+        "retryable": True,
+    }
+    assert fetch_calls == 2
+    assert delete_calls == [[delete_target], [delete_target]]
+
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(FbsWbOperation.idempotency_key == idem_key)
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION
+        trbx_rows = (
+            await session.execute(
+                select(FbsTrbx).where(FbsTrbx.supply_id == uuid.UUID(supply["id"]))
+            )
+        ).scalars().all()
+        assert len(trbx_rows) == 2
+
+    retry_after_recovery = await _delete_cargo_places(
+        async_client,
+        headers,
+        supply["id"],
+        wb_trbx_ids=[delete_target],
+        idempotency_key=idem_key,
+    )
+    assert retry_after_recovery.status_code == 200, retry_after_recovery.text
+    remaining = retry_after_recovery.json()["cargo_places"]
+    assert len(remaining) == 1
+    assert remaining[0]["wb_trbx_id"] == keep_target
+    assert delete_calls == [[delete_target], [delete_target]]
+
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(FbsWbOperation.idempotency_key == idem_key)
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_CONFIRMED
+
+
 # TC-NEW-FBS-PVZ-DELETE-003 — guards: unknown id, cross-supply id, post-deliver
 # block. warehouse_sc cargo-place delete used to be rejected outright with
 # "wrong_delivery_type"; that was our own caution, not a WB rule (see the
