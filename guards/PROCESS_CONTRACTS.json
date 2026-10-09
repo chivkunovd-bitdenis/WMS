@@ -288,7 +288,7 @@
     "backend/tests/test_wms546_marking_verdicts.py": "23f8240bc9b2ea447656db646d28c1696ad0a858751c8bba9db77f6ccef45cdb",
     "frontend/src/screens/v2/wms666ChangeScope.test.ts": "f1a0ab3e20f484ed4b901daeae00d899ce6bfd84b4d8efa920dad7fbfb76cf34",
     "scripts/ci/tests/test_backend_shard_progress.py": "d7083629e4efd4026da8dc5e2693f04b7191127352325661b30132738921c8a8",
-    "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx": "1e5663e2fd7e646905e6c65652e7c2081e52d16a9fc6cbca477de49f5ec8c57e",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx": "ab335b0fe125d191a8787dd3fe8a9eb41195cc76bceaece71a0eb64db5732da2",
     "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx": "c5f389f7436e2c4b34727d4d38fce202fa7361e10bb1acb2acd8432976def84b",
     "scripts/ci/tests/test_ci_scope.py": "2460d5cd9ca38277a3019dae3bd668174061660480fb773a3415bf11be7a488a",
     "scripts/ci/select_process_artifacts.py": "d0ff3ec8b2df1496cc0ff2a4a9481dc77a4af1ecbded7712908e933c22fb6478"
