@@ -13,6 +13,8 @@ from app.models.fbs_order import FbsOrder
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import FbsWbOperation
 from app.services import fbs_supply_transfer_service as transfer
+from app.services.fbs_packaging_integration_service import detach_cancelled_order_from_supply
+from app.services.wb_marketplace_orders_service import _get_or_create_wb_origin_supply
 from app.services.wildberries_client import WildberriesClientError
 from app.services.wildberries_fbs_client import MarketplaceSuppliesPage
 from tests.fbs_supply_card_fixture import empty_neighbor, ready_wb_supply, snapshot
@@ -189,3 +191,111 @@ async def test_delete_cannot_enter_before_transfer_intent_is_committed(async_cli
     async with SessionLocal() as session:
         assert await session.get(FbsSupply, target) is not None
         assert (await session.get(FbsOrder, order)).supply_id == target
+
+
+async def ready_other_order(source, order):
+    """Another order of the same seller that is not in any supply."""
+    async with SessionLocal() as session:
+        mine = await session.get(FbsOrder, order)
+        return (await session.scalars(select(FbsOrder.id).where(
+            FbsOrder.seller_id == mine.seller_id, FbsOrder.id != order,
+            FbsOrder.supply_id.is_(None),
+        ))).first()
+
+
+async def import_card_with_order(tenant, wb_supply_id, order):
+    """The regular WB import path creates the local card and links the order to it."""
+    async with SessionLocal() as session:
+        row = await session.get(FbsOrder, order)
+        card = await _get_or_create_wb_origin_supply(
+            session, tenant, row.seller_id, wb_supply_id, {}, [row],
+            supplies_dict={wb_supply_id: ("Imported", False)},
+        )
+        assert card is not None
+        row.supply_id, row.wb_supply_id = card.id, wb_supply_id
+        await session.commit()
+        return card.id
+
+
+@pytest.mark.asyncio
+async def test_recovered_transfer_locks_and_links_found_card_before_wb_dispatch(
+    async_client, monkeypatch,
+):
+    """Review round 2: stop after the WB number is saved, a sync imports that WB supply
+    with another order, a cancel empties it; the retry reads the card and a DELETE races it."""
+    headers, tenant, source, _, order, wb_id = await setup(async_client, monkeypatch)
+    other = (await ready_other_order(source, order))
+    create = AsyncMock(return_value={"id": "WB-lost-reply"})
+    patch = AsyncMock()
+    monkeypatch.setattr(transfer, "create_marketplace_supply", create)
+    monkeypatch.setattr(transfer, "add_orders_to_marketplace_supply", patch)
+    monkeypatch.setattr(
+        transfer, "fetch_marketplace_supplies_page",
+        AsyncMock(return_value=MarketplaceSuppliesPage(supplies={}, next_cursor=None)),
+    )
+    monkeypatch.setattr(
+        transfer, "fetch_marketplace_supply_order_ids", AsyncMock(return_value=[wb_id]),
+    )
+    state = {"crash": True, "pause": False}
+    paused, resume = asyncio.Event(), asyncio.Event()
+    original_commit = AsyncSession.commit
+
+    async def commit(session):
+        holds_operation = any(
+            isinstance(row, FbsWbOperation) for row in session.sync_session.identity_map.values()
+        )
+        if state["pause"] and holds_operation:
+            state["pause"] = False
+            paused.set()
+            await resume.wait()
+        await original_commit(session)
+        if state["crash"] and create.await_count:
+            state["crash"] = False
+            raise RuntimeError("process stopped after the WB number was saved")
+
+    monkeypatch.setattr(AsyncSession, "commit", commit)
+
+    # 1. First request creates the WB supply, saves its number and stops.
+    with pytest.raises(RuntimeError, match="process stopped"):
+        await move(async_client, headers, source, None, order)
+    async with SessionLocal() as session:
+        operation = await session.scalar(select(FbsWbOperation).where(
+            FbsWbOperation.tenant_id == tenant,
+            FbsWbOperation.operation_kind == "supply_transfer_orders",
+        ))
+        assert operation.state == "pending" and operation.wb_object_id == "WB-lost-reply"
+        assert operation.response_summary_json["target_supply_id"] is None
+    patch.assert_not_awaited()
+
+    # 2-3. Regular import creates the card with another order, regular cancel empties it.
+    card = await import_card_with_order(tenant, "WB-lost-reply", other)
+    async with SessionLocal() as session:
+        row = await session.get(FbsOrder, other)
+        row.status = "cancelled"
+        await detach_cancelled_order_from_supply(session, tenant, row, actor_user_id=None)
+        await session.commit()
+        assert (await session.get(FbsOrder, other)).supply_id is None
+
+    # 4. The retry reads the card; a DELETE of that empty card comes right after.
+    state["pause"] = True
+    retry = asyncio.create_task(move(async_client, headers, source, None, order))
+    deleting = None
+    try:
+        await asyncio.wait_for(paused.wait(), timeout=5)
+        deleting = asyncio.create_task(async_client.delete(
+            f"/operations/fbs-supplies/{card}", headers=headers,
+        ))
+        await asyncio.wait({deleting}, timeout=0.3)
+    finally:
+        resume.set()
+        result = await retry
+        refusal = await deleting if deleting is not None else None
+    assert refusal is not None and refusal.status_code == 409, (
+        refusal.status_code, result.status_code, result.text,
+    )
+    # 5. WB was asked once and the local state agrees with it.
+    assert result.status_code == 200 and result.json()["state"] == "confirmed", result.text
+    assert patch.await_count == 1
+    async with SessionLocal() as session:
+        assert await session.get(FbsSupply, card) is not None
+        assert (await session.get(FbsOrder, order)).supply_id == card

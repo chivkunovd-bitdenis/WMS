@@ -545,14 +545,31 @@ async def transfer_orders(
                 return _result(operation, orders)
             await session.commit()
         if target is None:
-            target = await session.scalar(
-                select(FbsSupply).where(
+            found_id = await session.scalar(
+                select(FbsSupply.id).where(
                     FbsSupply.tenant_id == tenant_id,
                     FbsSupply.seller_id == source.seller_id,
                     FbsSupply.marketplace == "wb",
                     FbsSupply.wb_supply_id == operation.wb_object_id,
                 )
             )
+            if found_id is not None:
+                # Recovery: the journal knows the WB number but not yet the local
+                # card. Hold the found card (same lock as delete) until its id is
+                # committed into the journal below, before any WB request.
+                try:
+                    await _lock_transfer_supplies(session, tenant_id, [source_id, found_id])
+                except FbsSupplyError as exc:
+                    if exc.code != "supply_not_found":
+                        raise
+                    # Deleted as an empty card before we took it: not linked, so allowed.
+                    found_id = None
+            if found_id is not None:
+                target = await session.scalar(
+                    select(FbsSupply)
+                    .where(FbsSupply.id == found_id)
+                    .execution_options(populate_existing=True)
+                )
         if target is None:
             target = FbsSupply(
                 tenant_id=tenant_id,
