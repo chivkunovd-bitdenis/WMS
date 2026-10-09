@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_supply import FbsSupply
@@ -75,11 +76,20 @@ async def supply_display_statuses(
     ozon = {s.id: s for s in supplies if s.marketplace == "ozon"}
     evidence: dict[uuid.UUID, dict[str, Any]] = {}
     if ozon:
-        for operation in await session.scalars(select(FbsWbOperation).where(
-            FbsWbOperation.local_entity_id.in_(ozon),
-            FbsWbOperation.operation_kind == "observed_handoff",
-            FbsWbOperation.tenant_id.in_({s.tenant_id for s in ozon.values()}),
-        )):
+        for operation in await session.scalars(
+            select(FbsWbOperation)
+            .options(load_only(
+                FbsWbOperation.local_entity_id,
+                FbsWbOperation.tenant_id,
+                FbsWbOperation.seller_id,
+                FbsWbOperation.response_summary_json,
+            ))
+            .where(
+                FbsWbOperation.local_entity_id.in_(ozon),
+                FbsWbOperation.operation_kind == "observed_handoff",
+                FbsWbOperation.tenant_id.in_({s.tenant_id for s in ozon.values()}),
+            )
+        ):
             if operation.local_entity_id not in ozon:
                 continue
             assert operation.local_entity_id is not None

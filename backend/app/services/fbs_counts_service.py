@@ -11,7 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_supply import FbsSupply
 from app.models.seller import Seller
-from app.services.fbs_supply_service import select_worklist_supplies, supply_worklist_statement
+from app.services.fbs_supply_service import (
+    select_ozon_worklist_supply_ids_by_group,
+    supply_worklist_statement,
+)
 from app.services.fbs_worklist_service import STATUS_GROUP_MAP, orders_worklist_statement
 
 
@@ -26,7 +29,7 @@ async def fetch_fbs_counts(
     wb_warehouse_id: int | None = None,
     search: str | None = None,
 ) -> dict[str, dict[str, int]]:
-    if status_group not in STATUS_GROUP_MAP:
+    if status_group not in STATUS_GROUP_MAP and status_group != "shipped":
         raise ValueError("invalid_status_group")
     seller_stmt = select(Seller.id).where(Seller.tenant_id == tenant_id)
     if effective_seller_id is not None:
@@ -34,39 +37,49 @@ async def fetch_fbs_counts(
     seller_ids = list((await session.scalars(seller_stmt)).all())
     now = datetime.now(tz=UTC)
     counts: dict[str, dict[uuid.UUID, int]] = {}
+    ozon_supply_ids = await select_ozon_worklist_supply_ids_by_group(
+        session, tenant_id, seller_id=effective_seller_id,
+        marketplace=marketplace, search=search,
+    )
     for group in dict.fromkeys(("new", "active", "delivery", status_group)):
-        orders = orders_worklist_statement(
-            tenant_id, seller_id=effective_seller_id, marketplace=marketplace,
-            status_group=group, search=search, server_now=now,
-            wb_warehouse_id=wb_warehouse_id if group == "new" and status_group == "new" else None,
-        )
-        members = orders.with_only_columns(FbsOrder.id, FbsOrder.seller_id)
+        if group == "shipped":
+            # Shipped is a supply-only tab. The order worklist intentionally
+            # rejects this group; its seller count comes from the same derived
+            # Ozon supply membership as the list.
+            linked = select(FbsOrder.id, FbsSupply.seller_id).join(
+                FbsSupply, FbsOrder.supply_id == FbsSupply.id
+            ).where(
+                FbsSupply.id.in_(ozon_supply_ids[group]),
+                FbsOrder.tenant_id == tenant_id,
+            )
+            rows = linked.subquery()
+        else:
+            orders = orders_worklist_statement(
+                tenant_id, seller_id=effective_seller_id, marketplace=marketplace,
+                status_group=group, search=search, server_now=now,
+                wb_warehouse_id=(
+                    wb_warehouse_id if group == "new" and status_group == "new" else None
+                ),
+            )
+            members = orders.with_only_columns(FbsOrder.id, FbsOrder.seller_id)
         if group in {"active", "delivery", "done"}:
             supplies = supply_worklist_statement(
                 tenant_id, seller_id=effective_seller_id, marketplace=marketplace,
                 status_group=group, search=search,
             ).where(FbsSupply.marketplace != "ozon").with_only_columns(FbsSupply.id).subquery()
-            # WMS-721: the tab of an Ozon supply follows its postings, so the
-            # same derived selection as the list rows picks the Ozon supplies.
-            ozon_matched, _ = await select_worklist_supplies(
-                session,
-                supply_worklist_statement(
-                    tenant_id, seller_id=effective_seller_id, marketplace=marketplace,
-                    status_group=group, search=search, ozon_candidates=True,
-                ).where(FbsSupply.marketplace == "ozon"),
-                status_group=group, limit=None, stop_at_limit=False, with_details=False,
-            )
-            ozon_ids = [supply.id for supply in ozon_matched]
             # Every linked order is counted, just as orders_count on a matched
             # supply row. Only unlinked orders use the order-level selection.
             linked = select(FbsOrder.id, FbsSupply.seller_id).join(
                 FbsSupply, FbsOrder.supply_id == FbsSupply.id
             ).where(
-                or_(FbsSupply.id.in_(select(supplies.c.id)), FbsSupply.id.in_(ozon_ids)),
+                or_(
+                    FbsSupply.id.in_(select(supplies.c.id)),
+                    FbsSupply.id.in_(ozon_supply_ids[group]),
+                ),
                 FbsOrder.tenant_id == tenant_id,
             )
             rows = union_all(linked, members.where(FbsOrder.supply_id.is_(None))).subquery()
-        else:
+        elif group != "shipped":
             rows = members.subquery()
         counted = await session.execute(
             select(rows.c.seller_id, func.count(rows.c.id)).group_by(rows.c.seller_id)
