@@ -15,6 +15,7 @@ import httpx
 from sqlalchemy import Select, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.settings import settings
 from app.models.fbs_order import (
@@ -99,6 +100,7 @@ from app.services.marketplace_scope import (
     wrong_marketplace_message,
 )
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+from app.services.ozon_fbs_status_service import supply_display_statuses
 from app.services.wildberries_client import (
     WildberriesClientError,
     add_order_to_marketplace_supply,
@@ -253,6 +255,7 @@ async def _get_supply(
     if with_orders:
         stmt = stmt.options(
             selectinload(FbsSupply.orders).selectinload(FbsOrder.product),
+            selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
             selectinload(FbsSupply.seller),
         )
     result = await session.execute(stmt)
@@ -1414,10 +1417,35 @@ async def get_supply(
     *,
     with_orders: bool = True,
 ) -> FbsSupply:
-    supply = await _get_supply(session, tenant_id, supply_id, with_orders=with_orders)
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsSupplyError("supply_not_found")
+    if supply.marketplace == "ozon":
+        # Public read projection; never put a derived display status into the
+        # session identity map used by handover/composition business operations.
+        statuses = await supply_display_statuses(session, [supply])
+        projection = FbsSupply(**{column.key: getattr(supply, column.key)
+                                  for column in FbsSupply.__table__.columns})
+        projection.status = statuses[supply.id]
+        if with_orders:
+            set_committed_value(projection, "orders", supply.orders)
+        return projection
     return supply
+
+
+_WORKLIST_STATUS_MAP: dict[str, frozenset[str] | set[str]] = {
+    "active": FBS_SUPPLY_ACTIVE_STATUSES,
+    "shipped": {"shipped", "acceptance_in_progress"},
+    "delivery": {FBS_SUPPLY_STATUS_IN_DELIVERY},
+    "done": {FBS_SUPPLY_STATUS_DONE},
+}
+
+
+def _worklist_statuses(status_group: str) -> frozenset[str] | set[str]:
+    statuses = _WORKLIST_STATUS_MAP.get(status_group)
+    if statuses is None:
+        raise FbsSupplyError("invalid_status_group", http_status=400)
+    return statuses
 
 
 def supply_worklist_statement(
@@ -1427,23 +1455,26 @@ def supply_worklist_statement(
     marketplace: str | None = None,
     status_group: str = "active",
     search: str | None = None,
+    ozon_candidates: bool = False,
 ) -> Select[tuple[FbsSupply]]:
-    """The same supply selection for list rows and derived order counts."""
-    status_map = {
-        "active": FBS_SUPPLY_ACTIVE_STATUSES,
-        "delivery": {FBS_SUPPLY_STATUS_IN_DELIVERY},
-        "done": {FBS_SUPPLY_STATUS_DONE},
-    }
-    statuses = status_map.get(status_group)
-    if statuses is None:
-        raise FbsSupplyError("invalid_status_group", http_status=400)
-    stmt = select(FbsSupply).where(
-        FbsSupply.tenant_id == tenant_id, FbsSupply.status.in_(statuses)
+    """The same supply selection for list rows and derived order counts.
+
+    WMS-721: the tab of an Ozon supply follows its postings, not the stored
+    status. With ozon_candidates=True every Ozon supply is a candidate and the
+    caller must apply supply_display_statuses (see select_worklist_supplies).
+    """
+    statuses = _worklist_statuses(status_group)
+    status_clause = (
+        or_(FbsSupply.marketplace == "ozon", FbsSupply.status.in_(statuses))
+        if ozon_candidates else FbsSupply.status.in_(statuses)
     )
+    stmt = select(FbsSupply).where(FbsSupply.tenant_id == tenant_id, status_clause)
     if seller_id is not None:
         stmt = stmt.where(FbsSupply.seller_id == seller_id)
     if marketplace is not None:
         stmt = stmt.where(FbsSupply.marketplace == marketplace)
+    if status_group == "shipped":
+        stmt = stmt.where(FbsSupply.marketplace == "ozon")
     if search and search.strip():
         term = search.strip()
         stmt = stmt.where(or_(
@@ -1455,6 +1486,50 @@ def supply_worklist_statement(
             )),
         ))
     return stmt
+
+
+async def select_worklist_supplies(
+    session: AsyncSession,
+    stmt: Select[tuple[FbsSupply]],
+    *,
+    status_group: str,
+    limit: int | None,
+    stop_at_limit: bool,
+    with_details: bool = True,
+) -> tuple[list[FbsSupply], dict[uuid.UUID, str]]:
+    """Supplies of the tab by their displayed (derived) status, newest first.
+
+    Filter the derived stage before applying the public limit. Read candidates
+    in bounded batches so a mixed tab does not load the whole WB/Ozon history.
+    limit=None reads every candidate (derived counts of WMS-716).
+    """
+    statuses = _worklist_statuses(status_group)
+    stmt = stmt.options(
+        *(
+            (
+                selectinload(FbsSupply.seller),
+                selectinload(FbsSupply.warehouse),
+                selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
+            )
+            if with_details else (selectinload(FbsSupply.orders),)
+        )
+    ).order_by(FbsSupply.updated_at.desc(), FbsSupply.id.desc())
+    supplies: list[FbsSupply] = []
+    display_statuses: dict[uuid.UUID, str] = {}
+    offset = 0
+    batch_size = max(limit or 0, 100)
+    while True:
+        batch = list((await session.execute(stmt.offset(offset).limit(batch_size))).scalars())
+        batch_statuses = await supply_display_statuses(session, batch)
+        display_statuses.update(batch_statuses)
+        supplies.extend(supply for supply in batch if batch_statuses[supply.id] in statuses
+                        and (status_group != "shipped" or supply.marketplace == "ozon"))
+        if len(batch) < batch_size or (
+            stop_at_limit and limit is not None and len(supplies) >= limit
+        ):
+            break
+        offset += batch_size
+    return supplies, display_statuses
 
 
 async def list_supply_worklist(
@@ -1469,18 +1544,14 @@ async def list_supply_worklist(
 ) -> dict[str, Any]:
     stmt = supply_worklist_statement(
         tenant_id, seller_id=seller_id, marketplace=marketplace,
-        status_group=status_group, search=search,
+        status_group=status_group, search=search, ozon_candidates=True,
     )
-    total = (
-        int(await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
-        if search and search.strip() else None
+    has_search = bool(search and search.strip())
+    supplies, display_statuses = await select_worklist_supplies(
+        session, stmt, status_group=status_group, limit=limit, stop_at_limit=not has_search,
     )
-    stmt = stmt.options(
-        selectinload(FbsSupply.seller),
-        selectinload(FbsSupply.warehouse),
-        selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
-    ).order_by(FbsSupply.updated_at.desc(), FbsSupply.id.desc()).limit(limit)
-    supplies = list((await session.execute(stmt)).scalars().all())
+    total = len(supplies) if has_search else None
+    supplies = supplies[:limit]
     if not supplies:
         return {"items": [], "total": total, "server_now": datetime.now(tz=UTC).isoformat()}
 
@@ -1545,7 +1616,7 @@ async def list_supply_worklist(
                 "name": supply.display_number or supply.name,
                 "delivery_type": supply.delivery_type,
                 "delivery_route": order_delivery_route(first_order) if first_order else None,
-                "status": supply.status,
+                "status": display_statuses[supply.id],
                 "seller": {
                     "id": str(supply.seller_id),
                     "name": supply.seller.name if supply.seller else "Селлер не найден",

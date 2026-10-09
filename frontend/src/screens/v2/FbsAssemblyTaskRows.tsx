@@ -39,6 +39,8 @@ function supplyStatusLabel(status: string): string {
     draft: 'Черновик',
     assembling: 'В работе',
     packed: 'Готова к сдаче',
+    shipped: 'Отгружена',
+    acceptance_in_progress: 'Идёт приёмка',
     in_delivery: 'В доставке',
     done: 'Завершена',
   }
@@ -47,7 +49,7 @@ function supplyStatusLabel(status: string): string {
 
 function supplyStatusColor(status: string): 'default' | 'primary' | 'success' | 'warning' {
   if (status === 'done') return 'success'
-  if (status === 'in_delivery') return 'primary'
+  if (['shipped', 'acceptance_in_progress', 'in_delivery'].includes(status)) return 'primary'
   if (status === 'draft' || status === 'assembling' || status === 'packed') return 'warning'
   return 'default'
 }

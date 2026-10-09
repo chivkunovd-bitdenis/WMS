@@ -380,6 +380,8 @@ class FbsWorklistOrderOut(BaseModel):
     status: str
     wb_status: str | None
     supplier_status: str | None
+    delivered_at: str | None = None
+    ozon_confirmed_stage: str | None = None
     seller: FbsWorklistSellerOut
     wb_warehouse: FbsWorklistWarehouseOut
     wms_warehouse: FbsWorklistWarehouseOut
