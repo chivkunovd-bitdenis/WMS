@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import String, and_, exists, func, or_, select, union_all
+from sqlalchemy import Select, String, and_, exists, func, or_, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -299,20 +299,17 @@ def order_search_clause(term: str) -> ColumnElement[bool]:
     )
 
 
-async def _fetch_orders_page(
-    session: AsyncSession,
+def orders_worklist_statement(
     tenant_id: uuid.UUID,
     *,
-    seller_id: uuid.UUID | None,
-    marketplace: str | None,
-    status_group: str | None,
-    wb_warehouse_id: int | None,
-    search: str | None,
-    limit: int,
-    cursor: str | None,
+    seller_id: uuid.UUID | None = None,
+    marketplace: str | None = None,
+    status_group: str | None = None,
+    wb_warehouse_id: int | None = None,
+    search: str | None = None,
     server_now: datetime,
-    sort: str = "deadline",
-) -> tuple[list[FbsOrder], int | None]:
+) -> Select[tuple[FbsOrder]]:
+    """The complete worklist selection, before pagination or projection."""
     served_wb_binding = exists(
         select(FbsWarehouseBinding.id).where(
             FbsWarehouseBinding.tenant_id == FbsOrder.tenant_id,
@@ -367,6 +364,28 @@ async def _fetch_orders_page(
                 ),
             )
         )
+    return stmt
+
+
+async def _fetch_orders_page(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None,
+    marketplace: str | None,
+    status_group: str | None,
+    wb_warehouse_id: int | None,
+    search: str | None,
+    limit: int,
+    cursor: str | None,
+    server_now: datetime,
+    sort: str = "deadline",
+) -> tuple[list[FbsOrder], int | None]:
+    stmt = orders_worklist_statement(
+        tenant_id, seller_id=seller_id, marketplace=marketplace,
+        status_group=status_group, wb_warehouse_id=wb_warehouse_id,
+        search=search, server_now=server_now,
+    )
     # Count the same filtered set before pagination, only when the UI searches.
     total = (
         int(await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
