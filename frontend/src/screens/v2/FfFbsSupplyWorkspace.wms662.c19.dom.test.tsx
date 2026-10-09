@@ -123,26 +123,23 @@ async function checkComposition(
   // This existing message describes the WHOLE supply, not preparation or picking.
   expect(document.body.textContent?.includes('Поставка уже передана в WB'), `${checkpoint}: parent completion`)
     .toBe(phase === 'full')
-  await click(tab('Состав'))
-  const table = [...document.querySelectorAll<HTMLTableElement>('table')]
-    .find((element) => element.textContent?.includes('Заказ WB'))!
-  expect(table).toBeDefined()
-  const headers = [...table.querySelectorAll('thead th')].map((element) => element.textContent)
-  const pickIndex = headers.indexOf('Подбор')
-  expect(pickIndex).toBeGreaterThanOrEqual(0)
-  const rows = [...table.querySelectorAll('tbody tr')]
-  expect(rows).toHaveLength(2)
+  // WMS-723: the «Состав» tab is gone by owner decision. The identity of every
+  // order (WB order number, row, selection label) is read where the supply
+  // composition is now shown: the rows of the selected «Упаковка и маркировка» tab.
+  const rows = [...document.querySelectorAll<HTMLElement>('[data-order-id]')]
+  expect(rows, `${checkpoint}: exactly the two supply orders`).toHaveLength(2)
+  expect(tab('Состав'), `${checkpoint}: no «Состав» tab`).toBeUndefined()
   for (const orderId of [662000, 662001]) {
-    const row = rows.find((element) => element.textContent?.includes(`№${orderId}`))!
-    expect(row, `${checkpoint}: order ${orderId}`).toBeDefined()
-    expect(row.children[pickIndex].textContent, `${checkpoint}: picking stays independent`).toBe('Ожидает')
-    // Direct owner instruction 2026-10-06: undo the added composition chip.
-    // C19 picking/navigation/read-only protections below remain unchanged.
-    expect(row.querySelector('.MuiChip-root'), `${checkpoint}: baseline composition has no added chip`).toBeNull()
-    const link = row.querySelector(`[data-testid="fbs-composition-history-${phase}-${orderId}"]`)
-      ?? [...row.querySelectorAll('button')].find(node => node.textContent === `№${orderId}`)
-    expect(link, `${checkpoint}: existing order history action`).toBeTruthy()
-    expect(link!.parentElement?.tagName, `${checkpoint}: baseline direct cell layout`).toBe('TD')
+    const fixtureOrder = partial.orders.find((order) => order.wb_order_id === orderId)!
+    expect(fixtureOrder, `${checkpoint}: fixture order ${orderId}`).toBeDefined()
+    // Picking stays independent: the replayed document keeps the order unpicked.
+    expect(fixtureOrder.pick.status, `${checkpoint}: picking stays independent`).toBe('pending')
+    const row = rows.find((element) => element.getAttribute('data-order-id') === fixtureOrder.id)!
+    expect(row, `${checkpoint}: order ${orderId} row is bound to its own order id`).toBeDefined()
+    expect(row.textContent, `${checkpoint}: order ${orderId} number`).toContain(`заказ ${orderId}`)
+    const otherId = orderId === 662000 ? 662001 : 662000
+    expect(row.textContent, `${checkpoint}: order ${orderId} row does not carry ${otherId}`).not.toContain(`заказ ${otherId}`)
+    expect(row.querySelector(`input[aria-label="Выбрать заказ ${orderId}"]`), `${checkpoint}: order ${orderId} selection control`).not.toBeNull()
   }
   // Reuse the real history with its saved creation event, without inventing events.
   await click(document.querySelector<HTMLElement>('[data-testid="fbs-supply-history-open"]')!)
