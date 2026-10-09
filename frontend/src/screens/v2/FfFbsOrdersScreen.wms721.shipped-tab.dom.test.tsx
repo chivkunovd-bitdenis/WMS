@@ -50,6 +50,12 @@ function backendFetch(input: RequestInfo | URL): Response | Promise<Response> {
         : []
     return json({ items, total: items.length, server_now: SERVER_NOW })
   }
+  if (url.pathname.endsWith('/operations/fbs-orders/counts')) {
+    return json({
+      tabs: { new: 0, active: 0, delivery: 0 },
+      sellers: { 'seller-721': group === 'shipped' ? 2 : 0 },
+    })
+  }
   if (url.pathname.endsWith('/operations/fbs-orders/worklist')) {
     if (group === 'shipped') {
       return json({
@@ -135,4 +141,15 @@ it('test_c2_shipped_tab_sends_no_orders_worklist_request', async () => {
     && request.includes('status_group=shipped'))).toBe(true))
   expect(requests.filter((request) => request.startsWith('/api/operations/fbs-orders/worklist')
     && request.includes('status_group=shipped'))).toEqual([])
+})
+
+it('test_c8_shipped_tab_counts_load_without_a_screen_error', async () => {
+  await mountScreen()
+  await clickTab('Отгруженные')
+  await settle(() => {
+    expect(requests.some((request) => request.startsWith('/api/operations/fbs-orders/counts')
+      && request.includes('status_group=shipped'))).toBe(true)
+    expect(supplyRowIds()).toEqual(['supply-721-shipped'])
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+  })
 })
