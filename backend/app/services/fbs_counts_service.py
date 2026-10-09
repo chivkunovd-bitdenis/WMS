@@ -5,13 +5,13 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select, union_all
+from sqlalchemy import func, or_, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_supply import FbsSupply
 from app.models.seller import Seller
-from app.services.fbs_supply_service import supply_worklist_statement
+from app.services.fbs_supply_service import select_worklist_supplies, supply_worklist_statement
 from app.services.fbs_worklist_service import STATUS_GROUP_MAP, orders_worklist_statement
 
 
@@ -45,12 +45,26 @@ async def fetch_fbs_counts(
             supplies = supply_worklist_statement(
                 tenant_id, seller_id=effective_seller_id, marketplace=marketplace,
                 status_group=group, search=search,
-            ).with_only_columns(FbsSupply.id).subquery()
+            ).where(FbsSupply.marketplace != "ozon").with_only_columns(FbsSupply.id).subquery()
+            # WMS-721: the tab of an Ozon supply follows its postings, so the
+            # same derived selection as the list rows picks the Ozon supplies.
+            ozon_matched, _ = await select_worklist_supplies(
+                session,
+                supply_worklist_statement(
+                    tenant_id, seller_id=effective_seller_id, marketplace=marketplace,
+                    status_group=group, search=search, ozon_candidates=True,
+                ).where(FbsSupply.marketplace == "ozon"),
+                status_group=group, limit=None, stop_at_limit=False, with_details=False,
+            )
+            ozon_ids = [supply.id for supply in ozon_matched]
             # Every linked order is counted, just as orders_count on a matched
             # supply row. Only unlinked orders use the order-level selection.
             linked = select(FbsOrder.id, FbsSupply.seller_id).join(
                 FbsSupply, FbsOrder.supply_id == FbsSupply.id
-            ).where(FbsSupply.id.in_(select(supplies.c.id)), FbsOrder.tenant_id == tenant_id)
+            ).where(
+                or_(FbsSupply.id.in_(select(supplies.c.id)), FbsSupply.id.in_(ozon_ids)),
+                FbsOrder.tenant_id == tenant_id,
+            )
             rows = union_all(linked, members.where(FbsOrder.supply_id.is_(None))).subquery()
         else:
             rows = members.subquery()

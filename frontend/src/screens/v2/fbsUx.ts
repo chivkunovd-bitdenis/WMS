@@ -266,10 +266,31 @@ export function orderStatusForChip(order: {
   marketplace: FbsMarketplace
   status: string
   wb_status: string | null
+  supplier_status?: string | null
+  supply_id?: string | null
+  delivered_at?: string | null
+  ozon_confirmed_stage?: string | null
 }): string {
-  return order.marketplace === 'ozon' && order.status === 'external_processing'
-    ? order.wb_status || order.status
-    : order.status
+  if (order.marketplace !== 'ozon') return order.status
+  const raw = order.wb_status?.trim().toLowerCase() ?? ''
+  const sub = order.supplier_status?.trim().toLowerCase() ?? ''
+  if (raw === 'cancelled' || raw === 'canceled') return 'cancelled'
+  if (raw === 'cancelled_from_split_pending') return order.supply_id ? 'ozon_split' : 'cancelled'
+  if (sub === 'posting_delivered' || sub === 'posting_received') return `ozon_${sub}`
+  if (raw === 'delivered' || raw === 'done') return 'ozon_posting_delivered'
+  if (sub === 'posting_transferring_to_delivery') {
+    return raw === 'awaiting_registration' ? 'ozon_transferring_to_courier' : 'ozon_transferring_to_delivery'
+  }
+  if (sub.startsWith('posting_') || sub === 'ship_failed') return `ozon_${sub}`
+  const early = ['new', 'awaiting_packaging', 'awaiting_approve', 'awaiting_verification', 'awaiting_registration', 'awaiting_deliver'].includes(raw)
+  if (early && order.ozon_confirmed_stage === 'delivery') return 'ozon_delivering'
+  if (early && order.ozon_confirmed_stage === 'acceptance_in_progress') return 'ozon_acceptance_in_progress'
+  if (raw === 'new' || raw === 'awaiting_packaging') {
+    if (order.status === 'sorted') return 'ozon_acceptance_in_progress'
+    return order.status === 'external_processing' ? 'new' : order.status
+  }
+  if (raw === 'awaiting_deliver') return order.delivered_at ? 'ozon_shipped' : 'ozon_ready'
+  return `ozon_${raw || 'unknown'}`
 }
 
 export function ordersWord(count: number) {
