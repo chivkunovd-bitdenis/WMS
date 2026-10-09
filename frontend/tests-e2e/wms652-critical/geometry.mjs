@@ -108,7 +108,8 @@ export async function geometryContracts(ctx){
  });
  await run(`WMS652.geometry[orders-overdue-new;1600x1000-long]`,async()=>{
   const d=selectionData();d.orders=d.orders.slice(0,2);d.orders.forEach(o=>{o.status='new';o.supply_id=null;});
-  d.orders.find(o=>o.id==='order-a').deadline_at=new Date(Date.now()-3600e3).toISOString();
+  // One hour before the fixed geometry-list server_now in browser.mjs.
+  d.orders.find(o=>o.id==='order-a').deadline_at='2026-10-06T07:00:00Z';
   startSelection(d,true);await cdp.send('Page.navigate',{url:`${origin}/app/ff/fbs`});
   await until(`document.querySelector('[data-testid="fbs-worklist-table"]')&&document.querySelector('[data-testid="fbs-order-order-a"]')`);
   const m=await evaluate(`(()=>{const table=document.querySelector('[data-testid="fbs-worklist-table"]'),b=e=>{const r=e.getBoundingClientRect();return{x:r.x,right:r.right,y:r.y,bottom:r.bottom,width:r.width,height:r.height}};
