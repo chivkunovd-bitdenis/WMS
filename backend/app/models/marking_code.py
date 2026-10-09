@@ -360,6 +360,17 @@ class MarkingCodeEvent(Base):
     copies: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
     meta_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Added by migration 20260710_0061 alongside marking_print_batches; no
+    # service populates either column today (see app/models/marking_print_batch.py),
+    # but both are mapped so the deployed FK is a recognised physical descendant
+    # edge rather than an unknown one (WMS-516 review P0-1).
+    print_batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("marking_print_batches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    position_in_batch: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )

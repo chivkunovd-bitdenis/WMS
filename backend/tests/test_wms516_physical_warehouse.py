@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import subprocess
+import sys
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from sqlalchemy import func, insert, select, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.physical_warehouse_guard import install_guards, remove_guards
 from app.db.session import SessionLocal
@@ -813,3 +818,100 @@ async def test_container_reference_lifecycle(db_session, reference, history_stat
         assert (await repair.apply(session, run))["status"] == "completed"
         assert await session.scalar(select(WarehouseBox.warehouse_id).where(
             WarehouseBox.id == box.id)) == third.id
+
+
+def _createdb_or_dropdb_args(command: str, url, db_name: str) -> list[str]:
+    args = [command]
+    if url.host:
+        args += ["-h", url.host]
+    if url.port:
+        args += ["-p", str(url.port)]
+    if url.username:
+        args += ["-U", url.username]
+    args.append(db_name)
+    return args
+
+
+async def test_repair_runs_on_a_database_built_by_alembic_migrations():
+    """WMS-516 review P0-1: the schema self-check must accept a real migrated DB.
+
+    Every other test in this file runs against the schema
+    ``Base.metadata.create_all()`` builds. Staging and production are built by
+    ``alembic upgrade head`` instead, and that migrated schema carries two
+    objects the ORM models did not describe: the ``marking_print_batches``
+    table (migration 20260710_0061, reachable from warehouses through
+    packaging_task_lines) and the composite
+    ``fk_operation_facts_tenant_warehouse`` foreign key (migration
+    20260826_0111). Before the fix, ``physical_warehouse_repair_service``'s own
+    schema self-check rejected both as an unrecognised physical descendant
+    before reading any data, so ``prepare`` never ran on a real database.
+
+    This seeds a legacy warehouse and its documents the way production
+    actually accumulated them -- before the guard migration existed -- then
+    upgrades the same database to head (installing the guard triggers on top
+    of that pre-existing legacy data, exactly as the production/staging
+    deploy step does) and runs prepare -> apply -> verify against it.
+    """
+    from app.db.session import engine as shared_engine
+
+    if shared_engine.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL-only: full alembic migration lineage")
+
+    backend_root = Path(__file__).resolve().parents[1]
+    db_name = f"wms516_migrated_{uuid.uuid4().hex[:12]}"
+    migrated_url = shared_engine.url.set(database=db_name)
+    migrated_url_str = migrated_url.render_as_string(hide_password=False)
+
+    def alembic(*args: str) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", *args],
+            cwd=backend_root,
+            env={**os.environ, "DATABASE_URL": migrated_url_str},
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    createdb = subprocess.run(
+        _createdb_or_dropdb_args("createdb", migrated_url, db_name),
+        capture_output=True, text=True,
+    )
+    assert createdb.returncode == 0, createdb.stdout + createdb.stderr
+    try:
+        # Legacy warehouses and their documents predate the guard migration on
+        # every real environment: seed before it exists, not after.
+        alembic("upgrade", "20260921_0490")
+        test_engine = create_async_engine(migrated_url_str, pool_pre_ping=True)
+        try:
+            async with async_sessionmaker(test_engine, expire_on_commit=False)() as session:
+                tenant, legacy, target, _old_loc, _new_loc, _product, _box = await seed(session)
+        finally:
+            await test_engine.dispose()
+
+        # The same deploy step staging/production run: guards arrive with it.
+        alembic("upgrade", "head")
+
+        test_engine = create_async_engine(migrated_url_str, pool_pre_ping=True)
+        try:
+            async with async_sessionmaker(test_engine, expire_on_commit=False)() as session:
+                run = uuid.uuid4()
+                prepared = await repair.prepare(session, run_id=run, tenant_id=tenant.id,
+                                                 source_id=legacy.id)
+                assert prepared["status"] == "prepared", prepared
+                assert prepared["before"]["on_hand"] == 1019
+                await session.commit()
+                applied = await repair.apply(session, run)
+                assert applied["status"] == "completed", applied
+                await session.commit()
+                verified = await repair.verify(session, run)
+                assert verified["matches_committed_snapshot"]
+                assert not verified["source_exists"]
+                assert await session.scalar(
+                    select(func.sum(InventoryBalance.quantity))) == 1019
+                assert await session.scalar(select(WarehouseBox.warehouse_id)) == target.id
+        finally:
+            await test_engine.dispose()
+    finally:
+        subprocess.run(
+            _createdb_or_dropdb_args("dropdb", migrated_url, db_name),
+            capture_output=True, text=True,
+        )

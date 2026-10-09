@@ -71,6 +71,7 @@ from app.models.marking_code import (
     MarkingPoolProduct,
     MarkingReprintRequest,
 )
+from app.models.marking_print_batch import MarkingPrintBatch
 from app.models.notification import Notification
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest

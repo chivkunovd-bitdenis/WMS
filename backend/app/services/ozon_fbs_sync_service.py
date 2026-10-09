@@ -341,10 +341,13 @@ async def sync_ozon_stocks(
     binding_ids: set[uuid.UUID] | None = None,
 ) -> SellerStockSyncResult:
     """Publish each Ozon binding's explicitly allocated pool through the provider boundary."""
+    from app.models.warehouse import Warehouse
+
     bindings = list(
         (
             await session.execute(
                 select(FbsWarehouseBinding)
+                .join(Warehouse, Warehouse.id == FbsWarehouseBinding.wms_warehouse_id)
                 .where(
                     FbsWarehouseBinding.tenant_id == tenant_id,
                     FbsWarehouseBinding.seller_id == seller_id,
@@ -353,6 +356,19 @@ async def sync_ozon_stocks(
                     # WMS-376. Публикация остатка зависит только от своей галки;
                     # `served` отбирает входящие заказы и сюда не относится.
                     FbsWarehouseBinding.stock_sync_enabled.is_(True),
+                    # WMS-516 review P2-1: a binding still pointing at a
+                    # non-operational/legacy marketplace warehouse (pre-repair
+                    # data, or the internal defect area) must not be touched
+                    # here. Any UPDATE of the binding row itself is guarded by
+                    # the physical-warehouse trigger through wms_warehouse_id,
+                    # so publishing would otherwise fail every cycle for the
+                    # whole seller. Mirrors the WB filter in
+                    # fbs_autopoll_service.list_active_stock_sync_bindings and
+                    # the intake-side _binding_for_row in this module.
+                    Warehouse.tenant_id == tenant_id,
+                    Warehouse.is_operational.is_(True),
+                    func.lower(Warehouse.code).not_in(["__defect__", "fbs-wb"]),
+                    ~func.lower(Warehouse.code).startswith("fbs-wb-"),
                 )
                 .order_by(FbsWarehouseBinding.external_warehouse_id)
             )

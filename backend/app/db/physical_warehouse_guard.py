@@ -101,30 +101,59 @@ def install_guards(connection: Connection) -> None:
           FOR edge IN SELECT value FROM jsonb_array_elements(graph->relation) LOOP
             ref := (record->>(edge->>0))::uuid;
             IF ref IS NULL THEN CONTINUE; END IF;
+            -- FOR KEY SHARE, not FOR SHARE: this only needs to hold the
+            -- ancestor's identity (id, and for warehouses its code/
+            -- is_operational) stable long enough to read it, the same
+            -- guarantee a native foreign key gets from Postgres's own
+            -- reference-check trigger. FOR SHARE also conflicts with an
+            -- ordinary FOR NO KEY UPDATE (ordinary column writes not
+            -- touching a key), so it made routine parent-row updates
+            -- (e.g. an FBS order's status) wait behind, or deadlock
+            -- against, a sibling insert walking up to the same order
+            -- (WMS-516 review P2-2). The one path that legitimately changes
+            -- a warehouse's own identity columns is the repair service,
+            -- which already holds a table-level SHARE ROW EXCLUSIVE lock
+            -- over the whole physical graph before touching any row, so
+            -- this weaker row lock does not let a repair race through.
             EXECUTE 'SELECT to_jsonb(p) FROM ' || quote_ident(edge->>1) ||
-              ' p WHERE id=$1 FOR SHARE' INTO parent USING ref;
+              ' p WHERE id=$1 FOR KEY SHARE' INTO parent USING ref;
             seen := wms_check_physical_record(edge->>1, parent, owner, seen, root_relation);
           END LOOP;
           RETURN seen;
         END $$;
         """.replace("__GRAPH__", graph_json)))
         connection.execute(text("""
+        CREATE OR REPLACE FUNCTION wms_repair_running() RETURNS boolean
+        LANGUAGE plpgsql STABLE AS $$
+        DECLARE run text := current_setting('wms.warehouse_repair', true);
+        BEGIN
+          -- The common case (no repair in progress) never touches
+          -- background_jobs at all: current_setting returns NULL/'' for
+          -- every ordinary write, so the EXISTS lookup below only runs
+          -- inside a repair transaction that actually set this GUC. When it
+          -- does run, comparing the typed uuid column against a cast value
+          -- uses the primary key index instead of a sequential scan (the
+          -- previous id::text = ... comparison could not use any index, and
+          -- there was no index on job_type/status either). A malformed
+          -- leftover setting fails the regex and is treated as "not running"
+          -- rather than raising on the uuid cast.
+          RETURN run ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            AND EXISTS (
+              SELECT 1 FROM background_jobs
+              WHERE id = run::uuid AND job_type = 'physical_warehouse_repair'
+                AND status = 'running'
+            );
+        END $$;
         CREATE OR REPLACE FUNCTION wms_physical_warehouse_guard() RETURNS trigger
         LANGUAGE plpgsql AS $$ BEGIN
-          IF EXISTS (SELECT 1 FROM background_jobs WHERE id::text =
-            current_setting('wms.warehouse_repair', true)
-            AND job_type='physical_warehouse_repair' AND status='running')
-          THEN RETURN NEW; END IF;
+          IF wms_repair_running() THEN RETURN NEW; END IF;
           PERFORM wms_check_physical_record(
             TG_TABLE_NAME, to_jsonb(NEW), NULL, '{}', TG_TABLE_NAME);
           RETURN NEW;
         END $$;
         CREATE OR REPLACE FUNCTION wms_reserved_warehouse_code() RETURNS trigger
         LANGUAGE plpgsql AS $$ BEGIN
-          IF EXISTS (SELECT 1 FROM background_jobs WHERE id::text =
-            current_setting('wms.warehouse_repair', true)
-            AND job_type='physical_warehouse_repair' AND status='running')
-          THEN RETURN NEW; END IF;
+          IF wms_repair_running() THEN RETURN NEW; END IF;
           IF lower(NEW.code)='fbs-wb' OR left(lower(NEW.code),7)='fbs-wb-' OR
             (TG_OP='UPDATE' AND (lower(OLD.code)='fbs-wb' OR
              left(lower(OLD.code),7)='fbs-wb-')) THEN
@@ -193,7 +222,8 @@ def remove_guards(connection: Connection) -> None:
         connection.exec_driver_sql(
             "DROP FUNCTION IF EXISTS wms_physical_warehouse_guard(); "
             "DROP FUNCTION IF EXISTS wms_check_physical_record(text,jsonb,uuid,jsonb,text); "
-            "DROP FUNCTION IF EXISTS wms_reserved_warehouse_code();"
+            "DROP FUNCTION IF EXISTS wms_reserved_warehouse_code(); "
+            "DROP FUNCTION IF EXISTS wms_repair_running();"
         )
     else:
         rows = connection.exec_driver_sql(

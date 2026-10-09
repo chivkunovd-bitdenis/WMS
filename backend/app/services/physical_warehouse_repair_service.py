@@ -124,10 +124,17 @@ async def _lock(session: AsyncSession) -> None:
                 if fk["referred_table"] not in {"warehouses", "storage_locations"}:
                     continue
                 table = Base.metadata.tables.get(name)
-                if table is None or fk["constrained_columns"] != [
-                    c for c in _refs(table, fk["referred_table"])
-                    if c in fk["constrained_columns"]
-                ]:
+                # A deployed FK may pair the physical reference column with an
+                # extra defensive tenant_id column, the composite-FK pattern
+                # migration 20260826_0111 introduced for operation_facts (e.g.
+                # fk_operation_facts_tenant_warehouse on (tenant_id, warehouse_id)
+                # -> warehouses(tenant_id, id)). It still identifies exactly one
+                # physical row, so reduce it the same way physical_graph() does:
+                # by the position paired with "id" on the referenced side.
+                if table is None or "id" not in fk["referred_columns"]:
+                    raise WarehouseRepairError(f"unrecognised_physical_fk:{name}")
+                physical_column = fk["constrained_columns"][fk["referred_columns"].index("id")]
+                if physical_column not in _refs(table, fk["referred_table"]):
                     raise WarehouseRepairError(f"unrecognised_physical_fk:{name}")
 
     await connection.run_sync(check_schema)
