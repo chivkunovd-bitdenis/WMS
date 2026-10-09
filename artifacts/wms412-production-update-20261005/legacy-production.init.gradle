@@ -1,0 +1,13 @@
+// WMS-412: publish the already accepted production code for existing pilot installs.
+// Keep the original certificate family and its existing manifest URL.
+// This is a full release build: no debug API, no debuggable flag, no removed features.
+allprojects { project ->
+    project.plugins.withId('com.android.application') {
+        project.extensions.getByName('androidComponents').finalizeDsl { android ->
+            android.buildTypes.getByName('release').signingConfig = android.signingConfigs.getByName('debug')
+            android.buildTypes.getByName('release').buildConfigField(
+                'String', 'APK_UPDATE_MANIFEST_URL',
+                '"https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/update.json"')
+        }
+    }
+}

@@ -1,0 +1,95 @@
+{
+  "id": "d8f9a5fd9a0679aa",
+  "status": "done",
+  "finished_at": 1791196896.032576,
+  "result": {
+    "summary": "Предыдущий вывод о необходимости вручную получать APK был неверным: обновление из самого приложения существует и присутствует в опубликованной сборке. Найдено прежнее исследование: out:207 ссылался на topic-159/source159. Оно завершилось после новых сообщений владельца договорённостью о проверке FBS на ТСД, без итоговой сверки версии; сейчас тема ожидает результат оператора. Действующего исследования для передачи уточнения не обнаружено, выполнена узкая read-only проверка обновления.",
+    "next_action": "Передать владельцу исправленный ответ ниже. Для гарантии обновления конкретного физического ТСД ещё нужно установить его текущую сборку, зашитый канал обновлений и совместимость подписи. В доступной переписке эти сведения не найдены. Установку и публикацию не выполнять.",
+    "answer": "Да, ты прав: обновление по кнопке сделано. Мой предыдущий ответ про обязательное ручное скачивание файла был неверным.\n\nНа главном экране открой «Обновление приложения» → «Проверить обновление» → «Скачать обновление» → «Установить обновление», затем подтверди установку в Android. Если Android запросит разрешение, разреши установку для WMS и повторно нажми «Установить обновление». Проверка и скачивание запускаются кнопками; скрытого автоматического обновления в проверенной версии нет.\n\nРабочая версия 0.2.0 действительно опубликована. Но есть конкретная проблема: старый адрес обновлений до сих пор предлагает 0.1.14, отдельный тестовый канал — 0.2.1-staging, а рабочий — 0.2.0. Поэтому обещать, что именно ваш ТСД получит нужную рабочую версию по кнопке, пока нельзя: неизвестно, какой адрес зашит в установленной на нём сборке. Это уже вопрос канала обновления, а не отсутствия функции.",
+    "task_ids": [],
+    "affected_areas": [
+      "мобильный ТСД",
+      "обновление приложения",
+      "рабочий и тестовый каналы APK"
+    ],
+    "evidence": {
+      "prior_investigation": {
+        "source": "out:207 / Telegram 283 → agent_event:internal:0066466ff292251133ed → topic-159 / in:159:1",
+        "result": "worker_done internal:6af908e21b75efd61b3d; итог — ожидание проверки оператором, без установленного SHA мобильной версии",
+        "verification": "read_context и SELECT через SQLite mode=ro в /Users/deniscivkunov/.wms-support-agent/state.db; штатный инструмент передачи уточнения этому исполнителю недоступен"
+      },
+      "git": {
+        "wms_head_and_fetched_origin_etalon": "001b93e00e3f76e29c7b3f658e082fe2c201b2d1",
+        "rules": "AGENTS.md прочитан, различий с обновлённым origin/etalon нет",
+        "mobile_repository": "/Users/deniscivkunov/Projects/WMS/mobile",
+        "old_checkout": "feat/mobile-tsd-redesign @ 69caa22b3d2d0e715966776d0edb2cec92723696; эта ветка содержит документы и прототип редизайна",
+        "update_implementation_commit": "00cf4d5c9ebbf7690ed3e8905bd0f4cb25d7c35c",
+        "release_worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms584-585-tsd-release",
+        "release_branch": "feat/wms584-585-tsd-release @ 41f0f336f11bb998486cc18e9f0a711831897a4a; remote подтверждён git ls-remote",
+        "published_source_commit": "81659534e76c46ebb07ccc02eb501b94404a8088",
+        "later_branch": "codex/wms595-inventory @ c4fb992afc74f6d2f933d300c0f3a3b10b5e84a7; remote подтверждён",
+        "redesign_relationship": "Ветка редизайна 69caa22 является предком опубликованного 8165953. Публикация 0.2.0 подтверждена, но это не доказывает реализацию каждого экрана прежнего прототипа. Исходная переписка не определяет более точную «новую версию».",
+        "state": "Рабочий каталог проверки и поздняя мобильная ветка чистые. В старом mobile присутствуют прежние .DS_Store и android/.kotlin/, в release-worktree — android/.kotlin/. Ничего не изменялось."
+      },
+      "code_path": {
+        "base": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms584-585-tsd-release/android/app",
+        "files": [
+          "src/main/java/ru/wms/tsd/features/home/HomeScreen.kt:139 — вход «Обновление приложения»",
+          "src/main/java/ru/wms/tsd/Navigation.kt:66 — переход на update",
+          "src/main/java/ru/wms/tsd/features/update/UpdateScreen.kt:56 — кнопки проверки, скачивания и установки",
+          "src/main/java/ru/wms/tsd/features/update/UpdateViewModel.kt:25 — проверка большей versionCode по явному нажатию",
+          "src/main/java/ru/wms/tsd/features/update/UpdateRepository.kt:108 — получение манифеста; скачивание APK, проверка размера и SHA-256",
+          "src/main/java/ru/wms/tsd/features/update/UpdateInstaller.kt:16 — проверка приложения и подписи, запуск установщика Android",
+          "build.gradle.kts:24 — адрес канала обновления"
+        ],
+        "mechanism": "Нативное обновление Android-приложения через APK; не обновление веб-части. Канал независим от выбранного API-сервера WMS."
+      },
+      "live_channels": [
+        {
+          "url": "https://github.com/oyster-labs-cy/wms-tsd-updates/releases/download/tsd-stable/update.json",
+          "available": "0.2.0 / code19",
+          "source_commit": "81659534e76c46ebb07ccc02eb501b94404a8088",
+          "apk_verification": "Файл заново скачан только в память: 37543774 байта; SHA-256 e622612aff0129e5e02f63f811155d302fb8bcc7d708c3802caf9159fbb0a1d5 совпал с манифестом. В DEX опубликованного APK обнаружены UpdateScreenKt, UpdateRepository, UpdateInstaller и адрес tsd-stable."
+        },
+        {
+          "url": "https://github.com/oyster-labs-cy/wms-tsd-updates/releases/download/tsd-preview/update.json",
+          "available": "0.2.1-staging / code20",
+          "source_commit": "a3411dae332c91eaf3671be123110f8aec4f1a29",
+          "scope": "Отдельная тестовая сборка с инвентаризацией и дополнениями Ozon. Рабочий stable-канал её не предлагает."
+        },
+        {
+          "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/tsd-preview/update.json",
+          "available": "0.1.14-profile-migration-fix / code15",
+          "verification": "GET манифеста HTTP 200; HEAD указанного APK HTTP 200, 45576210 байт. Этот старый адрес присутствует, например, в исходниках сборки code11."
+        }
+      ],
+      "limits": "Не проверены установленная версия, канал и подпись физического ТСД, доступность GitHub из его сети и фактическое завершение установки. Устройства, продукт, БД и секреты не изменялись; сборки не публиковались, сообщения клиентам не отправлялись."
+    }
+  },
+  "source_message": {
+    "id": 172,
+    "source": "telegram",
+    "chat_id": 689889703,
+    "msg_id": "292",
+    "author_id": "689889703",
+    "text": "(расшифровка голосового) Блядь, так короче, в чём проблема сейчас? Сделай так, чтобы у человека, у которого установлен TSD, нажал кнопку, и ему скачалась продовая полноценная нормальная, блядь, версия. Можно так сделать?"
+  },
+  "active_jobs": [
+    {
+      "id": "5beb52dad9529727",
+      "status": "running",
+      "task_ids": [
+        "WMS-653",
+        "WMS-654",
+        "WMS-657",
+        "WMS-658",
+        "WMS-659"
+      ]
+    },
+    {
+      "id": "7c1e91003d941c72",
+      "status": "running",
+      "task_ids": []
+    }
+  ]
+}

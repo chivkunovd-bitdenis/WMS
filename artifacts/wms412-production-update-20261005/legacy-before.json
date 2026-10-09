@@ -1,0 +1,9 @@
+{
+  "versionCode": 15,
+  "versionName": "0.1.14-profile-migration-fix",
+  "apkUrl": "https://github.com/oyster-labs-cy/wms-tsd-updates/releases/download/tsd-preview/WMS-TSD-0.1.14-profile-migration-fix-cf6a90997786-debug.apk",
+  "sha256": "cf6a909977865d725eb27acb07cfdf3964790f64d48070d0860fec1ff307af80",
+  "sizeBytes": 45576210,
+  "minSdk": 24,
+  "notes": "WMS-440–445: приёмка, сортировка, профиль, упаковка и FBS-восстановление после потерянного ответа. Обновляйте между заданиями."
+}

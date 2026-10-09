@@ -1,0 +1,178 @@
+{
+  "task": {
+    "id": "WMS-412",
+    "authorization": "Existing release authorization supplied in this request: source172, Telegram292, owner689889703. Telegram identity and message were not independently reread.",
+    "scope": "Read-only assessment of an in-place production update through the installed application's existing Update action.",
+    "new_task_required": false,
+    "actions_performed": "Read project rules, the requested analyst skill, release records, saved manifests, relevant source and tests; verified downloaded APK hashes and public signing certificates.",
+    "mutations_performed": false
+  },
+  "decision": {
+    "status": "CONDITIONALLY_SUPPORTED_NOT_ACCEPTED",
+    "assessment": "The proposed release packaging addresses the confirmed signature mismatch for legacy installations with the verified AndroidDebug certificate and versionCode below 19. It can deliver the full accepted production application while retaining application data. Publishing manifest19 does not offer a downgrade to existing staging20 installations. These conclusions support the bounded approach, but do not establish successful installation or preservation of settings on a device.",
+    "publication_condition": "Verify the newly built artifact, both distribution endpoints and the actual old-app update path before treating the release as safe for ordinary operator rollout. Uploading an immutable candidate APK and activating the two update manifests are separate steps.",
+    "confirmed_blocking_defect_in_proposal": null,
+    "confirmed_existing_defect": "Legacy15 and stable19 have different signing certificates. The release-signed staging20 currently described as served by Oyster preview cannot update the verified debug-signed legacy15 in place.",
+    "unresolved_acceptance_blocker": "The exact legacy15 → newly built legacy-compatible19 update, including encrypted settings and PIN recovery, has not been exercised. No physical device is available, and the saved emulator log confirms failure to start because of insufficient disk space.",
+    "staging_preservation_limit": "Existing staging20 remains installed with its existing settings and server. This proposal neither converts it to production nor preserves a usable future release-signed update feed on the shared preview endpoint."
+  },
+  "evidence": {
+    "production_source": "81659534e76c46ebb07ccc02eb501b94404a8088",
+    "production_version": "0.2.0 / versionCode19",
+    "stable_apk_sha256_verified": "e622612aff0129e5e02f63f811155d302fb8bcc7d708c3802caf9159fbb0a1d5",
+    "legacy_apk_sha256_verified": "cf6a909977865d725eb27acb07cfdf3964790f64d48070d0860fec1ff307af80",
+    "legacy_signer_sha256_verified": "e343ab0cccc6284b271a72da42a67b14a0f0893d92b9ca461f1cac3d0be1aeb6",
+    "stable_signer_sha256_verified": "426aa37de6069fb33087f59b18f8718c04dbe750386a2adca12baf82158cb16e",
+    "legacy_package_verified": "ru.wms.tsd",
+    "legacy_version_code_verified": 15,
+    "stable_debuggable_verified": false,
+    "saved_manifests": "Read legacy-before.json, stable-before.json and staging-before.json under artifacts/wms412-production-update-20261005. These are saved snapshots, not a fresh verification of public endpoints.",
+    "acceptance_record": "The actual mobile worktree is /Users/deniscivkunov/Projects/WMS/.worktrees/wms584-585-tsd-release. Its docs/PROGRESS.md production entry records published code19, 278 Android unit tests, release signing and emulator checks. WMS-584/WMS-585 supplements identify the same source. Older incomplete conclusions in those documents are superseded by later release entries.",
+    "historical_limits": "Prior acceptance did not cover physical ATOL hardware, real printing or live marketplace operations. It also does not prove this new certificate-compatible upgrade path.",
+    "source_comparisons": "The source corresponding to version15 at 83b8458 was compared with 8165953 for authentication storage, authentication migration and updating. The stable and staging source updater directories have no differences. Mapping the downloaded legacy APK to every source file was not independently established."
+  },
+  "requirements": [
+    {
+      "id": "R1",
+      "requirement": "Build the complete accepted application from exact source8165953 as release0.2.0/code19, retaining production API https://wms.sellerfocus.pro/api/. Limit overrides to existing signing configuration and the specified legacy update-manifest URL.",
+      "basis": "Owner requests the full accepted production application; later staging features are excluded."
+    },
+    {
+      "id": "R2",
+      "requirement": "Retain applicationId ru.wms.tsd and sign the new release APK with the existing certificate matching verified legacy15. The final APK must remain non-debuggable. Do not uninstall the old app, clear its data or recreate signing material.",
+      "basis": "In-place update preserving settings."
+    },
+    {
+      "id": "R3",
+      "requirement": "Preserve encrypted preferences, saved employees, PINs, server selection and persisted recovery records. Validate identity through the existing authentication behavior; do not silently change employee, organization or server.",
+      "basis": "Owner requires settings preservation and existing tenant boundaries."
+    },
+    {
+      "id": "R4",
+      "requirement": "Publish the same verified legacy-compatible19 artifact through both specified old tsd-preview endpoints, using a unique immutable APK name and matching manifest hash, size, version and minSdk. The installed candidate must subsequently use the old WMS tsd-preview route.",
+      "basis": "Legacy installations contain two different embedded update URLs."
+    },
+    {
+      "id": "R5",
+      "requirement": "Leave tsd-stable and its existing release-signed19 APK unchanged. Existing stable19 and staging20 must not be offered this code19 as a newer update.",
+      "basis": "Bounded release; preserve existing stable and staging installations."
+    },
+    {
+      "id": "R6",
+      "requirement": "Failed downloads, cancelled installation and retry must leave the installed application and its data usable. Update between tasks; do not represent unsaved in-memory work as guaranteed to survive Android replacing the process.",
+      "basis": "Existing updater recovery behavior and release notes."
+    },
+    {
+      "id": "R7",
+      "requirement": "Record the exact source, build override recipe, candidate hash, signing certificate, public verification and actual acceptance results under WMS-412. Save release material in an appropriate named Git branch without merging main or including unrelated changes.",
+      "basis": "Project preservation rules and the owner's release-only scope."
+    }
+  ],
+  "channel_assessment": {
+    "matching_legacy_below19": "Receives candidate19 from either old endpoint, subject to package, certificate, Android compatibility and old-updater verification.",
+    "legacy_compatible19_after_update": "Uses the old WMS preview route and sees no newer version while manifest19 remains served.",
+    "release_signed_stable19": "Continues using unchanged tsd-stable. No conversion or cross-signature replacement is needed.",
+    "release_signed_staging20": "Its updater compares manifest.versionCode > installed.versionCode. Therefore manifest19 is not offered. Source inspection confirms the updater is unchanged from stable19.",
+    "uncovered_installations": "Earlier APKs with another certificate, debug builds already at code19 or above, and release-signed builds below19 on an old preview URL are not proven compatible by the legacy15 certificate check.",
+    "future_constraint": "A static manifest cannot select an APK by installed certificate. Raising a shared preview manifest above20 with the legacy signer would expose staging20 to another signature mismatch. The present plan preserves staging20 now; it does not resolve future two-certificate distribution.",
+    "rollback_constraint": "Restoring an earlier manifest can stop further offers but cannot undo an installed code19 or its application changes. Do not use uninstall, data clearing or forced downgrade as rollback."
+  },
+  "auth_profile_assessment": {
+    "normal15_to19": "The compared sources retain auth_store, base_url, saved_staff, the encrypted-preference algorithms and SavedStaff identity fields. Changes to AuthStore are additive recovery support rather than a replacement of the authentication store. No destructive profile migration was found in the inspected path.",
+    "older_unmigrated_profiles": "The existing login screen invokes migrateLegacyStaffForPin. For an eligible legacy record with a saved usable server and token, successful /auth/me supplies identity fields while retaining PIN and token. Failed identity lookup leaves the raw record intact.",
+    "truthful_login_limit": "An expired token, unavailable server or invalid identity can require password login or a later retry. Retaining stored records does not guarantee an uninterrupted authenticated session. An unmigrated record can remain stored without appearing as a PIN tile.",
+    "server_preservation": "A saved server overrides the production default. A saved staging server therefore stays staging. The release build also rejects cleartext HTTP in relevant authentication paths; preserving an old HTTP setting does not guarantee it remains usable. Ordinary production coverage should be stated for the existing HTTPS production profiles.",
+    "test_limit": "Existing authentication unit tests cover legacy migration, PIN retention and failed identity lookup, but use mocked storage. The crypto configuration test does not prove that an installed code15 encrypted store can be decrypted after this exact APK replacement."
+  },
+  "checks": [
+    {
+      "id": "C1",
+      "requirements": ["R1", "R2"],
+      "class": "разово",
+      "check": "Build from exact production source with the bounded init-script override. Inspect the resulting APK for package, code19, minSdk24, non-debuggable status, production API, old WMS manifest URL and exact legacy signer. Compare packaging and source differences against accepted stable19; require no staging functionality or source-set substitution.",
+      "verdict": "NOT_CHECKED",
+      "evidence": "The candidate APK has not been presented. Baseline APK hashes and certificates were verified."
+    },
+    {
+      "id": "C2",
+      "requirements": ["R2", "R5"],
+      "class": "навсегда",
+      "check": "Exercise installed versions15,19,20 against manifest19: offer only to15; accept matching package/certificate; reject mismatched certificate. Rerun existing UpdateTest cases for identity and current-or-older versions.",
+      "verdict": "SOURCE_CONFIRMED_EXECUTION_PENDING",
+      "evidence": "UpdateViewModel.check and verifyIdentity inspected; relevant existing tests found but not run."
+    },
+    {
+      "id": "C3",
+      "requirements": ["R2", "R3", "R4"],
+      "class": "руками",
+      "check": "On a controlled device or emulator, install the actual downloaded legacy15 and prepare synthetic saved settings/profile. Use its existing Update action through each applicable old URL, complete replacement without uninstalling, reopen code19 and verify server, employee, organization, PIN and settings. Reopen Update and confirm the candidate uses the intended legacy route.",
+      "verdict": "NOT_CHECKED_BLOCKS_UPGRADE_ACCEPTANCE",
+      "evidence": "No working emulator or physical device. Code15 source strictly requires nonempty matching signer metadata even on API24; the newer code19 fallback cannot repair a failure occurring inside the old updater before installation. ADB replacement alone would not prove the requested Update action."
+    },
+    {
+      "id": "C4",
+      "requirements": ["R3"],
+      "class": "навсегда",
+      "check": "Rerun existing auth tests for legacy migration retaining PIN, current profiles requiring no migration and invalid identity retaining the raw record. Include a real upgrade fixture for encrypted preferences and verify repeated reopening and correct server selection for saved employees.",
+      "verdict": "SOURCE_COMPATIBLE_RUNTIME_PENDING",
+      "evidence": "AuthStore, AuthManager, LoginScreen and relevant AuthManagerTest cases inspected."
+    },
+    {
+      "id": "C5",
+      "requirements": ["R4", "R5"],
+      "class": "разово",
+      "check": "Upload immutable APK assets before activating manifests. Download and verify public bytes, then reread both exact legacy manifest URLs and their APKs after activation. Confirm equal candidate identity and unchanged tsd-stable manifest/APK. Preserve existing staging assets.",
+      "verdict": "NOT_CHECKED",
+      "evidence": "Only before-snapshots and previously downloaded baseline APKs were inspected. Two endpoints cannot be assumed to change atomically; record each result separately."
+    },
+    {
+      "id": "C6",
+      "requirements": ["R6"],
+      "class": "навсегда",
+      "check": "Use existing updater tests for interrupted or corrupt download, double tap, cancelled installation and cached-file revalidation. Confirm retry reaches the verified candidate without altering installed data. Recheck after a stale preview20 offer to ensure refresh obtains manifest19.",
+      "verdict": "TESTS_IDENTIFIED_NOT_RUN",
+      "evidence": "Relevant cases exist in android/app/src/test/java/ru/wms/tsd/features/update/UpdateTest.kt."
+    },
+    {
+      "id": "C7",
+      "requirements": ["R1", "R3"],
+      "class": "руками",
+      "check": "After the controlled upgrade, open the accepted intake, placement, ordinary shipment and FBS sections with synthetic data. Confirm the full application starts and saved context remains usable; retain prior functional acceptance without claiming new hardware or marketplace validation.",
+      "verdict": "NOT_CHECKED",
+      "evidence": "Historical production-source acceptance exists; this newly packaged upgrade has not been exercised."
+    },
+    {
+      "id": "C8",
+      "requirements": ["R7"],
+      "class": "разово",
+      "check": "Save the non-secret build recipe and release evidence under WMS-412, inspect the scoped diff, commit and publish the release branch as required. Record source SHA separately from evidence commit and distributed APK hash.",
+      "verdict": "NOT_PERFORMED_READ_ONLY_ROLE",
+      "evidence": "No files, branches, manifests or releases were changed by this assessment."
+    }
+  ],
+  "release_vs_product_change": {
+    "classification": "Release compatibility and distribution repair using already accepted product source.",
+    "within_scope": [
+      "Release build signed normally with the existing legacy-compatible certificate.",
+      "Legacy update URL override, immutable APK assets and accurate manifests.",
+      "Release-specific compatibility checks and WMS-412 evidence."
+    ],
+    "outside_scope": [
+      "New authentication or automatic server-migration behavior.",
+      "Updater routing redesign or signature-verification bypass.",
+      "Staging20 conversion, later staging features or unrelated WMS fixes.",
+      "Main merge, secret inspection or key management."
+    ],
+    "boundary": "If a required check exposes an authentication or old-updater defect, this packaging assessment does not authorize silently changing product behavior. Record the concrete failure under WMS-412 and distinguish any required code correction from the proposed release-only work."
+  },
+  "external_basis": [
+    "Android updates require compatible application signing identity: [Android app signing](https://developer.android.com/studio/publish/app-signing). Using the existing debug certificate here preserves that identity; it does not make the release build debuggable.",
+    "Android uses versionCode for version ordering and downgrade protection: [Android app versioning](https://developer.android.com/studio/publish/versioning). The application's own strict greater-than check was additionally verified in source."
+  ],
+  "limitations": [
+    "This is an assessment, not release acceptance or a readiness declaration.",
+    "No build, tests, installation, publication, live operator verification or production mutation was performed.",
+    "Physical-device absence and the supplied 735 MiB free-space figure come from the request; the emulator's insufficient-space failure was verified in its saved log.",
+    "Memory was used to locate relevant release history; substantive conclusions were checked against current local source, artifacts and release records."
+  ]
+}

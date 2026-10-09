@@ -1,0 +1,14 @@
+{
+  "versionCode": 20,
+  "versionName": "0.2.1-staging",
+  "apkUrl": "https://github.com/oyster-labs-cy/wms-tsd-updates/releases/download/tsd-preview/WMS-TSD-0.2.1-staging-code20-a3411dae332c-5affbc570c2a.apk",
+  "sha256": "5affbc570c2af9624e17d0934cc861fb9a36f1fee26ff6a2371cfab56bb8dd0b",
+  "sizeBytes": 37658484,
+  "minSdk": 24,
+  "environment": "staging",
+  "apiBaseUrl": "https://wms-production-780c.up.railway.app/",
+  "sourceCommit": "a3411dae332c91eaf3671be123110f8aec4f1a29",
+  "productCommit": "8f9f4b35a9eab3d52d9422ae15b1f58e1d7859c0",
+  "notes": "Staging: WMS-593/594/595/597, инвентаризация и Ozon FBS. После обновления выберите staging в настройках сервера; сохранённый адрес не меняется. Обновляйте между заданиями.",
+  "backendCommit": "0e8cce88b993998f8cbd74b5750fff72a34395da"
+}
