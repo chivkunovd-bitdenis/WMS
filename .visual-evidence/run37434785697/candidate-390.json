@@ -1,0 +1,246 @@
+{
+  "name": "candidate-390",
+  "width": 390,
+  "baseline": false,
+  "fullyReserved": {
+    "onHand": 5,
+    "reserved": 5,
+    "available": 0,
+    "included": true
+  },
+  "geometry": {
+    "viewport": {
+      "width": 390,
+      "height": 1000
+    },
+    "paper": {
+      "x": -10,
+      "y": 165.5625,
+      "width": 82,
+      "height": 514.03125,
+      "right": 72,
+      "bottom": 679.59375
+    },
+    "controls": [
+      {
+        "text": "​",
+        "rect": {
+          "x": 7,
+          "y": 182.5625,
+          "width": 741.40625,
+          "height": 40,
+          "right": 748.40625,
+          "bottom": 222.5625
+        }
+      },
+      {
+        "text": "СеллерИП Александрова Екатерина Владиславовна — товары для дома и путешествийСеллер",
+        "rect": {
+          "x": 7,
+          "y": 254.5625,
+          "width": 741.40625,
+          "height": 40,
+          "right": 748.40625,
+          "bottom": 294.5625
+        }
+      },
+      {
+        "text": "Маркетплейс​Маркетплейс",
+        "rect": {
+          "x": 7,
+          "y": 326.5625,
+          "width": 741.40625,
+          "height": 40,
+          "right": 748.40625,
+          "bottom": 366.5625
+        }
+      },
+      {
+        "text": "Передача остатков​Передача остатков",
+        "rect": {
+          "x": 7,
+          "y": 398.5625,
+          "width": 741.40625,
+          "height": 40,
+          "right": 748.40625,
+          "bottom": 438.5625
+        }
+      },
+      {
+        "text": "Категория​Категория",
+        "rect": {
+          "x": 7,
+          "y": 470.5625,
+          "width": 741.40625,
+          "height": 40,
+          "right": 748.40625,
+          "bottom": 510.5625
+        }
+      },
+      {
+        "text": "С остатком",
+        "rect": {
+          "x": 7,
+          "y": 542.5625,
+          "width": 741.40625,
+          "height": 48,
+          "right": 748.40625,
+          "bottom": 590.5625
+        }
+      },
+      {
+        "text": "Найдено: 1 из 3",
+        "rect": {
+          "x": 7,
+          "y": 622.5625,
+          "width": 741.40625,
+          "height": 40.03125,
+          "right": 748.40625,
+          "bottom": 662.59375
+        }
+      }
+    ],
+    "overlaps": [],
+    "controlsWithinViewport": false,
+    "stockIndex": 8,
+    "rows": [
+      {
+        "text": "Товар a-positive—WildberriesNEEDLE-a-positive——ИП Александрова Екатерина Владиславовна — товары для дома и путешествийОстаток 5Резерв 5Доступно 0не передаётсяТЗРезервы0",
+        "stock": "Остаток 5Резерв 5Доступно 0",
+        "stockRect": {
+          "x": -87,
+          "y": 730.1875,
+          "width": 160,
+          "height": 217.15625,
+          "right": 73,
+          "bottom": 947.34375
+        },
+        "sellerRect": {
+          "x": -197,
+          "y": 730.1875,
+          "width": 110,
+          "height": 217.15625,
+          "right": -87,
+          "bottom": 947.34375
+        },
+        "cells": [
+          {
+            "x": -939,
+            "y": 730.1875,
+            "width": 44,
+            "height": 217.15625,
+            "right": -895,
+            "bottom": 947.34375
+          },
+          {
+            "x": -895,
+            "y": 730.1875,
+            "width": 56,
+            "height": 217.15625,
+            "right": -839,
+            "bottom": 947.34375
+          },
+          {
+            "x": -839,
+            "y": 730.1875,
+            "width": 160,
+            "height": 217.15625,
+            "right": -679,
+            "bottom": 947.34375
+          },
+          {
+            "x": -679,
+            "y": 730.1875,
+            "width": 170,
+            "height": 217.15625,
+            "right": -509,
+            "bottom": 947.34375
+          },
+          {
+            "x": -509,
+            "y": 730.1875,
+            "width": 118,
+            "height": 217.15625,
+            "right": -391,
+            "bottom": 947.34375
+          },
+          {
+            "x": -391,
+            "y": 730.1875,
+            "width": 130,
+            "height": 217.15625,
+            "right": -261,
+            "bottom": 947.34375
+          },
+          {
+            "x": -261,
+            "y": 730.1875,
+            "width": 64,
+            "height": 217.15625,
+            "right": -197,
+            "bottom": 947.34375
+          },
+          {
+            "x": -197,
+            "y": 730.1875,
+            "width": 110,
+            "height": 217.15625,
+            "right": -87,
+            "bottom": 947.34375
+          },
+          {
+            "x": -87,
+            "y": 730.1875,
+            "width": 160,
+            "height": 217.15625,
+            "right": 73,
+            "bottom": 947.34375
+          },
+          {
+            "x": 73,
+            "y": 730.1875,
+            "width": 124,
+            "height": 217.15625,
+            "right": 197,
+            "bottom": 947.34375
+          },
+          {
+            "x": 197,
+            "y": 730.1875,
+            "width": 70,
+            "height": 217.15625,
+            "right": 267,
+            "bottom": 947.34375
+          },
+          {
+            "x": 267,
+            "y": 730.1875,
+            "width": 110,
+            "height": 217.15625,
+            "right": 377,
+            "bottom": 947.34375
+          },
+          {
+            "x": 377,
+            "y": 730.1875,
+            "width": 96,
+            "height": 217.15625,
+            "right": 473,
+            "bottom": 947.34375
+          },
+          {
+            "x": 473,
+            "y": 730.1875,
+            "width": 106,
+            "height": 217.15625,
+            "right": 579,
+            "bottom": 947.34375
+          }
+        ]
+      }
+    ]
+  },
+  "pass": false,
+  "error": "AssertionError [ERR_ASSERTION]: Filters extend outside narrow viewport\n\nfalse !== true\n\n    at runCase (file:///home/runner/work/WMS/WMS/scripts/ci/wms667-visual-probe.mjs:120:12)\n    at async file:///home/runner/work/WMS/WMS/scripts/ci/wms667-visual-probe.mjs:149:36",
+  "pageErrors": []
+}
