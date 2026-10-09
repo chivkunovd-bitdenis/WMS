@@ -527,8 +527,9 @@ async def save_observations(
                 continue
             previous = evidence.get(str(order.id)) or {}
             children = observation.get("children") or {}
-            old_children = previous.get("children") or {}
-            if children and previous.get("scope") == observation.get("scope"):
+            same_scope = previous.get("scope") == observation.get("scope")
+            old_children = (previous.get("children") or {}) if same_scope else {}
+            if children:
                 for number, child in children.items():
                     old = old_children.get(number) or {}
                     if old.get("quantities") and old["quantities"] != child["quantities"]:
@@ -541,10 +542,16 @@ async def save_observations(
                         posting_stage,
                     )
 
+                    previous_stage = old.get(CONFIRMED_STAGE_KEY)
+                    if previous_stage is None and old:
+                        previous_stage = posting_stage(
+                            old.get("status"), old.get("substatus"),
+                            handed=bool(old.get("prior_positive")),
+                        )
                     child[CONFIRMED_STAGE_KEY] = posting_stage(
                         child.get("status"), child.get("substatus"),
                         handed=bool(child.get("positive") or old.get("prior_positive")),
-                        previous=old.get(CONFIRMED_STAGE_KEY),
+                        previous=previous_stage,
                     )
                     child["previous_positive"] = bool(old.get("prior_positive"))
                     child["prior_positive"] = bool(
