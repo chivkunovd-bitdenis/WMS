@@ -1895,6 +1895,11 @@ async def post_all_remaining(
         await session.commit()
         await session.refresh(req)
         return req
+    await inv_svc.lock_stock_products(
+        session,
+        tenant_id,
+        {line.product_id for line, _remaining in to_receive},
+    )
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )
@@ -2652,6 +2657,11 @@ async def complete_distribution(
             raise InboundIntakeError("qty_exceeds_accepted")
 
     posted_rows = await _distribution_posted_quantities(session, req, rows)
+    await inv_svc.lock_stock_products(
+        session,
+        tenant_id,
+        {row.product_id for row in rows},
+    )
     for r in rows:
         line = lines_by_product[r.product_id]
         quantity_to_post = r.quantity - posted_rows.get(r.id, 0)
@@ -2711,6 +2721,15 @@ async def reopen_receiving(
     if any(ln.posted_qty > 0 for ln in req.lines):
         raise InboundIntakeError("already_posted_partial")
 
+    await inv_svc.lock_stock_products(
+        session,
+        tenant_id,
+        {
+            line.product_id
+            for line in req.lines
+            if _accepted_qty_for_line(line) > 0
+        },
+    )
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )

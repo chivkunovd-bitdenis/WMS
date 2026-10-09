@@ -39,6 +39,8 @@ from app.models.fbs_order import (
     RESERVE_STATUS_WAREHOUSE_UNMAPPED,
     FbsOrder,
     FbsOrderProduct,
+    FbsOrderProductReservation,
+    FbsOrderReservation,
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
@@ -837,6 +839,94 @@ async def _charge_confirmed_order(session: AsyncSession, order: FbsOrder) -> Non
     await record_fbs_order_confirmed(session, order)
 
 
+async def _prelock_ozon_import_stock_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    rows: list[dict[str, Any]],
+) -> None:
+    """Acquire all stock rows touched by this import before per-order reserves."""
+    from app.services import inventory_service
+
+    external_ids = {
+        external_id
+        for row in rows
+        if (external_id := _text(row, "posting_number", "order_id", "id")) is not None
+    }
+    existing_orders = list(
+        (
+            await session.scalars(
+                select(FbsOrder)
+                .options(selectinload(FbsOrder.product_positions))
+                .where(
+                    FbsOrder.tenant_id == tenant_id,
+                    FbsOrder.seller_id == seller_id,
+                    FbsOrder.marketplace == "ozon",
+                    FbsOrder.external_order_id.in_(external_ids),
+                )
+            )
+        ).all()
+    ) if external_ids else []
+    existing_by_external_id = {
+        order.external_order_id: order for order in existing_orders
+    }
+    stock_product_ids: set[uuid.UUID] = set()
+    affected_order_ids: set[uuid.UUID] = set()
+
+    for row in rows:
+        external_id = _text(row, "posting_number", "order_id", "id")
+        if external_id is None:
+            continue
+        binding = await _binding_for_row(session, tenant_id, seller_id, row)
+        if not _warehouse_is_served_for_row(binding):
+            continue
+
+        existing = existing_by_external_id.get(external_id)
+        if existing is not None:
+            affected_order_ids.add(existing.id)
+            if existing.product_id is not None:
+                stock_product_ids.add(existing.product_id)
+            stock_product_ids.update(
+                position.product_id
+                for position in existing.product_positions
+                if position.product_id is not None
+            )
+
+        fallback_product_id = await _product_id_for_row(
+            session, tenant_id, seller_id, row
+        )
+        positions = await _posting_products_for_row(session, tenant_id, seller_id, row)
+        if positions:
+            stock_product_ids.update(
+                position.product_id
+                for position in positions
+                if position.product_id is not None and position.quantity > 0
+            )
+        elif fallback_product_id is not None:
+            stock_product_ids.add(fallback_product_id)
+
+    if affected_order_ids:
+        stock_product_ids.update(
+            (await session.scalars(
+                select(FbsOrderReservation.product_id).where(
+                    FbsOrderReservation.fbs_order_id.in_(affected_order_ids)
+                )
+            )).all()
+        )
+        stock_product_ids.update(
+            (await session.scalars(
+                select(FbsOrderProductReservation.product_id)
+                .join(
+                    FbsOrderProduct,
+                    FbsOrderProduct.id == FbsOrderProductReservation.order_product_id,
+                )
+                .where(FbsOrderProduct.order_id.in_(affected_order_ids))
+            )).all()
+        )
+
+    await inventory_service.lock_stock_products(session, tenant_id, stock_product_ids)
+
+
 async def sync_ozon_orders(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -863,16 +953,21 @@ async def sync_ozon_orders(
     upserted = 0
     created = 0
     statuses_updated = 0
-    for row in rows:
-        external_order_id = _text(row, "posting_number", "order_id", "id")
+    import_rows: list[dict[str, Any]] = []
+    for source_row in rows:
+        external_order_id = _text(source_row, "posting_number", "order_id", "id")
         if external_order_id is None:
             continue
+        if (
+            selected_posting_numbers is not None
+            and external_order_id not in selected_posting_numbers
+        ):
+            continue
+        row = source_row
         if selected_posting_numbers is not None:
-            if external_order_id not in selected_posting_numbers:
-                continue
             # v3 posting details use a scalar price, while the normal v4 list
             # uses a money object. Keep the existing validated intake path.
-            row = dict(row)
+            row = dict(source_row)
             if isinstance(row.get("products"), list):
                 products = []
                 for raw_product in row["products"]:
@@ -882,6 +977,16 @@ async def sync_ozon_orders(
                         product["price"] = {"amount": str(price)}
                     products.append(product)
                 row["products"] = products
+        import_rows.append(row)
+
+    await _prelock_ozon_import_stock_products(
+        session, tenant_id, seller_id, import_rows
+    )
+
+    for row in import_rows:
+        external_order_id = _text(row, "posting_number", "order_id", "id")
+        if external_order_id is None:
+            continue
         existing = (
             await session.execute(
                 select(FbsOrder)
