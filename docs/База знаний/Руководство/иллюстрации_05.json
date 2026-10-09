@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "chapter": "05_Отгрузка_календарь.md",
+      "image": "assets/05/06-stage-calendar-october-crop.png",
+      "sourcepath": "docs/База знаний/Руководство/assets/05/04-stage-calendar-current.png",
+      "date": "2026-10-09",
+      "scope": "Real Stage G browser capture in the authorized fulfillment administrator role. October calendar viewed without changing documents.",
+      "after_heading": "Найти документ в календаре отгрузок",
+      "caption": "Календарь Stage G за октябрь 2026 года: четыре видимые плитки FBS с датой и подписью типа документа.",
+      "width": 1630,
+      "height": 940,
+      "callouts": [
+        {
+          "n": 1,
+          "rect": [713, 212, 213, 42],
+          "marker": [964, 233],
+          "label": "Плитка FBS в календаре"
+        }
+      ]
+    },
+    {
+      "chapter": "05_Отгрузка_календарь.md",
+      "image": "assets/05/07-stage-calendar-fbs-document-crop.png",
+      "sourcepath": "docs/База знаний/Руководство/assets/05/05-stage-calendar-event-open.png",
+      "date": "2026-10-09",
+      "scope": "Real Stage G browser capture after opening an existing October FBS calendar tile. Read-only inspection; no document fields were changed.",
+      "after_heading": "Найти документ в календаре отгрузок",
+      "caption": "После нажатия на плитку FBS открылась карточка существующей поставки. Это пример перехода для FBS; обычная складская отгрузка открывает свой документ.",
+      "width": 1510,
+      "height": 850,
+      "callouts": [
+        {
+          "n": 1,
+          "rect": [68, 29, 500, 64],
+          "marker": [600, 61],
+          "label": "Заголовок открытой поставки FBS"
+        }
+      ]
+    },
+    {
+      "chapter": "05_Отгрузка_календарь.md",
+      "image": "assets/05/11-stage-outbound-draft-form-1440-crop.png",
+      "sourcepath": "docs/База знаний/Руководство/assets/05/10-stage-outbound-draft-form-1440-selected.png",
+      "date": "2026-10-09",
+      "scope": "Real Stage G browser capture in the authorized fulfillment administrator role. Reused the already existing empty ordinary outbound draft; status draft, zero lines. No product was selected and no row was added.",
+      "after_heading": "Создать заявку и добавить товары",
+      "caption": "Открыт пустой черновик обычной отгрузки: статус draft; показаны поля «Товар», «Количество, шт», необязательное поле «Ячейка (можно позже)» и кнопка «Добавить строку».",
+      "width": 441,
+      "height": 400,
+      "callouts": [
+        {
+          "n": 1,
+          "rect": [13.5, 84.5, 418.5, 41],
+          "marker": [420, 45],
+          "label": "Выберите SKU товара"
+        },
+        {
+          "n": 2,
+          "rect": [13.5, 164.5, 418.5, 43],
+          "marker": [420, 135],
+          "label": "Введите количество в штуках"
+        },
+        {
+          "n": 3,
+          "rect": [13.5, 299.5, 418.5, 49],
+          "marker": [420, 382],
+          "label": "Добавить строку в пустой черновик"
+        }
+      ]
+    }
+  ]
+}
