@@ -253,12 +253,16 @@ function LazyProductPhotoThumb({
   size,
   previewSize,
   testId,
+  retryKey,
 }: {
   src: string | null | undefined
   alt: string
   size: number | string
   previewSize: number
   testId: string
+  // Счётчик ответов списка: битое фото проверяется заново при каждом новом ответе
+  // (ручное «Обновить» и фоновый опрос), а не при каждом перерисовании строки.
+  retryKey: number
 }) {
   const anchorRef = useRef<HTMLSpanElement | null>(null)
   const [nearViewport, setNearViewport] = useState(false)
@@ -299,6 +303,7 @@ function LazyProductPhotoThumb({
         size={size}
         previewSize={previewSize}
         testId={testId}
+        retryKey={retryKey}
       />
     </Box>
   )
@@ -312,7 +317,7 @@ const FBS_PRODUCT_TEXT_MIN_WIDTH = 300
 
 // Фото исключено из расчёта высоты строки: её задают текст и действия.
 // Измерение лишь резервирует такую же ширину рядом с текстом, без роста по кругу.
-function OrderProductCell({ order, children }: { order: FbsWorklistOrder; children: React.ReactNode }) {
+function OrderProductCell({ order, children, photoRetryKey }: { order: FbsWorklistOrder; children: React.ReactNode; photoRetryKey: number }) {
   const cellRef = useRef<HTMLTableCellElement | null>(null)
   const [photoWidth, setPhotoWidth] = useState(0)
   useLayoutEffect(() => {
@@ -346,6 +351,7 @@ function OrderProductCell({ order, children }: { order: FbsWorklistOrder; childr
           size="100%"
           previewSize={280}
           testId={`fbs-product-photo-${order.id}`}
+          retryKey={photoRetryKey}
         />
       </Box>
       <Box sx={{ ml: `${photoWidth + 10}px`, minWidth: FBS_PRODUCT_TEXT_MIN_WIDTH }}>{children}</Box>
@@ -398,6 +404,7 @@ type NewOrderRowProps = {
   onToggle: (order: FbsWorklistOrder) => void
   onOpenWorkspace: (supplyId: string) => void
   onGoToCatalog: (productId: string | null) => void
+  photoRetryKey: number
 }
 
 // Клик по одной галке меняет selected только у одной строки. React.memo не даёт
@@ -410,6 +417,7 @@ const NewOrderRow = memo(function NewOrderRow({
   onToggle,
   onOpenWorkspace,
   onGoToCatalog,
+  photoRetryKey,
 }: NewOrderRowProps) {
   const blocked = blockingSelectionBlockers(order.selection_blockers).length > 0
   const ozonPositions = order.marketplace === 'ozon' && order.positions.length > 0
@@ -437,7 +445,7 @@ const NewOrderRow = memo(function NewOrderRow({
           onChange={() => onToggle(order)}
         />
       </TableCell>
-      <OrderProductCell order={order}>
+      <OrderProductCell order={order} photoRetryKey={photoRetryKey}>
         <Box>
           {ozonPositions ? ozonPositions.map((position, index) => (
             <OrderPositionText index={index} key={position.id ?? position.sku ?? position.name} variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
@@ -654,6 +662,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   const [activeSearch, setActiveSearch] = useState('')
   const [searchTotal, setSearchTotal] = useState<number | null>(null)
   const [orders, setOrders] = useState<FbsWorklistOrder[]>([])
+  // Номер ответа списка, а не перерисовки: по нему битые фото в строках проверяются
+  // заново после «Обновить» и фонового опроса, не теряя адрес и размеры области.
+  const [listGeneration, setListGeneration] = useState(0)
   const [activeSupplies, setActiveSupplies] = useState<FbsSupplyWorklistItem[]>([])
   const [assemblyTasks, setAssemblyTasks] = useState<FbsAssemblyTask[]>([])
   const [externalActiveOrders, setExternalActiveOrders] = useState<FbsWorklistOrder[]>([])
@@ -811,6 +822,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         setWarehouseOptions([])
         setServerNow(suppliesPage.server_now)
         setLastLoadedAt(new Date().toISOString())
+        setListGeneration((value) => value + 1)
         return
       }
       const page = await fetchFbsWorklist(token, authHeaders, {
@@ -842,6 +854,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
       }
       setServerNow(page.server_now)
       setLastLoadedAt(new Date().toISOString())
+      setListGeneration((value) => value + 1)
     } catch (cause) {
       if (sequence !== loadSequence.current) return
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
@@ -1787,6 +1800,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                     onToggle={toggle}
                     onOpenWorkspace={openWorkspace}
                     onGoToCatalog={goToCatalog}
+                    photoRetryKey={listGeneration}
                   />
                 )
               }
@@ -1820,7 +1834,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                 >
                   <TableCell padding="checkbox" />
                     <>
-                      <OrderProductCell order={order}>
+                      <OrderProductCell order={order} photoRetryKey={listGeneration}>
                         <Box>
                           {ozonPositions ? ozonPositions.map((position, index) => (
                             <OrderPositionText index={index} key={position.id ?? position.sku ?? position.name} variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
