@@ -1,3 +1,4 @@
+import { ensureFbsStickers } from './fbsStickerPrefetch'
 import { FbsPackingScanBar } from './FbsPackingScanBar'
 import { FbsPackingActionsToolbar, type FbsPackingActions } from './FbsPackingActionsToolbar'
 import type { PackingScanController } from './fbsSequentialPacking'
@@ -31,6 +32,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { plural } from '../../utils/plural'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FfFbsAssemblyPick } from './FfFbsAssemblyPick'
+import { imperiyaWalkRows, usesTabOrderPickList } from './imperiyaPickListOrder'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
   fetchFbsWorkspace,
@@ -269,6 +271,22 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     escapeHandlerRef.current = handler
   }, [])
 
+  const stickerAttempts = useRef(new Set<string>())
+  useEffect(() => { stickerAttempts.current.clear() }, [open, stage])
+  useEffect(() => {
+    if (!open || stage !== 'picking') return
+    for (const snapshot of ordered) {
+      if (snapshot.supply.marketplace !== 'wb' || stickerAttempts.current.has(snapshot.supply.id)
+        || !snapshot.orders.some(order => !order.sticker.code && order.status !== 'cancelled')) continue
+      stickerAttempts.current.add(snapshot.supply.id)
+      void ensureFbsStickers(token, authHeaders, snapshot).then(result => {
+        onFrameWorkspace(result.workspace)
+        if (result.errorMessage) setError(result.errorMessage)
+      })
+        .catch(cause => setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.'))
+    }
+  }, [open, stage, ordered, token, authHeaders, onFrameWorkspace])
+
   // Д14: лист подбора по всей группе — тот же шаблон, что у карточки; строки —
   // суммарный план, в шапке — номера всех поставок группы.
   const printPickingList = async () => {
@@ -312,12 +330,14 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
       return
     }
     let rows = fbsAssemblyPickingRows(printable)
+    let allOptions: FbsPickOptionProduct[] = []
     try {
       const optionLists = await Promise.all(ordered.map((one) => getFbsPickOptions(token, authHeaders, one.supply.id)))
       if (generation !== openGeneration.current) {
         printWindow.close()
         return
       }
+      allOptions = optionLists.flat()
       const byProduct = new Map<string, FbsPickOptionProduct[]>()
       for (const list of optionLists) {
         for (const option of list) byProduct.set(option.product_id, [...(byProduct.get(option.product_id) ?? []), option])
@@ -356,6 +376,12 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
         const item = context.get(row.key)
         return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies, sourceGroups: item.source_groups } : row
       })
+      // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: лист идёт маршрутом вкладки «Подбор»
+      // (сумма группы). Остальные клиенты печатают как раньше. См. imperiyaPickListOrder.ts.
+      if (usesTabOrderPickList(token) && allOptions.length) {
+        const allContexts = lists.flat()
+        rows = imperiyaWalkRows(rows, allOptions, allContexts)
+      }
     } catch {
       setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')
       printWindow.close()

@@ -178,7 +178,7 @@ async function intercept({requestId,request}) {
   }
   if(u.origin!==ORIGIN){blocked.push(request.url);return cdp.send('Fetch.failRequest',{requestId,errorReason:'BlockedByClient'});}
   const body=request.postData?JSON.parse(request.postData):null;
-  requestLog.push({method:request.method,path:path+u.search,body});
+  requestLog.push({method:request.method,path:path+u.search,body,requestId});
   const ws=path.match(/^\/operations\/fbs-supplies\/([^/]+)\/workspace$/);
   if(ws)return fulfill(requestId,state[ws[1]]);
   if(mode==='geometry-list'&&path==='/operations/fbs-orders/worklist')return fulfill(requestId,{items:selectionState.orders,total:selectionState.orders.length,warehouse_options:[],server_now:'2026-10-06T08:00:00Z'});
@@ -262,6 +262,19 @@ async function scan(code) {
   await cdp.send('Input.insertText',{text:code});
   await cdp.send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
   await cdp.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+}
+async function settlePackingReadback(supplyId) {
+  // The fixture records /pack before replying. complete() then launches these
+  // two reads; the next case must not navigate away while their callbacks live.
+  const lastPack=requestLog.findLastIndex(r=>r.path.endsWith('/pack'));
+  assert(lastPack>=0,'case boundary requires its completed packing request');
+  const paths=[`/operations/fbs-supplies/${supplyId}/workspace`,`/operations/packaging-tasks/task-${supplyId}`];
+  const finished=()=>paths.every(path=>requestLog.slice(lastPack+1).some(r=>{
+    const token=cdp.paused.get(r.requestId);
+    return r.method==='GET'&&r.path===path&&token?.networkId&&token.disposition==='network-completed';
+  }));
+  for(let i=0;i<100&&!finished();i++)await sleep(50);
+  assert(finished(),'both post-pack readbacks must finish before the next case');
 }
 const chromePath=process.env.WMS652_CHROME||(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'google-chrome');
 const chrome=spawn(chromePath,['--headless=new','--mute-audio','--no-sandbox','--disable-gpu','--no-first-run','--disable-background-networking','--disable-component-update',
@@ -583,6 +596,7 @@ async function flagContracts(){
       for(const pack of packs)assert(server?pack.body.idempotency_key===`scan-${pack.body.order_id}:packed`:/^local:.+:packed$/.test(pack.body.idempotency_key));
       if(qr)assert(trace.indexOf('print:scan-wb-a-order')<trace.indexOf('pack:wb-a-order'));
       assert(trace.indexOf('pack:wb-a-order')<trace.indexOf('lookup:wb-next-order'),'next correct order after first pack');
+      await settlePackingReadback(many?'wb-b':'wb-a');
       assert.equal(blocked.length,0);assert.equal(errors.length,0);
       report.cases.push({id:report.currentCase,status:'PASS'});console.log(`${report.currentCase}: PASS`);
     }catch(e){report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});console.error(`${report.currentCase}: ${e}`);}

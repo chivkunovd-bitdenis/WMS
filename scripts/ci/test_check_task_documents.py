@@ -139,6 +139,10 @@ class GitTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.git("init", "-q")
+        # No background Git writer may outlive a fixture command and race the
+        # TemporaryDirectory cleanup of .git/objects/pack.
+        self.git("config", "--local", "gc.auto", "0")
+        self.git("config", "--local", "maintenance.auto", "false")
         self.git("config", "user.name", "Fixture")
         self.git("config", "user.email", "fixture@example.invalid")
         self.write("AGENTS.md", "Правила\n")
