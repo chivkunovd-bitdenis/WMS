@@ -70,8 +70,8 @@ export type PickRow = {
 }
 
 export type CellPickRow =
-  | { kind: 'cell' | 'object'; key: string; depth: number; title: string; barcode: string | null; qty: number; objectKind?: ObjKind }
-  | { kind: 'goods'; key: string; depth: number; row: PickRow; place: PickPlace | null }
+  | { kind: 'cell' | 'object' | 'picked'; key: string; depth: number; title: string; barcode: string | null; qty: number; objectKind?: ObjKind }
+  | { kind: 'goods'; key: string; depth: number; row: PickRow; place: PickPlace | null; alreadyPicked?: boolean }
 
 type CellPickBranch = {
   kind: 'cell' | 'object'
@@ -89,12 +89,42 @@ const cellOrder = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' }
 // It must follow physical cells on a walking list, just like an absent cell.
 const UNASSIGNED_LOCATION = 'Без ячеек'
 
+/**
+ * Товар собран полностью: план больше нуля и осталось ноль. Это то же правило,
+ * что у подсветки вида по товарам (isComplete в UnloadPickScreen).
+ */
+export const isPlanDone = (row: PickRow) => row.plan > 0 && row.left === 0
+
+export type CellPickOptions = {
+  /**
+   * WMS-709 R4: у собранного товара не показывать места, с которых в этом подборе
+   * ничего не снято. Выключено по умолчанию: без флага список содержит все места.
+   */
+  hideUntouchedOfDone?: boolean
+}
+
 /** FBS walk list: one cell, then its loose goods and nested containers. */
-export function cellPickRowsOf(rows: PickRow[], objects: WarehouseObject[], cells: Cell[]): CellPickRow[] {
+export function cellPickRowsOf(
+  rows: PickRow[],
+  objects: WarehouseObject[],
+  cells: Cell[],
+  options: CellPickOptions = {},
+): CellPickRow[] {
   const roots = new Map<string, CellPickBranch>()
+  // WMS-709: штуки, которые подбор уже принёс на сортировку, — отдельным разделом
+  // «Уже подобрано» в конце списка, чтобы не путались с тем, что ещё надо снять.
+  const alreadyPicked: Array<{ row: PickRow; place: PickPlace }> = []
   for (const row of rows) {
     for (const place of row.places.length ? row.places : [null]) {
       const { cell, chain } = place ? chainOf(place.holder, objects, cells) : { cell: null, chain: [] }
+      if (place && cell?.code === UNASSIGNED_LOCATION && place.picked === 0 && (row.left === 0 || place.left === 0)) {
+        alreadyPicked.push({ row, place })
+        continue
+      }
+      // WMS-709 R4: собранный товар не показывает места без снятий. Ячейка или тара
+      // без показанных мест не создаётся вовсе, поэтому и её «N шт» не считает
+      // скрытые штуки.
+      if (place && options.hideUntouchedOfDone && isPlanDone(row) && place.picked === 0) continue
       const rootKey = cell ? cellRef(cell.id) : 'no-cell'
       const existingRoot = roots.get(rootKey)
       const root: CellPickBranch = existingRoot ?? {
@@ -148,6 +178,17 @@ export function cellPickRowsOf(rows: PickRow[], objects: WarehouseObject[], cell
   for (const branch of [...roots.values()].sort((a, b) => (
     Number(isUnassigned(a)) - Number(isUnassigned(b)) || cellOrder.compare(a.title, b.title)
   ))) append(branch)
+  if (alreadyPicked.length) {
+    flattened.push({
+      kind: 'picked', key: 'already-picked', depth: 0, title: 'Уже подобрано', barcode: null,
+      qty: alreadyPicked.reduce((sum, { place }) => sum + place.qty, 0),
+    })
+    for (const { row, place } of [...alreadyPicked].sort((a, b) => (
+      cellOrder.compare(a.row.product.sku, b.row.product.sku) || cellOrder.compare(a.row.key, b.row.key)
+    ))) {
+      flattened.push({ kind: 'goods', key: `${row.key}|${place.key}`, depth: 1, row, place, alreadyPicked: true })
+    }
+  }
   return flattened
 }
 

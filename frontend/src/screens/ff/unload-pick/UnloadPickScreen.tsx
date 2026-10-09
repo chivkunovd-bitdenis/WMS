@@ -179,6 +179,8 @@ export function UnloadPickScreen({
   const [history, setHistory] = useState<PickOp[]>([])
   const [source, setSource] = useState<string | null>(null)
   const [sourceLabel, setSourceLabel] = useState<string | null>(null)
+  // WMS-709 R10: строка ячейки или тары, к которой вид по ячейкам прокрутит один раз.
+  const [scrollTo, setScrollTo] = useState<{ key: string } | null>(null)
   const [scanValue, setScanValue] = useState('')
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
@@ -421,6 +423,7 @@ export function UnloadPickScreen({
         setScanError(null)
         setScanNotice(`Ячейка ${result.locationCode} — пикните товар, который снимаете`)
         expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
+        setScrollTo({ key: reference })
         playScanSuccess()
         return true
       }
@@ -436,6 +439,7 @@ export function UnloadPickScreen({
         setScanError(null)
         setScanNotice(`${label} — пикните товар, который снимаете`)
         expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
+        setScrollTo({ key: reference })
         playScanSuccess()
         return true
       }
@@ -519,6 +523,7 @@ export function UnloadPickScreen({
       setScanError(null)
       setScanNotice(`Ячейка ${cell.code} — пикните товар, который снимаете`)
       expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
+      setScrollTo({ key: reference })
       return
     }
     const object = objects.find(
@@ -531,6 +536,7 @@ export function UnloadPickScreen({
       setScanError(null)
       setScanNotice(`${placeLabel(reference, objects, cells)} — пикните товар`)
       expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
+      setScrollTo({ key: reference })
       return
     }
     const product = products.find(
@@ -764,6 +770,7 @@ export function UnloadPickScreen({
         objects={objects}
         cells={cells}
         source={source}
+        scrollTo={scrollTo}
         onQtyChange={handlePlaceQtyChange}
         canUndo={(row, place) => {
           if (!place || row.picked === 0) return false

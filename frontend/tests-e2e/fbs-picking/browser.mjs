@@ -215,7 +215,7 @@ await run('packing-flag',async(page,f)=>{
   await expect(qty(page,f)).toHaveValue('1')
 })
 await run('sources',async(page,f)=>{
-  for(const title of ['Ячейка / тара / товар','ШК','Размер','Собрать','Собрано']) await expect(screen(page).getByRole('columnheader',{name:title,exact:true})).toBeVisible()
+  for(const title of ['Ячейка / тара / товар','ШК','Размер','План','Осталось подобрать','Собрано']) await expect(screen(page).getByRole('columnheader',{name:title,exact:true})).toBeVisible()
   await expect(page.getByTestId('pick-left-qty')).toHaveText('3')
   for(const s of f.sources) await expect(screen(page)).toContainText(s.container_id?s.scan:s.code)
   await source(page,f,2)
