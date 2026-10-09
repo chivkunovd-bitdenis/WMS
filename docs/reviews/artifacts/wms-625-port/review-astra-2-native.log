@@ -1,0 +1,17 @@
+key=new HTTP/1.1 200 OK status=accepted receipt=test-1 submissions=1
+key=new HTTP/1.1 200 OK status=accepted receipt=test-1 submissions=1
+key=import-receipt HTTP/1.1 200 OK status=accepted receipt=old-7 submissions=1
+key=import-unknown HTTP/1.1 409 Conflict status=unknown receipt=nil submissions=1
+key=import-unknown HTTP/1.1 409 Conflict status=unknown receipt=nil submissions=1
+bench-before 0
+seconds=8.17963993549347 submissions=350
+bench-after 0
+seconds=11.0901460647583 submissions=350
+bench-after 1
+seconds=10.594990968704224 submissions=350
+bench-before 1
+seconds=8.331593036651611 submissions=350
+bench-before 2
+seconds=9.089224100112915 submissions=350
+bench-after 2
+seconds=12.522933959960938 submissions=350

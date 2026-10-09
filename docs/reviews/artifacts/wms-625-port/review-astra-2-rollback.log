@@ -1,0 +1,18 @@
+CASE accepted
+('new', 'print') 0 status=accepted receipt=new-1 submissions=1 
+('old', 'print') 0 receipt=new-1
+submissions=0 
+('old', 'print', 'other') 0 receipt=old-1
+submissions=1 
+('new', 'inspect') 0 status=accepted receipt=new-1 submissions=0 
+CASE saved
+('new', 'saved') 0 status=saved receipt=nil submissions=0 
+('old', 'print') 0 receipt=old-1
+submissions=1 
+('new', 'inspect') 0 status=accepted receipt=old-1 submissions=0 
+CASE failed
+('new', 'fail') 0 status=failed_before_submit receipt=nil submissions=0 
+('old', 'print') 0 receipt=old-1
+submissions=1 
+('new', 'inspect') 0 status=failed_before_submit receipt=nil submissions=0 
+('new', 'retry') 0 status=accepted receipt=new-1 submissions=1 

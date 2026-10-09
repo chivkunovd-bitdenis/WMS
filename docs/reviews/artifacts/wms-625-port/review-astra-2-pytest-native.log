@@ -1,0 +1,17 @@
+..F                                                               [100%]
+=================================== FAILURES ===================================
+________ NativeRuntimeTest.test_http_async_legacy_recovery_and_restart _________
+
+self = <test_macos_native.NativeRuntimeTest testMethod=test_http_async_legacy_recovery_and_restart>
+
+    def test_http_async_legacy_recovery_and_restart(self):
+        directory = self.root / "http-store"
+        directory.mkdir()
+        with socket.socket() as sock:
+>           sock.bind(("127.0.0.1", 0))
+E           PermissionError: [Errno 1] Operation not permitted
+
+test_macos_native.py:115: PermissionError
+=========================== short test summary info ============================
+FAILED test_macos_native.py::NativeRuntimeTest::test_http_async_legacy_recovery_and_restart
+1 failed, 2 passed, 7 subtests passed in 31.43s

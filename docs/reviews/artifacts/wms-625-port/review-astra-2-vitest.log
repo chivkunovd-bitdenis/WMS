@@ -1,0 +1,39 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms625-port/frontend
+
+ ✓ src/screens/v2/fbsKizAutoReprint.test.ts (15 tests) 10ms
+ ✓ src/utils/durableDirectQr.review.test.ts (8 tests) 18ms
+ ✓ src/utils/printProductThermalLabel.test.ts (15 tests) 6ms
+ ✓ src/screens/v2/fbsSequentialPacking.copies.test.ts (8 tests) 19ms
+ ✓ src/screens/v2/fbsSequentialPacking.test.ts (37 tests) 118ms
+ ✓ src/utils/durableDirectQr.test.ts (73 tests) 216ms
+ ✓ src/screens/v2/fbsSequentialPacking.binding.test.ts (6 tests) 15ms
+ ✓ src/utils/kizReprintPrint.test.ts (8 tests) 6ms
+ ✓ src/utils/clientErrorReport.test.ts (9 tests) 113ms
+ ✓ src/utils/printShipmentPackagingSheet.test.ts (11 tests) 6ms
+ ✓ src/utils/printInboundReceivingSheet.test.ts (12 tests) 5ms
+ ✓ src/utils/printMarkingCodeLabel.test.ts (32 tests) 438ms
+ ✓ src/utils/labelSize.test.ts (13 tests) 3ms
+ ✓ src/utils/markingPrintPresets.test.ts (6 tests) 3ms
+ ✓ src/utils/sellerStaffRequest.test.ts (10 tests) 33ms
+ ✓ src/utils/errorRecovery.test.ts (10 tests) 6ms
+ ✓ src/utils/printOzonReturnReconciliation.test.ts (2 tests) 3ms
+ ↓ src/utils/printMarkingCodeLabel.pagination.test.ts (6 tests | 6 skipped)
+ ✓ src/utils/productBarcodePrint.test.ts (7 tests) 8ms
+ ✓ src/utils/kizReprintApi.test.ts (3 tests) 12ms
+ ✓ src/utils/readApiErrorMessage.test.ts (3 tests) 4ms
+ ✓ src/utils/moscowDate.test.ts (4 tests) 3ms
+ ✓ src/utils/printPackagingInstructions.test.ts (2 tests) 2ms
+ ✓ src/utils/sellerWbStatus.test.ts (3 tests) 2ms
+ ✓ src/utils/urlSellerFilter.test.ts (4 tests) 6ms
+ ✓ src/utils/latestRequestSequence.test.ts (2 tests) 19ms
+ ✓ src/screens/v2/fbsSequentialPacking.recovery.test.ts (3 tests) 17ms
+ ✓ src/screens/v2/fbsSequentialPacking.wms625.test.ts (10 tests) 39ms
+ ✓ src/utils/printPreparedQr.test.ts (4 tests) 85ms
+ ✓ src/utils/markingAvailability.test.ts (3 tests) 1ms
+
+ Test Files  29 passed | 1 skipped (30)
+      Tests  323 passed | 6 skipped (329)
+   Start at  12:27:45
+   Duration  3.55s (transform 1.34s, setup 0ms, collect 5.71s, tests 1.22s, environment 1.74s, prepare 3.77s)
+

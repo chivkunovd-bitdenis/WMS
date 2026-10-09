@@ -1,0 +1,397 @@
+......F.........................EEE                        [100%]
+==================================== ERRORS ====================================
+_ ERROR at setup of NativeRuntimeTest.test_compiled_store_crash_faults_and_retry_self_test _
+
+cls = <class 'test_macos_native.NativeRuntimeTest'>
+
+    @classmethod
+    def setUpClass(cls):
+        cls.directory = tempfile.TemporaryDirectory(prefix="wms-native-test-")
+        cls.root = Path(cls.directory.name)
+        cls.binary = cls.root / "wms-print"
+        cls.observer = cls.root / "observe-fixture"
+        subprocess.run(
+            [
+                "clang",
+                "-c",
+                str(ROOT / "wms_cups_observe.c"),
+                "-o",
+                str(cls.root / "cups.o"),
+            ],
+            check=True,
+        )
+>       subprocess.run(
+            [
+                "swiftc",
+                "-O",
+                "-whole-module-optimization",
+                str(ROOT / "wms_print_direct_macos.swift"),
+                "-Xlinker",
+                str(cls.root / "cups.o"),
+                "-lcups",
+                "-o",
+                str(cls.binary),
+            ],
+            check=True,
+        )
+
+test_macos_native.py:42: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = None, check = True
+popenargs = (['swiftc', '-O', '-whole-module-optimization', '/Users/deniscivkunov/Projects/WMS/.worktrees/wms625-port/tools/print-...ct_macos.swift', '-Xlinker', '/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms-native-test-8kawh_49/cups.o', ...],)
+kwargs = {}
+process = <Popen: returncode: 1 args: ['swiftc', '-O', '-whole-module-optimization', '...>
+stdout = None, stderr = None, retcode = 1
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['swiftc', '-O', '-whole-module-optimization', '/Users/deniscivkunov/Projects/WMS/.worktrees/wms625-port/tools/print-agent/wms_print_direct_macos.swift', '-Xlinker', '/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms-native-test-8kawh_49/cups.o', '-lcups', '-o', '/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms-native-test-8kawh_49/wms-print']' returned non-zero exit status 1.
+
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py:577: CalledProcessError
+---------------------------- Captured stderr setup -----------------------------
+<unknown>:0: error: unable to open output file '/Users/deniscivkunov/.cache/clang/ModuleCache/1PXA6S2OAN3ZD/SwiftShims-RZ4N2HIA9DA9.pcm': 'Operation not permitted'
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib/swift/Swift.swiftmodule/arm64e-apple-macos.swiftinterface:5:8: error: could not build Objective-C module 'SwiftShims'
+import SwiftShims
+       ^
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib/swift/Swift.swiftmodule/arm64e-apple-macos.swiftinterface:1:1: error: failed to build module 'Swift'; this SDK is not supported by the compiler (the SDK is built with 'Apple Swift version 5.8 (swiftlang-5.8.0.117.59 clang-1403.0.22.8.50)', while this compiler is 'Apple Swift version 5.8.1 (swiftlang-5.8.0.124.5 clang-1403.0.22.11.100)'). Please select a toolchain which matches the SDK.
+// swift-interface-format-version: 1.0
+^
+_ ERROR at setup of NativeRuntimeTest.test_cups_unique_title_receipt_state_and_reasons _
+
+cls = <class 'test_macos_native.NativeRuntimeTest'>
+
+    @classmethod
+    def setUpClass(cls):
+        cls.directory = tempfile.TemporaryDirectory(prefix="wms-native-test-")
+        cls.root = Path(cls.directory.name)
+        cls.binary = cls.root / "wms-print"
+        cls.observer = cls.root / "observe-fixture"
+        subprocess.run(
+            [
+                "clang",
+                "-c",
+                str(ROOT / "wms_cups_observe.c"),
+                "-o",
+                str(cls.root / "cups.o"),
+            ],
+            check=True,
+        )
+>       subprocess.run(
+            [
+                "swiftc",
+                "-O",
+                "-whole-module-optimization",
+                str(ROOT / "wms_print_direct_macos.swift"),
+                "-Xlinker",
+                str(cls.root / "cups.o"),
+                "-lcups",
+                "-o",
+                str(cls.binary),
+            ],
+            check=True,
+        )
+
+test_macos_native.py:42: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = None, check = True
+popenargs = (['swiftc', '-O', '-whole-module-optimization', '/Users/deniscivkunov/Projects/WMS/.worktrees/wms625-port/tools/print-...ct_macos.swift', '-Xlinker', '/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms-native-test-8kawh_49/cups.o', ...],)
+kwargs = {}
+process = <Popen: returncode: 1 args: ['swiftc', '-O', '-whole-module-optimization', '...>
+stdout = None, stderr = None, retcode = 1
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['swiftc', '-O', '-whole-module-optimization', '/Users/deniscivkunov/Projects/WMS/.worktrees/wms625-port/tools/print-agent/wms_print_direct_macos.swift', '-Xlinker', '/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms-native-test-8kawh_49/cups.o', '-lcups', '-o', '/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms-native-test-8kawh_49/wms-print']' returned non-zero exit status 1.
+
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py:577: CalledProcessError
+_ ERROR at setup of NativeRuntimeTest.test_http_async_legacy_recovery_and_restart _
+
+cls = <class 'test_macos_native.NativeRuntimeTest'>
+
+    @classmethod
+    def setUpClass(cls):
+        cls.directory = tempfile.TemporaryDirectory(prefix="wms-native-test-")
+        cls.root = Path(cls.directory.name)
+        cls.binary = cls.root / "wms-print"
+        cls.observer = cls.root / "observe-fixture"
+        subprocess.run(
+            [
+                "clang",
+                "-c",
+                str(ROOT / "wms_cups_observe.c"),
+                "-o",
+                str(cls.root / "cups.o"),
+            ],
+            check=True,
+        )
+>       subprocess.run(
+            [
+                "swiftc",
+                "-O",
+                "-whole-module-optimization",
+                str(ROOT / "wms_print_direct_macos.swift"),
+                "-Xlinker",
+                str(cls.root / "cups.o"),
+                "-lcups",
+                "-o",
+                str(cls.binary),
+            ],
+            check=True,
+        )
+
+test_macos_native.py:42: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = False, timeout = None, check = True
+popenargs = (['swiftc', '-O', '-whole-module-optimization', '/Users/deniscivkunov/Projects/WMS/.worktrees/wms625-port/tools/print-...ct_macos.swift', '-Xlinker', '/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms-native-test-8kawh_49/cups.o', ...],)
+kwargs = {}
+process = <Popen: returncode: 1 args: ['swiftc', '-O', '-whole-module-optimization', '...>
+stdout = None, stderr = None, retcode = 1
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['swiftc', '-O', '-whole-module-optimization', '/Users/deniscivkunov/Projects/WMS/.worktrees/wms625-port/tools/print-agent/wms_print_direct_macos.swift', '-Xlinker', '/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms-native-test-8kawh_49/cups.o', '-lcups', '-o', '/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms-native-test-8kawh_49/wms-print']' returned non-zero exit status 1.
+
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py:577: CalledProcessError
+=================================== FAILURES ===================================
+_ DirectPrintTest.test_http_lost_response_and_history_without_default_printer __
+
+self = <test_wms_print_direct.DirectPrintTest testMethod=test_http_lost_response_and_history_without_default_printer>
+
+    def test_http_lost_response_and_history_without_default_printer(self):
+        printer = self.printer(auto_work=True)
+>       server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test_wms_print_direct.py:462: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/socketserver.py:457: in __init__
+    self.server_bind()
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/http/server.py:148: in server_bind
+    socketserver.TCPServer.server_bind(self)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <http.server.ThreadingHTTPServer object at 0x10c4bd940>
+
+    def server_bind(self):
+        """Called by constructor to bind the socket.
+    
+        May be overridden.
+    
+        """
+        if self.allow_reuse_address and hasattr(socket, "SO_REUSEADDR"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Since Linux 6.12.9, SO_REUSEPORT is not allowed
+        # on other address families than AF_INET/AF_INET6.
+        if (
+            self.allow_reuse_port and hasattr(socket, "SO_REUSEPORT")
+            and self.address_family in (socket.AF_INET, socket.AF_INET6)
+        ):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+>       self.socket.bind(self.server_address)
+E       PermissionError: [Errno 1] Operation not permitted
+
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/socketserver.py:478: PermissionError
+=========================== short test summary info ============================
+FAILED test_wms_print_direct.py::DirectPrintTest::test_http_lost_response_and_history_without_default_printer
+ERROR test_macos_native.py::NativeRuntimeTest::test_compiled_store_crash_faults_and_retry_self_test
+ERROR test_macos_native.py::NativeRuntimeTest::test_cups_unique_title_receipt_state_and_reasons
+ERROR test_macos_native.py::NativeRuntimeTest::test_http_async_legacy_recovery_and_restart
+1 failed, 31 passed, 3 errors, 14 subtests passed in 14.47s
