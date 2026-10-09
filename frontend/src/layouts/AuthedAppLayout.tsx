@@ -242,7 +242,7 @@ export function AuthedAppLayout({
                 data-testid="nav-ff-mp-shipments"
                 data-task-id="NAV-01"
               >
-                <ListItemText primary="Отгрузки" />
+                <ListItemText primary="FBO" />
               </ListItemButton>
             ) : null}
             {canCatalogCells && (addressStorageEnabled || !isAdmin) ? (
@@ -252,7 +252,7 @@ export function AuthedAppLayout({
             ) : null}
             {isAdmin || can('inventory') ? (
               <ListItemButton component={NavLink} to={`${base}/reports`} data-testid="nav-ff-reports" data-task-id="NAV-01">
-                <ListItemText primary="Отчёты" />
+                <ListItemText primary="История по товарам" />
               </ListItemButton>
             ) : null}
             {canStorage ? (

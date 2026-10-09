@@ -1,4 +1,9 @@
 // @vitest-environment jsdom
+// Keep seller-menu absence checks meaningful under SSR's missing viewport.
+vi.mock('@mui/material', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@mui/material')>(),
+  useMediaQuery: () => true,
+}))
 // Decorative icon barrel exports thousands of SVGs; they are outside this contract.
 vi.mock('@mui/icons-material', () => new Proxy({}, {
   has: () => true,
@@ -25,7 +30,7 @@ function ffMenu(role: string, patch: Partial<FfPermissions>) {
   return dom(<MemoryRouter initialEntries={['/app/ff/mp-shipments']}><AuthedAppLayout portal="ff" meRole={role} ffPermissions={permissions(patch)} onLogout={() => {}}>child</AuthedAppLayout></MemoryRouter>)
 }
 function sellerMenu(products: boolean) {
-  return dom(<MemoryRouter><SellerLayout permissions={{ ...emptySellerPermissions(), products, documents: true }} onLogout={() => {}} /></MemoryRouter>)
+  return dom(<MemoryRouter><SellerLayout permissions={{ ...emptySellerPermissions(), products, documents: true }} onLogout={() => {}} children={null} /></MemoryRouter>)
 }
 // Execute the production route JSX, not a copied route/guard. SSR keeps unrelated
 // network effects outside this small contract and retains the actual page component.
