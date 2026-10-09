@@ -84,19 +84,20 @@ export function buildFboPickPrintHtml({ rows, objects, cells, view, selected, do
     }).join('')
   }
   const pickedRows = renderRows(true)
-  const widths = view === 'products' ? [37, 12, 24, 9, 9, 9] : [12, 24, 37, 9, 9, 9]
   return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Лист подбора — ${escapeHtml(document)}</title>
 <style>
-@page { size: A4; margin: 12mm; }
+@page { size: A4 landscape; margin: 10mm; }
 body { font: 11px/1.35 Arial, sans-serif; color: #111; margin: 0; }
 h1 { font-size: 18px; margin: 0 0 8px; } p { margin: 0 0 12px; }
-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-thead { display: table-header-group; } th, td { border: 1px solid #555; padding: 5px; vertical-align: top; overflow-wrap: anywhere; }
-th { text-align: left; background: #eee; } .number { text-align: right; }
+table { width: 100%; border-collapse: collapse; table-layout: auto; }
+thead { display: table-header-group; } th, td { border: 1px solid #555; padding: 5px; vertical-align: top; }
+td { overflow-wrap: anywhere; }
+th { text-align: left; background: #eee; white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+.number { text-align: right; white-space: nowrap; }
 tr.group-start td { border-top-width: 2px; }
 tr { break-inside: avoid; } .section { font-weight: bold; background: #eee; }
 </style></head><body><h1>Лист подбора</h1><p>${escapeHtml(document)}<br>Селлер: ${escapeHtml(seller)}${marketplace ? `<br>Маркетплейс: ${marketplace === 'ozon' ? 'Ozon' : 'WB'}` : ''}</p>
-<table><colgroup>${widths.map((width) => `<col style="width:${width}%">`).join('')}</colgroup><thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead><tbody>${renderRows(false)}${pickedRows ? `<tr><td colspan="6" class="section">Уже подобрано</td></tr>${pickedRows}` : ''}</tbody></table></body></html>`
+<table><thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead><tbody>${renderRows(false)}${pickedRows ? `<tr><td colspan="6" class="section">Уже подобрано</td></tr>${pickedRows}` : ''}</tbody></table></body></html>`
 }
 
 /** A separate print document; no warehouse requests or changes to scanning state. */
@@ -104,7 +105,7 @@ export function printFboPickHtml(html: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const frame = window.document.createElement('iframe')
     frame.setAttribute('aria-hidden', 'true')
-    frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0'
+    frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:297mm;height:210mm;border:0'
     let scheduled = false
     let settled = false
     let printTimer: number | undefined
