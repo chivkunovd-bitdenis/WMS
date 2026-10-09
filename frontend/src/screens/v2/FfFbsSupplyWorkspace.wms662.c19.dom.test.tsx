@@ -150,7 +150,17 @@ async function checkComposition(
   }, { timeout: 3_000 })
   const pickingText = document.querySelector('[data-testid="fbs-pick-unified"]')!.textContent ?? ''
   expect(pickingText, `${checkpoint}: both orders still wait for picking`).toMatch(/2\s*штук осталось снять из 2 по плану/)
-  expect(pickingText, `${checkpoint}: picking is not shown as finished`).not.toMatch(/Все товары подобраны|0\s*штук осталось/)
+  expect(pickingText, `${checkpoint}: picking screen is not shown as finished`).not.toMatch(/0\s*штук осталось/)
+  // The whole open «Подбор» panel, including the messages beside the picking screen.
+  const panelText = document.querySelector('[data-testid="fbs-pick-unified"]')!
+    .closest('.MuiDialogContent-root')!.textContent ?? ''
+  expect(panelText, `${checkpoint}: panel contains the picking screen`).toContain(pickingText)
+  // «Все товары подобраны» is for a current picking stage with everything taken; 2 of 2 are left.
+  expect(panelText, `${checkpoint}: no «all picked» message while 2 pieces are left`).not.toContain('Все товары подобраны')
+  // «Подбор завершён…» only says the supply is past the picking stage (stage ≠ current):
+  // absent in the assembling supply, present in the handed-over one (stage tracking).
+  expect(panelText.includes('Подбор завершён. Этот этап доступен только для просмотра.'), `${checkpoint}: past-stage notice`)
+    .toBe(phase === 'full')
   await click(tab('Упаковка и маркировка'))
   expect(tab('Упаковка и маркировка').getAttribute('aria-selected'), `${checkpoint}: back on packing`).toBe('true')
   // Reuse the real history with its saved creation event, without inventing events.
@@ -177,7 +187,7 @@ async function checkComposition(
   expect(printTape).not.toHaveBeenCalled()
 }
 
-it('C19: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged', { timeout: 60_000 }, async () => {
+it('C19: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged', { timeout: 20_000 }, async () => {
   const immutableProof = JSON.stringify(proof)
   for (const phase of ['partial', 'full'] as const) {
     current = phase === 'partial' ? partial : full
