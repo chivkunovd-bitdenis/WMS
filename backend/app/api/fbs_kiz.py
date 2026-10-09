@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import contextlib
 import uuid
 from typing import Annotated, Literal, cast
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +13,7 @@ from app.api.fbs_errors import envelope_from_exc
 from app.db.session import get_db
 from app.models.user import User
 from app.services import fbs_kiz_service as kiz_svc
-from app.services.wildberries_client import short_kiz_write_timeout
+from app.services.fbs_kiz_wb_delivery_service import deliver_order_kiz_to_wb
 
 router = APIRouter(
     prefix="/operations/fbs-orders",
@@ -205,9 +204,11 @@ async def validate_fbs_order_kiz(
 )
 async def commit_fbs_order_kiz(
     body: FbsKizCommitBody,
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[FbsKizCommitRowOut]:
+    tenant_id, user_id = user.tenant_id, user.id
     pairs = [
         kiz_svc.FbsKizCommitPair(
             order_id=item.order_id,
@@ -217,34 +218,33 @@ async def commit_fbs_order_kiz(
         )
         for item in body.pairs
     ]
-    wait = short_kiz_write_timeout() if body.scan_no_wb_wait else contextlib.nullcontext()
     async with httpx.AsyncClient() as http_client:
-        with wait:
-            rows = await kiz_svc.commit_kiz_pairs(
-                session,
-                user.tenant_id,
-                user.id,
-                pairs,
-                body.idempotency_key,
-                http_client,
-            )
+        rows = await kiz_svc.commit_kiz_pairs(
+            session,
+            tenant_id,
+            user_id,
+            pairs,
+            body.idempotency_key,
+            http_client,
+            defer_wb=body.scan_no_wb_wait,
+        )
+    if body.scan_no_wb_wait:
+        for order_id in dict.fromkeys(pair.order_id for pair in pairs):
+            background_tasks.add_task(deliver_order_kiz_to_wb, order_id, tenant_id)
     return [_commit_row_out(row) for row in rows]
 
 
 @router.delete("/{order_id}/kiz", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_fbs_order_kiz(
     order_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
+    tenant_id, user_id = user.tenant_id, user.id
     try:
-        async with httpx.AsyncClient() as http_client:
-            await kiz_svc.cancel_order_kiz(
-                session,
-                user.tenant_id,
-                user.id,
-                order_id,
-                http_client,
-            )
+        await kiz_svc.cancel_order_kiz(session, tenant_id, user_id, order_id)
     except kiz_svc.FbsKizError as exc:
         _raise_from_service(exc)
+    # WMS-640: the KIZ is already unbound in WMS; WB gets the removal in the background.
+    background_tasks.add_task(deliver_order_kiz_to_wb, order_id, tenant_id)

@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-import contextlib
 import uuid
 from datetime import date, datetime
 from typing import Annotated, Any, Literal, cast
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Response,
+    status,
+)
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +44,7 @@ from app.services import kiz_reprint_service as kiz_reprint_svc
 from app.services import ozon_box_assembly_service as ozon_assembly_svc
 from app.services import packaging_task_service as packaging_task_svc
 from app.services import tenant_settings_service as tenant_settings_svc
+from app.services.fbs_kiz_wb_delivery_service import deliver_order_kiz_to_wb
 from app.services.fbs_order_history_service import FbsOrderHistoryError, supply_history
 from app.services.fbs_print_asset_service import (
     FbsPrintAssetError,
@@ -47,7 +56,6 @@ from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_wor
 from app.services.marketplace_account_service import MarketplaceAccountError
 from app.services.marketplace_provider import MarketplaceProviderError, provider_error_message
 from app.services.ozon_fbs_errors import OzonFbsProcessError
-from app.services.wildberries_client import short_kiz_write_timeout
 
 router = APIRouter(prefix="/operations/fbs-supplies", tags=["operations"])
 
@@ -2440,6 +2448,7 @@ async def print_fbs_supply_order_tape(
 async def scan_fbs_supply_product_for_auto_print(
     supply_id: uuid.UUID,
     body: FbsScanAutoPrintBody,
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsScanAutoPrintOut:
@@ -2525,28 +2534,28 @@ async def scan_fbs_supply_product_for_auto_print(
                 session, tenant_id, actor_id, scan_id=scan_id, order=order, marking=marking
             )
 
-    # WMS-635 Д2, Q1: the scan's pool KIZ write waits for WB only briefly and a
-    # pending WB answer still hands the label out.
-    wb_wait = short_kiz_write_timeout() if body.print_chz else contextlib.nullcontext()
+    # WMS-640: the scan's pool KIZ is bound in WMS and queued; the write goes to WB
+    # in the background, so the label is handed out whatever WB answers.
     async with httpx.AsyncClient() as http_client:
-        with wb_wait:
-            try:
-                result = await order_tape_svc.print_fbs_order_tape(
-                    session,
-                    user.tenant_id,
-                    supply_id,
-                    order_ids=[selected.order_id],
-                    layout=layout,
-                    allow_partial=True,
-                    include_order_qr=body.print_qr,
-                    reprint=False,
-                    actor_user_id=user.id,
-                    http_client=http_client,
-                    scan_no_wb_wait=True,
-                    on_new_binding=_note_pool_kiz if body.print_chz else None,
-                )
-            except order_tape_svc.FbsOrderTapePrintError as exc:
-                _raise_from_order_tape_service(exc)
+        try:
+            result = await order_tape_svc.print_fbs_order_tape(
+                session,
+                user.tenant_id,
+                supply_id,
+                order_ids=[selected.order_id],
+                layout=layout,
+                allow_partial=True,
+                include_order_qr=body.print_qr,
+                reprint=False,
+                actor_user_id=user.id,
+                http_client=http_client,
+                scan_no_wb_wait=True,
+                on_new_binding=_note_pool_kiz if body.print_chz else None,
+            )
+        except order_tape_svc.FbsOrderTapePrintError as exc:
+            _raise_from_order_tape_service(exc)
+    if body.print_chz:
+        background_tasks.add_task(deliver_order_kiz_to_wb, selected.order_id, tenant_id)
     # The selection was intentionally committed before marketplace work.  The
     # prepared QR asset and any allocated/bound marking code are a second,
     # independently durable phase so a lost response can recover exactly this
@@ -2765,6 +2774,7 @@ class FbsScanUndoOut(BaseModel):
 async def undo_fbs_packing_scan(
     supply_id: uuid.UUID,
     body: FbsScanUndoBody,
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsScanUndoOut:
@@ -2795,16 +2805,17 @@ async def undo_fbs_packing_scan(
     await session.rollback()
     if body.kiz_keys:
         try:
-            async with httpx.AsyncClient() as http_client:
-                warning = await kiz_svc.rollback_scan_kiz(
-                    session,
-                    tenant_id,
-                    user_id,
-                    supply_id,
-                    body.order_id,
-                    body.kiz_keys,
-                    http_client,
-                )
+            warning = await kiz_svc.rollback_scan_kiz(
+                session,
+                tenant_id,
+                user_id,
+                supply_id,
+                body.order_id,
+                body.kiz_keys,
+            )
+            # WMS-640: undone in WMS at once; WB gets the removal (and the restore of
+            # a replaced code) in the background.
+            background_tasks.add_task(deliver_order_kiz_to_wb, body.order_id, tenant_id)
         except kiz_svc.FbsKizError as exc:
             await session.rollback()
             status_code = (

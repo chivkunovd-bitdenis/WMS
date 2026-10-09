@@ -19,7 +19,6 @@ from app.core.settings import settings
 from app.models.document_event import (
     DOCUMENT_TYPE_FBS_SUPPLY,
     EVENT_DATA_CHANGED,
-    SOURCE_SYSTEM,
     SOURCE_USER,
     DocumentEvent,
 )
@@ -76,7 +75,6 @@ from app.services.wildberries_client import put_marketplace_order_meta
 from app.services.wildberries_errors import WildberriesClientError
 from app.services.wildberries_fbs_client import (
     delete_marketplace_order_meta,
-    fetch_marketplace_orders_meta_batch,
 )
 
 _MISSING_PRODUCT_NAME = "Товар не сопоставлен"
@@ -1303,8 +1301,12 @@ async def cancel_order_kiz(
     tenant_id: uuid.UUID,
     actor_user_id: uuid.UUID | None,
     order_id: uuid.UUID,
-    http_client: httpx.AsyncClient,
+    http_client: httpx.AsyncClient | None = None,
 ) -> None:
+    """Unbind the order's KIZ in WMS at once; WB gets the removal in the background (WMS-640).
+
+    ``http_client`` is not used any more (no WB call here); callers may still pass it.
+    """
     await session.rollback()
     try:
         order = await _get_order_for_kiz(session, tenant_id, order_id, for_update=True)
@@ -1326,21 +1328,21 @@ async def cancel_order_kiz(
                 .with_for_update()
                 .execution_options(populate_existing=True)
             )
+        await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
         if current is not None:
-            await void_existing_sgtin_marking(
+            unbound_value = current.value
+            await _void_existing_sgtin_marking_locally(
                 session,
-                tenant_id,
-                order,
                 current,
-                http_client,
                 actor_user_id=actor_user_id,
                 reason=_VOID_OPERATOR_CANCEL_REASON,
             )
         else:
-            token = await marking_svc.require_marketplace_token(
-                session, tenant_id, order.seller_id
-            )
-            await _delete_sgtin_from_wb(order, http_client, token)
+            unbound_value = str((saved_sgtin or {}).get("value") or "")
+        # The removal reads WB first and deletes only while WB still holds this code.
+        await marking_svc.queue_kiz_unbind(
+            session, order, unbound_value, actor_user_id=actor_user_id
+        )
         if line is not None:
             # Cancelled labels no longer cover a unit. Re-read the existing codes
             # under the same line lock as printing; pool-to-external replacement
@@ -1389,6 +1391,8 @@ async def _commit_one_kiz_pair(
     pair: FbsKizCommitPair,
     http_client: httpx.AsyncClient,
     idempotency_key: str,
+    *,
+    defer_wb: bool = False,
 ) -> _FbsKizCommitOutcome:
     validated = await _validate_kiz_pair(
         session,
@@ -1422,6 +1426,9 @@ async def _commit_one_kiz_pair(
         and current.meta_status != META_STATUS_REJECTED
     ):
         operation = await marking_svc.pending_kiz_operation(session, current)
+        if operation is not None and defer_wb:
+            # WMS-640: the packing scan never calls WB; the background finishes it.
+            raise FbsKizError("wb_pending_confirmation", persist_failure_state=True)
         if operation is not None:
             token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
             try:
@@ -1510,26 +1517,43 @@ async def _commit_one_kiz_pair(
     await session.flush()
     new_error: FbsKizError | None = None
     new_write_accepted = False
-    try:
-        if current is not None:
-            await _delete_sgtin_from_wb(order, http_client, token)
-        await marking_svc.attach_order_meta_to_wb_and_sync(
-            session,
-            tenant_id,
-            order,
-            marking,
-            http_client,
-            actor_user_id=actor_user_id,
-            api_token=token,
-        )
-    except FbsKizError as exc:
-        new_error = exc
-    except marking_svc.FbsMarkingError as exc:
-        new_write_accepted = isinstance(exc, marking_svc.FbsMarkingWriteAcceptedError)
-        new_error = _marking_error_to_kiz(exc)
-    except WildberriesClientError as exc:
-        new_error = FbsKizError(marking_svc._wb_error_code(exc))
     pending_error: FbsKizError | None = None
+    if defer_wb:
+        # WMS-640: the binding is applied in WMS; the removal of a replaced code
+        # and the write of this one wait in the queue and go to WB in the background.
+        await marking_svc.record_pending_kiz_operation(
+            session, order, marking, error_code=marking_svc.KIZ_WB_QUEUED,
+            actor_user_id=actor_user_id, idempotency_key=idempotency_key,
+            scan_auto_print_id=pair.scan_auto_print_id,
+            queue_flags={"replace": True} if current is not None else None,
+        )
+        if pair.scan_auto_print_id is not None and actor_user_id is not None:
+            with contextlib.suppress(scan_print_svc.FbsScanAutoPrintError):
+                await scan_print_svc.record_bound_reprint_target(
+                    session, tenant_id, actor_user_id, pair.scan_auto_print_id, order.id,
+                    marking.id,
+                )
+        pending_error = FbsKizError("wb_pending_confirmation", persist_failure_state=True)
+    else:
+        try:
+            if current is not None:
+                await _delete_sgtin_from_wb(order, http_client, token)
+            await marking_svc.attach_order_meta_to_wb_and_sync(
+                session,
+                tenant_id,
+                order,
+                marking,
+                http_client,
+                actor_user_id=actor_user_id,
+                api_token=token,
+            )
+        except FbsKizError as exc:
+            new_error = exc
+        except marking_svc.FbsMarkingError as exc:
+            new_write_accepted = isinstance(exc, marking_svc.FbsMarkingWriteAcceptedError)
+            new_error = _marking_error_to_kiz(exc)
+        except WildberriesClientError as exc:
+            new_error = FbsKizError(marking_svc._wb_error_code(exc))
     # WMS-579: once WB answered the PUT of the new code, a replacement is no
     # longer compensated: its unknown result is reconciled like a first binding.
     # The old code is still restored when deleting it or writing the new one
@@ -1696,6 +1720,8 @@ async def commit_kiz_pairs(
     pairs: list[FbsKizCommitPair],
     idempotency_key: str,
     http_client: httpx.AsyncClient,
+    *,
+    defer_wb: bool = False,
 ) -> list[FbsKizCommitRow]:
     await session.rollback()
 
@@ -1722,6 +1748,7 @@ async def commit_kiz_pairs(
                 pair,
                 http_client,
                 idempotency_key,
+                defer_wb=defer_wb,
             )
             if pair.scan_auto_print_id is not None and (
                 outcome.newly_bound or outcome.associate_scan_auto_print
@@ -1842,109 +1869,6 @@ async def assert_scan_undo_open(
             )
 
 
-def _wb_outcome_unknown(code: str) -> bool:
-    return (
-        code in {"wb_transport_error", "wb_pending_confirmation", "wb_upstream_error_408"}
-        or code.startswith("wb_upstream_error_5")
-    )
-
-
-async def _wb_sgtin_state(
-    order: FbsOrder, http_client: httpx.AsyncClient, token: str, value: str
-) -> str:
-    """Fact in WB for this order: 'same' (value bound), 'absent', 'other' or 'unknown'."""
-    try:
-        rows = await fetch_marketplace_orders_meta_batch(
-            http_client, api_token=token, order_ids=[int(order.wb_order_id)]
-        )
-    except WildberriesClientError:
-        return "unknown"
-    row = next((one for one in rows if one.order_id == int(order.wb_order_id)), None)
-    if row is None:
-        # No row for this order is no proof of anything.
-        return "unknown"
-    bound = [
-        detail.value for detail in row.meta_details
-        if detail.key == MARKING_KIND_SGTIN and detail.value
-    ]
-    if not bound:
-        return "absent"
-    return "same" if value in bound else "other"
-
-
-async def _delete_scan_kiz_from_wb(
-    session: AsyncSession,
-    order: FbsOrder,
-    http_client: httpx.AsyncClient,
-    token: str,
-    value: str,
-    intent_key: str,
-) -> None:
-    """Delete exactly this code in WB; never a blind repeat after a lost answer.
-
-    An earlier attempt leaves a durable intent: the next attempt starts by
-    reading WB and deletes only while WB still holds this very code.
-    """
-    if not is_wildberries(order):
-        return
-    earlier = await session.scalar(
-        select(DocumentEvent.id).where(
-            DocumentEvent.tenant_id == order.tenant_id,
-            DocumentEvent.idempotency_key == intent_key,
-        )
-    )
-    if earlier is not None:
-        state = await _wb_sgtin_state(order, http_client, token, value)
-        if state == "absent":
-            return
-        if state == "other":
-            raise FbsKizError(
-                "kiz_rollback_changed",
-                message="КИЗ заказа в WB уже изменён — этот скан не отменить.",
-            )
-        if state == "unknown":
-            raise FbsKizError("wb_pending_confirmation")
-    elif order.supply_id is not None:
-        await record_document_event(
-            session,
-            tenant_id=order.tenant_id,
-            document_type=DOCUMENT_TYPE_FBS_SUPPLY,
-            document_id=order.supply_id,
-            event_type=EVENT_DATA_CHANGED,
-            source=SOURCE_SYSTEM,
-            actor_user_id=None,
-            payload_json={"kind": "wms631_kiz_undo_delete", "order_id": str(order.id)},
-            idempotency_key=intent_key,
-        )
-        # The intent is durable before the irreversible WB call.
-        await session.commit()
-        await _get_order_for_kiz(session, order.tenant_id, order.id, for_update=True)
-        current = await _current_sgtin_marking_for_update(session, order.id)
-        if current is None or current.value != value:
-            raise FbsKizError(
-                "kiz_rollback_changed",
-                message="КИЗ заказа уже изменён другим действием — этот скан не отменить.",
-            )
-    try:
-        await delete_marketplace_order_meta(
-            http_client, api_token=token, order_id=int(order.wb_order_id), key=MARKING_KIND_SGTIN
-        )
-        return
-    except WildberriesClientError as exc:
-        code = marking_svc._wb_error_code(exc)
-        if not _wb_outcome_unknown(code):
-            raise FbsKizError(code) from exc
-    state = await _wb_sgtin_state(order, http_client, token, value)
-    if state == "absent":
-        return
-    if state == "other":
-        raise FbsKizError(
-            "kiz_rollback_changed",
-            message="КИЗ заказа в WB уже изменён — этот скан не отменить.",
-        )
-    raise FbsKizError("wb_pending_confirmation")
-
-
 async def _recount_line_markings(
     session: AsyncSession, tenant_id: uuid.UUID, line: PackagingTaskLine | None
 ) -> None:
@@ -1998,7 +1922,6 @@ async def rollback_scan_kiz(
     supply_id: uuid.UUID,
     order_id: uuid.UUID,
     commit_keys: list[str],
-    http_client: httpx.AsyncClient,
 ) -> str | None:
     """WMS-631 R19: undo the KIZ one packing scan bound; return a warning or None.
 
@@ -2037,14 +1960,10 @@ async def rollback_scan_kiz(
             "kiz_rollback_changed",
             message="КИЗ заказа уже изменён другим действием — этот скан не отменить.",
         )
-    token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
+    await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
     if current is not None and current.value == value:
-        # Stage 1: remove this scan's code from WB and from the order.
-        if current.meta_status != META_STATUS_REJECTED:
-            # WB refused this code, so WB holds nothing of it to delete.
-            await _delete_scan_kiz_from_wb(
-                session, order, http_client, token, value, f"wms631-kiz-undo-delete:{receipt_id}"
-            )
+        # Stage 1: remove this scan's code from the order; WB gets the removal in
+        # the background (WMS-640), reading WB first.
         line: PackagingTaskLine | None = None
         if current.marking_code is not None and current.marking_code.packaging_task_line_id:
             line = await session.get(PackagingTaskLine, current.marking_code.packaging_task_line_id)
@@ -2053,6 +1972,7 @@ async def rollback_scan_kiz(
         await _void_existing_sgtin_marking_locally(
             session, current, actor_user_id=actor_user_id, reason=_VOID_OPERATOR_CANCEL_REASON
         )
+        await marking_svc.queue_kiz_unbind(session, order, value, actor_user_id=actor_user_id)
         # Д19 applies to a pool KIZ this scan printed («Печатать ЧЗ», receipt
         # scan:<id>). A KIZ the operator scanned is on the item: like the cross
         # in the row, «Назад» leaves it usable for the next scan (Д3).
@@ -2089,25 +2009,7 @@ async def rollback_scan_kiz(
         await session.commit()
         return None
     if current is not None and current.value == previous_value:
-        # Already restored by an earlier attempt: finished only once WB confirms it (N5).
-        operation = await marking_svc.pending_kiz_operation(session, current)
-        if operation is not None:
-            try:
-                await marking_svc.reconcile_pending_kiz_operation(
-                    session, order, current, operation, http_client, token,
-                    actor_user_id=actor_user_id,
-                )
-            except (WildberriesClientError, marking_svc.FbsMarkingError) as exc:
-                await session.commit()
-                raise FbsKizError("wb_pending_confirmation") from exc
-            await session.commit()
-            if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
-                raise FbsKizError("wb_pending_confirmation")
-            if operation.state == WB_OPERATION_STATE_FAILED:
-                raise FbsKizError("meta_validation_fail")
-        elif current.meta_status == META_STATUS_SENDING:
-            await session.commit()
-            raise FbsKizError("wb_pending_confirmation")
+        # Already restored by an earlier attempt; its WB write is in the queue.
         await session.commit()
         return None
     previous_code_id = receipt.get("previous_code_id")
@@ -2144,38 +2046,17 @@ async def rollback_scan_kiz(
     )
     session.add(marking)
     await session.flush()
-    restore_error: FbsKizError | None = None
-    try:
-        await marking_svc.attach_order_meta_to_wb_and_sync(
-            session, tenant_id, order, marking, http_client,
-            actor_user_id=actor_user_id, api_token=token,
-        )
-    except marking_svc.FbsMarkingError as exc:
-        restore_error = _marking_error_to_kiz(exc)
-        if isinstance(exc, marking_svc.FbsMarkingWriteAcceptedError):
-            restore_error = FbsKizError("wb_pending_confirmation")
-    except WildberriesClientError as exc:
-        restore_error = FbsKizError(marking_svc._wb_error_code(exc))
-    except FbsKizError as exc:
-        restore_error = exc
-    if restore_error is not None and not (
-        _wb_outcome_unknown(restore_error.code) or marking.meta_status == META_STATUS_SENDING
-    ):
-        # WB refused: the replaced code stays void (never free) and the step stays to retry.
-        await session.rollback()
-        raise restore_error
-    if restore_error is not None:
-        # Unknown WB result: the existing pending-operation rule reconciles it, no blind resend.
-        await marking_svc.record_pending_kiz_operation(
-            session, order, marking, error_code=restore_error.code,
-            actor_user_id=actor_user_id,
-            idempotency_key=f"wms631-kiz-restore:{receipt_id}",
-            scan_auto_print_id=None,
-        )
+    # WMS-640: the replaced code is written back in the background, after the
+    # removal of the scanned one (read-first: WB may still hold it).
+    await marking_svc.record_pending_kiz_operation(
+        session, order, marking, error_code=marking_svc.KIZ_WB_QUEUED,
+        actor_user_id=actor_user_id,
+        idempotency_key=f"wms631-kiz-restore:{receipt_id}",
+        scan_auto_print_id=None,
+        queue_flags={"read_first": True},
+    )
     await _recount_line_markings(session, tenant_id, line_ref.line)
     await session.commit()
-    if restore_error is not None:
-        raise FbsKizError("wb_pending_confirmation")
     return None
 
 

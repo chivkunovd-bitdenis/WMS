@@ -71,7 +71,9 @@ from app.services.ozon_provider_factory import build_ozon_provider
 from app.services.wildberries_client import (
     WildberriesClientError,
     kiz_scan_skips_wb_readback,
-    put_marketplace_order_meta,
+)
+from app.services.wildberries_client import (
+    put_marketplace_order_meta as put_marketplace_order_meta,  # re-exported: WMS-640 delivery
 )
 from app.services.wildberries_credentials_service import (
     _seller_in_tenant,
@@ -81,13 +83,20 @@ from app.services.wildberries_errors import WildberriesBusinessError
 from app.services.wildberries_fbs_client import (
     MarketplaceMetaDetail,
     MarketplaceOrderMetaRow,
-    fetch_marketplace_orders_meta_batch,
     split_marketplace_order_id_batches,
+)
+from app.services.wildberries_fbs_client import (
+    fetch_marketplace_orders_meta_batch as fetch_marketplace_orders_meta_batch,
 )
 
 logger = logging.getLogger(__name__)
 
 OPERATION_KIND_ORDER_KIZ_BIND = "order_kiz_bind"
+# WMS-640: the packing screen never waits for WB. A KIZ change is applied in WMS at
+# once and queued here; a background job sends it to WB right after the response.
+OPERATION_KIND_ORDER_KIZ_UNBIND = "order_kiz_unbind"
+KIZ_WB_QUEUED = "wb_queued"  # nothing has been sent to WB yet
+KIZ_WB_SENDING = "wb_sending"  # one worker holds this operation and talks to WB
 
 _META_KIND_FROM_PLURAL: dict[str, str] = {
     "sgtins": MARKING_KIND_SGTIN,
@@ -735,6 +744,7 @@ async def record_pending_kiz_operation(
     actor_user_id: uuid.UUID | None,
     idempotency_key: str,
     scan_auto_print_id: uuid.UUID | None = None,
+    queue_flags: dict[str, bool] | None = None,
 ) -> None:
     marking.meta_status = META_STATUS_UNKNOWN
     marking.check_status = CHECK_STATUS_ERROR
@@ -758,9 +768,17 @@ async def record_pending_kiz_operation(
             wb_object_kind="order", wb_object_id=str(order.wb_order_id),
             created_by_user_id=actor_user_id,
             request_summary_json=(
-                {"scan_auto_print_id": str(scan_auto_print_id)}
-                if scan_auto_print_id is not None
-                else None
+                {
+                    **(
+                        {"scan_auto_print_id": str(scan_auto_print_id)}
+                        if scan_auto_print_id is not None
+                        else {}
+                    ),
+                    # WMS-640: "replace" — WB's old code is deleted before this one
+                    # is written; "read_first" — WB is read before the write.
+                    **(queue_flags or {}),
+                }
+                or None
             ),
         )
         session.add(operation)
@@ -770,6 +788,48 @@ async def record_pending_kiz_operation(
     operation.error_context_json = None
     operation.confirmed_at = None
     operation.failed_at = None
+
+
+async def queue_kiz_unbind(
+    session: AsyncSession,
+    order: FbsOrder,
+    value: str,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """WMS-640: the KIZ is already unbound in WMS; its removal in WB is sent in the background."""
+    if not is_wildberries(order):
+        return
+    session.add(FbsWbOperation(
+        tenant_id=order.tenant_id, seller_id=order.seller_id,
+        operation_kind=OPERATION_KIND_ORDER_KIZ_UNBIND,
+        idempotency_key=hashlib.sha256(f"unbind:{order.id}:{uuid.uuid4()}".encode()).hexdigest(),
+        request_hash=hashlib.sha256(value.encode()).hexdigest(),
+        local_entity_type="fbs_order", local_entity_id=order.id,
+        wb_object_kind="order", wb_object_id=str(order.wb_order_id),
+        created_by_user_id=actor_user_id,
+        state=WB_OPERATION_STATE_PENDING_CONFIRMATION,
+        error_code=KIZ_WB_QUEUED,
+        request_summary_json={"value": value},
+    ))
+    await session.flush()
+
+
+async def kiz_queued_for_wb(session: AsyncSession, marking: FbsOrderMarking) -> bool:
+    """WMS-640: this KIZ is bound in WMS but has not reached WB yet."""
+    found = await session.scalar(
+        select(FbsWbOperation.id)
+        .where(
+            FbsWbOperation.tenant_id == marking.tenant_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+            FbsWbOperation.local_entity_type == "fbs_order_marking",
+            FbsWbOperation.local_entity_id == marking.id,
+            FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
+            FbsWbOperation.error_code.in_({KIZ_WB_QUEUED, KIZ_WB_SENDING}),
+        )
+        .limit(1)
+    )
+    return found is not None
 
 
 async def confirmed_kiz_operation_for_scan_auto_print(
@@ -1027,6 +1087,14 @@ async def _sync_order_meta_from_wb(
             # empty. An empty read is no news: the red «WB не принял ЧЗ» verdict
             # stays until the operator replaces or removes the code, or WB itself
             # shows the code (a non-empty answer is applied below as usual).
+            continue
+        if (
+            meta_detail is not None and current is marking
+            and marking.kind == MARKING_KIND_SGTIN
+            and await kiz_queued_for_wb(session, marking)
+        ):
+            # WMS-640: this KIZ has not been sent to WB yet, so WB's answer
+            # describes the previous code, not a verdict on this one.
             continue
         if meta_detail is not None and current is marking:
             # Preserve every received WB detail, including unknown decisions, so a

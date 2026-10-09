@@ -555,6 +555,13 @@ async def print_fbs_order_tape(
                 raise marking_svc.FbsMarkingError("order_marking_not_found")
             if order.status == FBS_ORDER_STATUS_CANCELLED:
                 raise marking_svc.FbsMarkingError("order_cancelled")
+            if scan_no_wb_wait and order.marketplace == "wb":
+                # WMS-640: the packing scan never calls WB. The pool code is bound
+                # and its label is handed out; the write waits in the queue and
+                # goes to WB in the background, whatever WB answers.
+                await _queue_printed_marking(session, order, marking, actor_user_id)
+                await session.commit()
+                continue
             await _send_or_reconcile_printed_marking(
                 session, tenant_id, order, marking, http_client, actor_user_id,
                 ordinary_print=order_id in ordinary_print_orders,
@@ -597,6 +604,23 @@ async def print_fbs_order_tape(
         order_errors=errors,
         shortage=shortage_total,
     )
+
+
+async def _queue_printed_marking(
+    session: AsyncSession,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    actor_user_id: uuid.UUID,
+) -> None:
+    operation = await marking_svc.pending_kiz_operation(session, marking)
+    if operation is not None or marking.meta_status in marking_svc._META_DELIVERY_OK:
+        # Already queued, or WB already accepted this very binding.
+        return
+    await marking_svc.record_pending_kiz_operation(
+        session, order, marking, error_code=marking_svc.KIZ_WB_QUEUED,
+        actor_user_id=actor_user_id, idempotency_key=f"tape:{marking.id}",
+    )
+    order.metadata_delivery_allowed = False
 
 
 async def _send_or_reconcile_printed_marking(

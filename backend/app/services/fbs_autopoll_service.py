@@ -1007,6 +1007,9 @@ async def sync_marking_verdicts_for_seller(
     ради «опять не зеленеют», то есть ради кодов, которые WB ещё не подтвердил,
     а не ради полной пересверки всех кодов поставки.
     """
+    # WMS-640: KIZ changes the packing screen queued (and whose background task was
+    # lost or hit a temporary WB refusal) are delivered before WB's verdicts are read.
+    from app.services.fbs_kiz_wb_delivery_service import deliver_queued_for_seller
     from app.services.fbs_marking_service import (
         MarkingVerdictsSyncResult,
         require_marketplace_token,
@@ -1014,6 +1017,7 @@ async def sync_marking_verdicts_for_seller(
         sync_marking_verdicts_batch,
     )
 
+    await deliver_queued_for_seller(session, http_client, target.tenant_id, target.seller_id)
     stmt = (
         select(FbsOrder)
         .join(FbsSupply, FbsOrder.supply_id == FbsSupply.id)
