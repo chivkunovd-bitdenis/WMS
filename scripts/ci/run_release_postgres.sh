@@ -79,15 +79,17 @@ run_suite 'FBS concurrency PostgreSQL contracts' env \
     -o asyncio_default_fixture_loop_scope=session \
     -o asyncio_default_test_loop_scope=session \
     --junitxml="$evidence/fbs-concurrency.xml"
-run_suite 'WMS-744 inbound product lock ordering on PostgreSQL' env \
+run_suite 'WMS-744 inbound and outbound product lock ordering on PostgreSQL' env \
   WMS_TEST_DATABASE_URL=postgresql+asyncpg://postgres:fixture-only@127.0.0.1:5432/wms_test_517 \
-  pytest -n 0 -q tests/test_wms744_inbound_product_lock_order.py \
+  pytest -n 0 -q \
+    tests/test_wms744_inbound_product_lock_order.py \
+    tests/test_wms744_outbound_lock_order.py \
     --junitxml="$evidence/744.xml"
 report_status=0
 python - "$evidence" <<'PY' || report_status=$?
 import pathlib, sys, xml.etree.ElementTree as ET
 root = pathlib.Path(sys.argv[1])
-expected_reports = [('662.xml', 10), ('662-f6.xml', 4), ('663-669-670-683.xml', 6), ('663-release-retry.xml', 5), ('fbs-concurrency.xml', 6), ('744.xml', 2)]
+expected_reports = [('662.xml', 10), ('662-f6.xml', 4), ('663-669-670-683.xml', 6), ('663-release-retry.xml', 5), ('fbs-concurrency.xml', 6), ('744.xml', 4)]
 failed = False
 for name, expected in expected_reports:
     path = root / name

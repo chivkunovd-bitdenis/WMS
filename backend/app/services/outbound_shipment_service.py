@@ -363,6 +363,9 @@ async def submit_request(
                 session, tenant_id, req.warehouse_id
             )
         ).id
+    await inv_svc.lock_stock_products(
+        session, tenant_id, {line.product_id for line in req.lines}
+    )
     try:
         for ln in req.lines:
             if sorting_location_id is not None:
@@ -492,6 +495,9 @@ async def post_request(
         to_ship.append((line, rem))
     if not to_ship:
         raise OutboundShipmentError("nothing_to_ship")
+    await inv_svc.lock_stock_products(
+        session, tenant_id, {line.product_id for line, _rem in to_ship}
+    )
     for line, rem in to_ship:
         sid = line.storage_location_id
         assert sid is not None
