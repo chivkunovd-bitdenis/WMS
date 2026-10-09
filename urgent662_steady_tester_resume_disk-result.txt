@@ -1,0 +1,10 @@
+**Вариант теста сохранён и опубликован; единственный фактический прогон — RED:** `1 failed, 6 warnings in 3.18s`. Новый gate не PASS.
+
+A/B нормализованы до setup commit: `supplier_status=delivering`, `required_meta_json=[]`. Старый тест `7f62e184` побайтово неизменён; все бизнес-проверки трёх заказов и двух товаров, публичные пути, барьер и лимиты сохранены.
+
+PostgreSQL подтвердил взаимное ожидание (`pg_cycle=True`) и **SQLSTATE `40P01`**. Ordinary удерживал P2 и ожидал Seller; встречное ожидание batch сервер зафиксировал на `INSERT INTO fbs_shipment_reversal_ledger`. После конкурентного прохода суммы были **A=1800, B=1800, C=0 вместо 1800**. Восстановление внутри того же теста вернуло C до 1800; повтор прошёл проверки без дублирования, но исходный RED сохранился.
+
+Коммит **`3abc3987694c4a27710d598039bb2e26d84eaf9c`** отправлен в `origin/codex/wms662-prod-handoff`; SHA удалённой ветки проверен. [Краткая передача](/Users/deniscivkunov/Projects/WMS/.worktrees/wms662-prod-handoff/docs/reviews/wms662-663-priority/steady-state-handoff-tester.md) и [журнал прогона](/Users/deniscivkunov/Projects/WMS/.worktrees/wms662-prod-handoff/docs/reviews/wms662-663-priority/steady-state-single-run-evidence.txt) входят в коммит.
+
+Ruff и проверка документов прошли. Продукт и чужие файлы сохранены. Собственный кластер 55468 остановлен; 55466, 56517 и текущая БД не затрагивались. Merge и деплоя не было.
+

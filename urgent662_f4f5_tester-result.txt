@@ -1,0 +1,12 @@
+**Контракты F4/F5 сохранены и опубликованы — разработчик может начинать.**
+
+Файл: [test_wms662_continued_billing_cancellation.py](/Users/deniscivkunov/Projects/WMS/.worktrees/wms662-prod-handoff/backend/tests/test_wms662_continued_billing_cancellation.py).
+
+На продукте `ca4808f002a81607364d874087e9e7896dd7f083` доказан бизнес-RED: **2 failed за 1,44 с**.
+
+- **F4:** настоящая передача и первый счёт проходят; после подтверждения второй единицы начислено **3600 вместо 2800** — упаковка `V2 unit=document` повторно берёт 800.
+- **F5:** настоящий `reverse_fbs_order_billing` после первой отмены оставляет **1800**; повтор добавляет сторно и меняет баланс до **0**. Контракт требует полного сторно первой отменой и неизменности повторов.
+
+**Commit SHA:** `91c89c55370b81389ae2b9968869a674a6dbb723`. Push в `origin/codex/wms662-prod-handoff` выполнен; SHA удалённой ветки проверен.
+
+[Передача разработчику](/Users/deniscivkunov/Projects/WMS/.worktrees/wms662-prod-handoff/docs/reviews/wms662-663-priority/wms662-f4-f5-testwriter.md) содержит сценарии и результаты. Изолированная SQLite занимала 3 МБ и удалена, сеть подменена. Ruff прошёл. В коммите только два новых файла; продукт, frozen-тесты и чужая работа не изменены.
