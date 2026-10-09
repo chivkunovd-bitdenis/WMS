@@ -1,0 +1,23 @@
+{
+  "release_sha": "fbd5f228b36be5894b3981bc5bbf4135ea303e1b",
+  "source_files": 352,
+  "services": {
+    "api": {
+      "image_id": "sha256:4865504b38a0d88f0e2d61b043e6bc885d489dfeeed55dfda428f6a45d930054",
+      "all_source_hashes_equal": true
+    },
+    "celery_worker": {
+      "image_id": "sha256:a070ad1c1afdd187281b65a2d20f8cb3f636b48d23c0edf77c65dd20ff3d7268",
+      "all_source_hashes_equal": true
+    },
+    "celery_beat": {
+      "image_id": "sha256:926325b592635f957e5f7b3944d07a93b359915e92b7da97e3324a9e074e5cfc",
+      "all_source_hashes_equal": true
+    },
+    "web": {
+      "image_id": "sha256:ece8fbb0868e27fc6813d01f05f249f4070ceb21c0bba4b78cd156581aa7a3e3",
+      "release_label": "fbd5f228b36be5894b3981bc5bbf4135ea303e1b",
+      "old_asset_union_verified": true
+    }
+  }
+}

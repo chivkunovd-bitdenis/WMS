@@ -1,0 +1,46 @@
+{
+  "release_sha": "fbd5f228b36be5894b3981bc5bbf4135ea303e1b",
+  "before_source_sha": "9971abed35e003abd5be8d2bc3e0032f3ca9f5c7",
+  "verified_at_utc": "2026-10-09T01:15:52.625954+00:00",
+  "containers": {
+    "api": {
+      "id": "973dd5e2a1fc124085c1c04a5c06f72af3fd0d7ea793ff276f03ebd58e3d74b3",
+      "image_id": "sha256:4865504b38a0d88f0e2d61b043e6bc885d489dfeeed55dfda428f6a45d930054",
+      "running": true,
+      "source_files_verified": 352
+    },
+    "celery_worker": {
+      "id": "3a835e6b40fc9e474bafe0367eab91eb5a7de89375721fc0790b33302533a69c",
+      "image_id": "sha256:a070ad1c1afdd187281b65a2d20f8cb3f636b48d23c0edf77c65dd20ff3d7268",
+      "running": true,
+      "source_files_verified": 352
+    },
+    "celery_beat": {
+      "id": "1d3cc80ec96eee6f4352ad95620520b68bafff99833f704b426ffb500a4b1fe6",
+      "image_id": "sha256:926325b592635f957e5f7b3944d07a93b359915e92b7da97e3324a9e074e5cfc",
+      "running": true,
+      "source_files_verified": 352
+    },
+    "web": {
+      "id": "2b2a93c8c776bf6a430ef11590d9e3d7a51ae6e704e59c9d7ca4c8e5f2d60191",
+      "image_id": "sha256:ece8fbb0868e27fc6813d01f05f249f4070ceb21c0bba4b78cd156581aa7a3e3",
+      "running": true
+    }
+  },
+  "database_container_unchanged": "c4a840b26aa9aba45411a309bfe34e5e8f1385af3612b0c092c81198acc3b0d7",
+  "redis_container_unchanged": "39d6438d8de1e046e9e89c76aa88fe616ea7fa12f45e4a8d8cadb27df3b32f05",
+  "public_index_sha256": "001da17c0f2669c40e2ba2ac9145ade236dc5102a6d57f3d2286afe0cfe5c73b",
+  "public_asset_hashes_verified": 191,
+  "previous_assets_retained": 166,
+  "health": "ok",
+  "database_read_only_check": {
+    "database_read": true,
+    "app_env": "production",
+    "public_registration": false
+  },
+  "worker_ping": "pong",
+  "migrations_run": false,
+  "stock_or_order_test_mutations": false,
+  "ci_run": 37867596525,
+  "rollback_script": "/opt/wms/.deploy-backups/wms666-packing/rollback-fbd5f228b36b.sh"
+}
