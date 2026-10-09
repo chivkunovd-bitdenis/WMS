@@ -14,7 +14,7 @@ start_pg() {
   local name="$1" port="$2" db="$3"
   docker run --detach --name "$name" --network host --tmpfs /var/lib/postgresql/data \
     -e POSTGRES_USER=wms_test -e POSTGRES_DB="$db" -e POSTGRES_HOST_AUTH_METHOD=trust \
-    postgres:16 -p "$port" -h 127.0.0.1
+    public.ecr.aws/docker/library/postgres:16 -p "$port" -h 127.0.0.1
   for attempt in {1..40}; do
     if docker exec "$name" pg_isready -h 127.0.0.1 -p "$port" -U wms_test -d "$db"; then return; fi
     sleep 1

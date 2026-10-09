@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 8
     services:
       postgres:
-        image: postgres:16
+        image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_DB: wms_test_663
           POSTGRES_USER: postgres
