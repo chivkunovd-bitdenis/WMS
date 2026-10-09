@@ -39,6 +39,9 @@ function page(params: URLSearchParams) {
   return { items: items.slice(offset, offset + limit).slice(0, sparsePages ? 2 : limit), total: items.length, scope_total: data.length, categories: params.get('seller_id') === 's2' ? ['D', 'E'] : ['A', 'B', 'C'], offset, limit }
 }
 beforeEach(() => {
+  // Menu transitions and the search debounce belong to this test's clock.
+  // A zero-delay real sleep left 195/225ms MUI transition callbacks pending.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
   data = [row('A-one', 'A'), row('A-two', 'A'), row('B-one', 'B'), row('C-one', 'C'), row('NO-category', null)]
   sparsePages = false
@@ -60,9 +63,22 @@ beforeEach(() => {
   }))
 })
 afterEach(async () => {
-  await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals()
+  try {
+    await act(async () => {
+      root.unmount()
+      // Complete any deliberately delayed read after unmount has aborted it,
+      // so its promise cannot continue against the next test's mutable data.
+      for (const request of delayed) request.resolve(json(page(request.params)))
+      await vi.runOnlyPendingTimersAsync()
+    })
+  } finally {
+    host.remove()
+    vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals()
+  }
 })
-async function settle() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) }) }
+async function settle() {
+  await act(async () => { await vi.runOnlyPendingTimersAsync() })
+}
 async function mount() {
   await act(async () => root.render(<MemoryRouter><FfProductsCatalogScreen token="test" authHeaders={authHeaders} sellers={sellers} warehouses={[]} /></MemoryRouter>))
   await settle()
@@ -87,7 +103,10 @@ function expectSelection(values: string[]) {
 }
 async function closeMenu() {
   const list = document.querySelector('[role="listbox"]')
-  if (list) await act(async () => list.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+  if (list) {
+    await act(async () => list.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    await settle()
+  }
 }
 function count(text: string) { expect(host.querySelector('[data-testid="ff-catalog-filter-count"]')?.textContent).toBe(text) }
 async function click(testId: string) {
