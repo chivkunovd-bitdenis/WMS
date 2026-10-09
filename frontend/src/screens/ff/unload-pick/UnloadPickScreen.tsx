@@ -6,6 +6,7 @@ import UndoOutlined from '@mui/icons-material/UndoOutlined'
 import {
   ActionGroup,
   DataTable,
+  ErrorNotice,
   IconAction,
   PrimaryAction,
   QtyCell,
@@ -24,6 +25,7 @@ import { isCellRef, refId } from '../sorting-objects/objectsStub'
 import { FboKizCount, FboKizList } from './fboPickKiz'
 import { kizCodesOfProduct, kizCountsByProduct, kizDisplayCode, type FboKizCode } from './fboKizData'
 import { createBoxPairTracker, loadFboPickUi, saveFboPickUi, type FboPickView } from './fboPickState'
+import { buildFboPickPrintHtml, loadPrintSelection, printFboPickHtml, printSourceKey, savePrintSelection } from './fboPickPrint'
 import {
   DOCUMENT,
   OBJECTS,
@@ -125,6 +127,10 @@ export type UnloadPickScanResult =
  * сцены базы знаний.
  */
 export type FboPickConfig = {
+  marketplace?: 'wb' | 'ozon'
+  printReady?: boolean
+  /** Picked totals from pick-options, independent of shipment boxes and source availability. */
+  printPickedByProduct?: ReadonlyMap<string, number>
   /** Ключ хранения вида, раскрытий и источника: id отгрузки. Без него состояние не сохраняется. */
   stateKey?: string
   /** КИЗ, привязанные к строкам отгрузки. */
@@ -227,6 +233,9 @@ export function UnloadPickScreen({
         onKizRemove: fboProp?.onKizRemove ?? (async () => undefined),
         onKizReprint: fboProp?.onKizReprint ?? (async () => undefined),
         onTakeWholeBox: fboProp?.onTakeWholeBox ?? null,
+        marketplace: fboProp?.marketplace,
+        printReady: fboProp?.printReady ?? true,
+        printPickedByProduct: fboProp?.printPickedByProduct,
       }
     : null
   const document = documentProp ?? DOCUMENT
@@ -240,6 +249,8 @@ export function UnloadPickScreen({
   const [history, setHistory] = useState<PickOp[]>([])
   // FBO: вид, раскрытия и источник переживают ошибку, перечитывание и смену вкладок документа.
   const [storedUi] = useState(() => (fbo?.stateKey ? loadFboPickUi(fbo.stateKey) : null))
+  const [printSelected, setPrintSelected] = useState(() => loadPrintSelection(fbo?.stateKey ?? null))
+  const [printError, setPrintError] = useState<string | null>(null)
   const [view, setView] = useState<FboPickView>(storedUi?.view ?? 'cells')
   const [source, setSource] = useState<string | null>(storedUi?.source ?? null)
   const [sourceLabel, setSourceLabel] = useState<string | null>(storedUi?.sourceLabel ?? null)
@@ -351,6 +362,41 @@ export function UnloadPickScreen({
   }, [stateKey, view, source, sourceLabel, sourceBarcode, expandedIds, collapsedIds, kizOpen])
 
   const rows = rowsOf(plan, stock, objects, cells, picked, products)
+  // Prune against loaded data only; a failed read must not erase the saved choice.
+  const printKeys = new Set(rows.flatMap((row) => row.places.map((place) => printSourceKey(row, place, objects, cells))))
+  const currentPrintSelected = new Set([...printSelected].filter((key) => printKeys.has(key)))
+  const printIdentity = JSON.stringify([...printKeys].sort())
+  useEffect(() => {
+    if (!fbo || !fbo.printReady) return
+    setPrintSelected((previous) => {
+      const next = new Set([...previous].filter((key) => printKeys.has(key)))
+      return next.size === previous.size ? previous : next
+    })
+  }, [printIdentity, fbo?.printReady])
+  useEffect(() => {
+    if (stateKey && fbo?.printReady) savePrintSelection(stateKey, currentPrintSelected)
+  }, [stateKey, printSelected, printIdentity, fbo?.printReady])
+  const printSelection = {
+    selected: currentPrintSelected,
+    onToggle: (keys: string[], checked: boolean) => setPrintSelected((previous) => {
+      const next = new Set([...previous].filter((key) => printKeys.has(key)))
+      keys.forEach((key) => { if (checked) next.add(key); else next.delete(key) })
+      return next
+    }),
+  }
+  async function printSheet() {
+    if (!fbo || !fbo.printReady) return
+    setPrintError(null)
+    try {
+      const html = buildFboPickPrintHtml({
+        rows, objects, cells, view, selected: currentPrintSelected, document, seller,
+        marketplace: fbo.marketplace, pickedByProduct: fbo.printPickedByProduct,
+      })
+      await printFboPickHtml(html)
+    } catch (cause) {
+      setPrintError(cause instanceof Error ? cause.message : 'Не удалось подготовить лист подбора')
+    }
+  }
   const planQty = rows.reduce((sum, row) => sum + row.plan, 0)
   const pickedQty = rows.reduce((sum, row) => sum + Math.min(row.picked, row.plan), 0)
   const leftQty = planQty - pickedQty
@@ -1041,6 +1087,7 @@ export function UnloadPickScreen({
 
       {fbo ? (
         // WMS-686: два вида над одними данными; переключение не меняет ни данные, ни источник.
+        <Stack direction="row" spacing={1} sx={{ mb: 1.5, alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
         <ToggleButtonGroup
           exclusive
           size="small"
@@ -1050,7 +1097,6 @@ export function UnloadPickScreen({
           }}
           aria-label="Вид подбора"
           data-testid="pick-view-switch"
-          sx={{ mb: 1.5 }}
         >
           <ToggleButton
             value="cells"
@@ -1067,7 +1113,12 @@ export function UnloadPickScreen({
             По товарам
           </ToggleButton>
         </ToggleButtonGroup>
+        <SecondaryAction disabled={!fbo.printReady} onClick={() => { void printSheet() }}>
+          Печать листа подбора
+        </SecondaryAction>
+        </Stack>
       ) : null}
+      {printError ? <ErrorNotice>{printError}</ErrorNotice> : null}
 
       {cellsView ? <FbsCellPickTable
         rows={rows}
@@ -1082,6 +1133,7 @@ export function UnloadPickScreen({
         }}
         onUndo={undoLast}
         fbo={fbo ? {
+          printSelection,
           collapsed: collapsedIds,
           onToggleCollapsed: toggleCollapsed,
           kizCodes: fbo.kizCodes,
@@ -1126,6 +1178,7 @@ export function UnloadPickScreen({
                 onQtyChange={(place, next) => handlePlaceQtyChange(row, place, next)}
                 objects={objects}
                 cells={cells}
+                printSelection={fbo ? printSelection : undefined}
               />
             </>
           ),

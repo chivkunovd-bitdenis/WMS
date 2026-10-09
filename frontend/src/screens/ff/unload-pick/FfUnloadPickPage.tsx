@@ -185,6 +185,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
   const navigate = useNavigate()
   const [detail, setDetail] = useState<ApiDetail | null>(null)
   const [pickOptions, setPickOptions] = useState<ApiPickProduct[]>([])
+  const [pickOptionsReady, setPickOptionsReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -210,6 +211,11 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
   // Ключи печати: пока перепечатка кода не завершилась, повтор идёт с тем же ключом — WMS Print
   // не напечатает вторую копию, если первая уже принята, а ответ потерялся.
   const reprintKeys = useRef<Map<string, string>>(new Map())
+  // Async reads belong to the document and authorization context that started them.
+  const requestContext = useMemo(() => ({ BASE, requestId, token }), [BASE, requestId, token])
+  const activeContext = useRef(requestContext)
+  activeContext.current = requestContext
+  const loadSeq = useRef(0)
   const isOzonFbs = source === 'fbs' && detail?.marketplace === 'ozon'
   // Тара, отсканированная как место снятия (§Ж-03), но пока не встретившаяся
   // среди источников pick-options — например, короб только что подъехал и в
@@ -237,53 +243,64 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
   )
 
   const load = useCallback(async (waitForSave = true) => {
+    if (activeContext.current !== requestContext || !mounted.current) return
+    const seq = ++loadSeq.current
+    const isCurrent = () => activeContext.current === requestContext && loadSeq.current === seq && mounted.current
     if (!requestId) {
       setError('Не указан номер отгрузки')
       setLoading(false)
       return
     }
     setLoading(true)
+    setPickOptionsReady(false)
     setError(null)
     try {
       if (waitForSave) await waitForPickSaves([`${BASE}/${requestId}`])
+      if (!isCurrent()) return
       const [detailRes, optionsRes] = await Promise.all([
         fetch(apiUrl(`${BASE}/${requestId}`), { headers: headers(token) }),
         fetch(apiUrl(`${BASE}/${requestId}/pick-options`), { headers: headers(token) }),
       ])
       if (!detailRes.ok) throw new Error(await readApiErrorMessage(detailRes))
       if (!optionsRes.ok) throw new Error(await readApiErrorMessage(optionsRes))
-      setDetail((await detailRes.json()) as ApiDetail)
-      setPickOptions((await optionsRes.json()) as ApiPickProduct[])
+      const [nextDetail, nextOptions] = await Promise.all([
+        detailRes.json() as Promise<ApiDetail>, optionsRes.json() as Promise<ApiPickProduct[]>,
+      ])
+      if (!isCurrent()) return
+      setDetail(nextDetail)
+      setPickOptions(nextOptions)
+      setPickOptionsReady(true)
       setVersion((current) => current + 1)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось открыть подбор')
+      if (isCurrent()) setError(err instanceof Error ? err.message : 'Не удалось открыть подбор')
     } finally {
-      setLoading(false)
+      if (isCurrent()) setLoading(false)
     }
-  }, [requestId, token])
+  }, [BASE, requestContext, requestId, token])
 
   useEffect(() => {
     void load()
+    return () => { loadSeq.current += 1 }
   }, [load])
 
   // WMS-686: КИЗ отгрузки. Последний начатый запрос побеждает — иначе опоздавший
   // ответ вернул бы на экран код, который уже отвязали.
   const kizSeq = useRef(0)
   const refreshKiz = useCallback(async () => {
-    if (!isFbo || !requestId) return
+    if (!isFbo || !requestId || activeContext.current !== requestContext) return
     kizSeq.current += 1
     const seq = kizSeq.current
     try {
       const res = await fetch(apiUrl(`${BASE}/${requestId}/marking-codes`), { headers: headers(token) })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       const body = (await res.json()) as { items?: FboKizCode[] }
-      if (seq === kizSeq.current) setKizCodes(body.items ?? [])
+      if (seq === kizSeq.current && activeContext.current === requestContext && mounted.current) setKizCodes(body.items ?? [])
     } catch (err) {
-      if (seq === kizSeq.current) {
+      if (seq === kizSeq.current && activeContext.current === requestContext && mounted.current) {
         setError(err instanceof Error ? err.message : 'Не удалось получить КИЗ отгрузки')
       }
     }
-  }, [BASE, isFbo, requestId, token])
+  }, [BASE, isFbo, requestContext, requestId, token])
 
   useEffect(() => {
     void refreshKiz()
@@ -303,7 +320,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
   }, [requestId, source, token, version])
 
   const screenData = useMemo(() => {
-    if (!detail) return null
+    if (!detail || detail.id !== requestId) return null
 
     // Состав берём из того источника, который его отдаёт. У отгрузки это строки
     // документа. У поставки ФБС строк в документе нет вовсе — там товары
@@ -449,12 +466,17 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       picked,
       placeSource,
     }
-  }, [boxLabels, catalogById, detail, isOzonFbs, pickOptions, source])
+  }, [boxLabels, catalogById, detail, isOzonFbs, pickOptions, source, requestId])
 
   // Товары, у которых включён Честный знак: число КИЗ видно и при нуле (WMS-686, R3).
   const markingProducts = useMemo(
     () => new Set((detail?.lines ?? []).filter((line) => line.requires_honest_sign).map((line) => line.product_id)),
     [detail],
+  )
+  // Detail line picked_qty describes shipment boxes; pick-options contains actual picking.
+  const printPickedByProduct = useMemo(
+    () => new Map(pickOptions.map((product) => [product.product_id, product.picked_qty])),
+    [pickOptions],
   )
 
   // WMS-575: места подбора перечитываются после снятия, но скан их не ждёт —
@@ -465,9 +487,11 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
   const optionsRefreshSeq = useRef(0)
 
   const updateOption = useCallback((): Promise<ApiPickProduct[] | null> => {
-    if (!requestId) return Promise.resolve(null)
+    if (!requestId || activeContext.current !== requestContext || !mounted.current) return Promise.resolve(null)
     optionsRefreshSeq.current += 1
     const seq = optionsRefreshSeq.current
+    const isCurrent = () => seq === optionsRefreshSeq.current && activeContext.current === requestContext && mounted.current
+    setPickOptionsReady(false)
     const refresh = (async () => {
       try {
         const res = await fetch(apiUrl(`${BASE}/${requestId}/pick-options`), {
@@ -477,10 +501,16 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         const next = (await res.json()) as ApiPickProduct[]
         // Перечитывания могут вернуться не по порядку: на экран ложится только
         // последнее начатое, иначе старый ответ вернул бы уже снятое.
-        if (seq === optionsRefreshSeq.current) setPickOptions(next)
+        if (isCurrent()) {
+          setPickOptions(next)
+          setPickOptionsReady(true)
+        }
         return next
       } catch {
-        setError('Снятие сохранено, список не обновлён. Обновите страницу.')
+        if (isCurrent()) {
+          setPickOptionsReady(false)
+          setError('Снятие сохранено, список не обновлён. Обновите страницу.')
+        }
         return null
       }
     })()
@@ -489,7 +519,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       if (optionsRefresh.current === refresh) optionsRefresh.current = null
     })
     return refresh
-  }, [BASE, requestId, token])
+  }, [BASE, requestContext, requestId, token])
 
   const confirmedPicked = useRef<PickedMap>({})
   useEffect(() => {
@@ -852,6 +882,9 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
           isFbo && requestId
             ? {
                 stateKey: requestId,
+                marketplace: detail?.marketplace,
+                printReady: pickOptionsReady && !loading,
+                printPickedByProduct,
                 kizCodes,
                 markingProducts,
                 onKizRemove: removeKiz,
