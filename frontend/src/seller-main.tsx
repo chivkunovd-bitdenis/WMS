@@ -9,6 +9,7 @@ import './ui/ui.css'
 import { muiTheme } from './mui/theme'
 import { WmsDatePickersProvider } from './mui/WmsDatePickersProvider'
 import { SellerApp } from './apps/seller/SellerApp'
+import { StagingBanner } from './components/StagingBanner'
 
 const sellerRouterBasename =
   import.meta.env.VITE_SELLER_ROUTER_BASENAME?.trim() || '/seller'
@@ -23,6 +24,7 @@ const router = createBrowserRouter([{
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider theme={muiTheme}>
+      <StagingBanner />
       <ErrorBoundary component="portal" root portal="seller">
         <WmsDatePickersProvider>
           <RouterProvider router={router} />
@@ -31,4 +33,3 @@ createRoot(document.getElementById('root')!).render(
     </ThemeProvider>
   </StrictMode>,
 )
-

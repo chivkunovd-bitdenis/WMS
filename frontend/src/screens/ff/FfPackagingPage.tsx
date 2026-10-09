@@ -1228,7 +1228,9 @@ export function FfPackagingTaskPanel({
           })}
         </Stack>
       )}
-      {taskEditable ? (
+      {/* WMS-686: у заданий отгрузок FBO «Завершить упаковку» нет — упаковка FBO идёт
+          в самой отгрузке и от статуса задания не зависит. */}
+      {taskEditable && !isMpUnloadTask ? (
         <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-complete-panel">
           <Stack spacing={1.5}>
             {hasIncompleteMarking && !isMpUnloadTask ? (
