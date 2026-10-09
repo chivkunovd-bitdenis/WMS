@@ -78,6 +78,30 @@ describe('WMS-725 · контракт печатного листа', () => {
     render(input([])); total(0)
     expect(document.body.textContent).toContain('В поставке нет товаров для подбора.')
   })
+  it('wms710_imperiya_total_counts_product_plan_once_without_changing_place_rows', () => {
+    const withPlanTotal = (rows: FbsPickingListPrintRow[], totalQuantity: number, patch: Partial<FbsPickingListPrintInput> = {}) => ({
+      ...input(rows, patch),
+      totalQuantity,
+    } as FbsPickingListPrintInput)
+
+    // Империя печатает одну строку товара на каждое место, повторяя в колонке «Взять» полный план.
+    const single = withPlanTotal([row({ required: 4 }), row({ required: 1 }), row({ required: 2 }), row({ required: 4 })], 7)
+    render(single)
+    total(7)
+    expect(bodyRows()).toHaveLength(4)
+    expect(bodyRows().map(tr => cell(tr, 'Взять').textContent?.trim())).toEqual(['4', '1', '2', '4'])
+
+    const group = withPlanTotal([row({ required: 6 }), row({ required: 2 }), row({ required: 6 }), row({ required: 2 }), row({ required: 1 })], 11, {
+      supplyName: 'Сборка · 2 поставки', marketplace: 'mixed',
+    })
+    render(group)
+    total(11)
+    expect(bodyRows()).toHaveLength(5)
+
+    // Обычная печать уже содержит одну строку на товар и сохраняет прежний расчёт.
+    render(input([row({ required: 4 }), row({ required: 1 }), row({ required: 2 })]))
+    total(7)
+  })
   it('c5_reference_and_four_meta_boxes_share_horizontal_row_with_full_values', () => {
     for (const long of [false, true]) for (const hasNumber of [false, true]) {
       const repeat = long ? 12 : 1
