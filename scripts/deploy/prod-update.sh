@@ -91,12 +91,64 @@ if [[ -f docker-compose.wms-host-8088.yml ]]; then
   python3 scripts/deploy/verify-wms-host-network.py "$DB_CONTAINER"
 fi
 
+# Keep assets referenced by already-open operator tabs. Preparation never starts
+# the temporary container and finishes before any application writer is stopped.
+WEB_ASSET_TMP=""
+WEB_ASSET_CONTAINER=""
+cleanup_web_assets() {
+  local status=$?
+  if [[ -n "$WEB_ASSET_CONTAINER" ]]; then
+    docker rm "$WEB_ASSET_CONTAINER" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$WEB_ASSET_TMP" ]]; then rm -rf -- "$WEB_ASSET_TMP"; fi
+  return "$status"
+}
+trap cleanup_web_assets EXIT
+
 BUILD_SERVICES=(migrations api celery_worker celery_beat web)
 
 echo "==> docker compose prod build (sequential)"
 for service in "${BUILD_SERVICES[@]}"; do
+  if [[ "$service" == "web" ]]; then
+    WEB_PREVIOUS_CONTAINER="$("${COMPOSE[@]}" ps -q web)"
+    if [[ -n "$WEB_PREVIOUS_CONTAINER" ]]; then
+      # Resolve the build output from this exact compose configuration, never
+      # from the old running container (which may use a different image tag).
+      WEB_COMPOSE_IMAGES="$("${COMPOSE[@]}" config --images web)"
+      WEB_IMAGE_TAG="$("${COMPOSE[@]}" config --format json web | \
+        python3 scripts/deploy/retain-web-assets.py image-tag --declared-images "$WEB_COMPOSE_IMAGES")"
+      WEB_ASSET_TMP="$(mktemp -d "${TMPDIR:-/tmp}/wms-web-assets.XXXXXX")"
+      mkdir "$WEB_ASSET_TMP/previous"
+      docker cp "$WEB_PREVIOUS_CONTAINER:/srv/." "$WEB_ASSET_TMP/previous/"
+    fi
+  fi
   "${COMPOSE[@]}" build "$service"
 done
+
+if [[ -n "$WEB_ASSET_TMP" ]]; then
+  echo "==> retain previous assets in the new web image before traffic"
+  WEB_NEW_IMAGE="$(docker image inspect --format '{{.Id}}' "$WEB_IMAGE_TAG")"
+  WEB_ASSET_CONTAINER="$(docker create "$WEB_NEW_IMAGE")"
+  mkdir "$WEB_ASSET_TMP/candidate" "$WEB_ASSET_TMP/verified"
+  docker cp "$WEB_ASSET_CONTAINER:/srv/." "$WEB_ASSET_TMP/candidate/"
+  WEB_ADDED_ASSETS="$(python3 scripts/deploy/retain-web-assets.py prepare \
+    --previous "$WEB_ASSET_TMP/previous" --candidate "$WEB_ASSET_TMP/candidate" \
+    --delta "$WEB_ASSET_TMP/delta" --manifest "$WEB_ASSET_TMP/manifest.json")"
+  if [[ "$WEB_ADDED_ASSETS" != "0" ]]; then
+    docker cp "$WEB_ASSET_TMP/delta/." "$WEB_ASSET_CONTAINER:/srv/"
+  fi
+  docker cp "$WEB_ASSET_CONTAINER:/srv/." "$WEB_ASSET_TMP/verified/"
+  python3 scripts/deploy/retain-web-assets.py verify \
+    --candidate "$WEB_ASSET_TMP/verified" --manifest "$WEB_ASSET_TMP/manifest.json"
+  # Commit only verified extra old files; all freshly built assets stay identical.
+  if [[ "$WEB_ADDED_ASSETS" != "0" ]]; then
+    docker commit "$WEB_ASSET_CONTAINER" "$WEB_IMAGE_TAG" >/dev/null
+  fi
+  docker rm "$WEB_ASSET_CONTAINER" >/dev/null
+  WEB_ASSET_CONTAINER=""
+  rm -rf -- "$WEB_ASSET_TMP"
+  WEB_ASSET_TMP=""
+fi
 
 echo "==> start infrastructure"
 "${COMPOSE[@]}" up -d --wait db redis

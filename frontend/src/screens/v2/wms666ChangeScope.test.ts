@@ -122,6 +122,7 @@ const WMS_666_PROCESS_FILES = new Set([
   'scripts/ci/verify_ci.py',
   'scripts/ci/verify_process_ci.py',
   'scripts/ci/verify_server_process_ci.py',
+  'scripts/deploy/prod-update.sh',
   'scripts/deploy/retain-web-assets.py',
   'scripts/deploy/rollback-wms666-packing.sh',
 
@@ -129,6 +130,7 @@ const WMS_666_PROCESS_FILES = new Set([
   'guards/PROCESS_CONTRACTS.json',
   'frontend/src/screens/v2/wms666ChangeScope.test.ts',
   'frontend/tests-e2e/wms652-critical/browser.mjs',
+  'frontend/tests-e2e/wms652-critical/geometry.mjs',
   'frontend/tests-e2e/fbs-picking/extended.mjs',
   'frontend/src/screens/v2/FfFbsSupplyWorkspace.load.test.ts',
   'frontend/src/screens/v2/FfFbsSupplyWorkspace.wms477.test.ts',

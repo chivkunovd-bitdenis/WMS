@@ -12,6 +12,7 @@ vi.mock('../utils/renderBarcodeDataUrl', () => ({ renderBarcodeDataUrl: () => 'd
 let root: Root
 let host: HTMLDivElement
 const print = vi.fn()
+const onBusyChange = vi.fn<(busy: boolean) => void>()
 const label = { product_name: 'Куртка зимняя больших размеров с мехом и капюшоном', sku_code: 'FBS-611', barcode: '4600000000024', wb_size: '54' }
 function context(): MarkingPrintContext {
   return {
@@ -25,14 +26,23 @@ function context(): MarkingPrintContext {
   }
 }
 async function render(ctx: MarkingPrintContext, busy = false, onClose = () => {}) {
-  await act(async () => root.render(<MarkingPrintDialog open reprint={false} ctx={ctx} busy={busy} onBusyChange={() => {}} onClose={onClose} />))
+  await act(async () => root.render(<MarkingPrintDialog open reprint={false} ctx={ctx} busy={busy} onBusyChange={onBusyChange} onClose={onClose} />))
 }
 const button = () => document.querySelector<HTMLButtonElement>('[data-testid="marking-print-confirm"]')!
+async function clickAndWaitForPrintAction(target: HTMLButtonElement) {
+  // DOM click does not return handlePrint's promise. Wait for its finally block,
+  // including FileReader image preparation, so no dispatch leaks into the next test.
+  const finished = new Promise<void>((resolve) => {
+    onBusyChange.mockImplementation((busy) => { if (!busy) resolve() })
+  })
+  await act(async () => { target.click(); await finished })
+}
 beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   window.localStorage.clear()
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response('{}', { status: 404 })))
   print.mockReset()
+  onBusyChange.mockReset()
   vi.mocked(printTapeSections).mockClear()
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -90,8 +100,7 @@ describe('WMS-611 FBS print availability', () => {
     })), order_errors: [], shortage: 0 })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['qr'], { type: 'image/png' }) }))
     vi.mocked(printTapeSections).mockClear()
-    await act(async () => button().click())
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
+    await clickAndWaitForPrintAction(button())
     expect(document.querySelector('[data-testid="marking-print-error"]')?.textContent ?? null).toBeNull()
     expect(printTapeSections).toHaveBeenCalledTimes(1)
     const sections = vi.mocked(printTapeSections).mock.calls[0][0]
@@ -127,8 +136,7 @@ describe('WMS-611 FBS print availability', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['qr'], { type: 'image/png' }) }))
     vi.mocked(printTapeSections).mockResolvedValue(undefined)
     await render(ctx, false, close)
-    await act(async () => button().click())
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+    await clickAndWaitForPrintAction(button())
 
     expect(print).toHaveBeenCalledTimes(1)
     expect(printTapeSections).toHaveBeenCalledTimes(1)
@@ -139,8 +147,7 @@ describe('WMS-611 FBS print availability', () => {
 
     const retry = document.querySelector<HTMLButtonElement>('[data-testid="marking-print-retry-qr-ack"]')
     expect(retry, 'an ack-only retry must be available after the tape dispatch is accepted').not.toBeNull()
-    await act(async () => retry!.click())
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+    await clickAndWaitForPrintAction(retry!)
     expect(print, 'a user retry must not dispatch the already accepted tape again').toHaveBeenCalledTimes(1)
     expect(printTapeSections).toHaveBeenCalledTimes(1)
     expect(confirmQrApplied.mock.calls.map(([asset]) => asset.id)).toEqual(['qr-order-611', 'qr-order-612', 'qr-order-612'])

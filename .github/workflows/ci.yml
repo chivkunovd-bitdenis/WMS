@@ -527,16 +527,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        id: checkout
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v5
+        id: pythonsetup
         with:
           python-version: "3.11"
       - name: Install infrastructure test dependencies
+        id: infradeps
+        continue-on-error: true
         run: python -m pip install pytest pytest-xdist
       - name: Install nightly controller test dependencies
+        id: nightdeps
+        continue-on-error: true
         run: python -m pip install -r tools/support_agent/requirements.txt
       - name: Execute named nightly controller contracts
+        id: nightcontracts
+        continue-on-error: true
         env:
           GIT_AUTHOR_NAME: WMS CI Fixture
           GIT_AUTHOR_EMAIL: wms-ci-fixture@example.invalid
@@ -547,16 +555,24 @@ jobs:
           tools/support_agent/tests/test_night.py
           --junitxml="$RUNNER_TEMP/night-controller.xml"
       - name: Verify whole candidate against the accepted product reference
+        id: productscope
+        continue-on-error: true
         run: python scripts/ci/product_scope.py --root . --trusted-ref a32306cfe8a37e063711fd77ab1246b9ade836ee
       - name: Infrastructure tests (not business guards)
+        id: infrastructure
+        continue-on-error: true
         run: |
           python -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v
           python -m unittest discover -s scripts/ci -p 'test_check_task_documents.py' -v
       - name: Execute all product-scope contracts and persist receipt
+        id: scopecontracts
+        continue-on-error: true
         run: |
           python -m pytest -q scripts/ci/tests/test_product_scope.py --junitxml="$RUNNER_TEMP/product-scope.xml"
           python -c 'import json,os,pathlib; pathlib.Path(os.environ["RUNNER_TEMP"],"product-scope-receipt.json").write_text(json.dumps(dict(version=1,sha=os.environ["GITHUB_SHA"],run_id=int(os.environ["GITHUB_RUN_ID"]),run_attempt=int(os.environ["GITHUB_RUN_ATTEMPT"]),report="product-scope.xml"))+"\n")'
       - name: Persist exact full-backend shard infrastructure cases
+        id: shardinfra
+        continue-on-error: true
         run: >-
           python -m pytest -q scripts/ci/tests/test_backend_shards.py
           scripts/ci/tests/test_backend_shard_progress.py
@@ -572,9 +588,13 @@ jobs:
           scripts/ci/tests/test_retain_web_assets.py
           --junitxml="$RUNNER_TEMP/ci-shards.xml"
       - name: WMS-687 strict reviewed correction compatibility
+        id: docgate
+        continue-on-error: true
         run: python -m pytest -q scripts/ci/test_check_task_documents.py --junitxml="$RUNNER_TEMP/docgate-687.xml"
       - uses: actions/upload-artifact@v4
+        id: guardreports
         if: always()
+        continue-on-error: true
         with:
           name: guard-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -587,6 +607,7 @@ jobs:
           retention-days: 14
       - name: Verify against the checker and manifest from trusted BASE
         id: integrity
+        continue-on-error: true
         env:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
         run: |
@@ -597,30 +618,55 @@ jobs:
             python scripts/ci/check_regression_guards.py --base "$BASE_SHA" --allow-bootstrap
           fi
       - name: Preserve accepted process test coverage and execution commands
+        id: processcoverage
+        continue-on-error: true
         env:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
         run: |
           set -euo pipefail
           python scripts/ci/process_contracts.py --root "$GITHUB_WORKSPACE" --base "$BASE_SHA"
       - name: Install backend guard dependencies
-        if: steps.integrity.outputs.backend_tests != '0'
+        id: backenddeps
+        if: steps.integrity.outcome == 'success' && steps.integrity.outputs.backend_tests != '0'
+        continue-on-error: true
         run: pip install -e './backend[dev]'
       - name: Approved backend guards
-        if: steps.integrity.outputs.backend_tests != '0'
+        id: backendguards
+        if: steps.integrity.outcome == 'success' && steps.integrity.outputs.backend_tests != '0'
+        continue-on-error: true
         working-directory: backend
         run: pytest -n auto tests/guards
       - uses: actions/setup-node@v4
-        if: steps.integrity.outputs.frontend_tests != '0'
+        id: frontendsetup
+        if: steps.integrity.outcome == 'success' && steps.integrity.outputs.frontend_tests != '0'
+        continue-on-error: true
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Approved frontend guards
-        if: steps.integrity.outputs.frontend_tests != '0'
+        id: frontendguards
+        if: steps.integrity.outcome == 'success' && steps.integrity.outputs.frontend_tests != '0'
+        continue-on-error: true
         working-directory: frontend
         run: |
           npm ci
           npx vitest run src/guards
+      - name: Report independent guard outcomes
+        if: always()
+        env:
+          RESULTS: ${{ steps.checkout.outcome }},${{ steps.pythonsetup.outcome }},${{ steps.infradeps.outcome }},${{ steps.nightdeps.outcome }},${{ steps.nightcontracts.outcome }},${{ steps.productscope.outcome }},${{ steps.infrastructure.outcome }},${{ steps.scopecontracts.outcome }},${{ steps.shardinfra.outcome }},${{ steps.docgate.outcome }},${{ steps.guardreports.outcome }},${{ steps.integrity.outcome }},${{ steps.processcoverage.outcome }},${{ steps.integrity.outputs.backend_tests == '0' && 'success' || steps.backenddeps.outcome }},${{ steps.integrity.outputs.backend_tests == '0' && 'success' || steps.backendguards.outcome }},${{ steps.integrity.outputs.frontend_tests == '0' && 'success' || steps.frontendsetup.outcome }},${{ steps.integrity.outputs.frontend_tests == '0' && 'success' || steps.frontendguards.outcome }}
+          BACKEND_TESTS: ${{ steps.integrity.outputs.backend_tests }}
+          FRONTEND_TESTS: ${{ steps.integrity.outputs.frontend_tests }}
+        run: |
+          failed=0
+          [[ ",$RESULTS," != *,,* ]] || failed=1
+          for result in ${RESULTS//,/ }; do
+            if [ "$result" != success ]; then printf 'Independent guard check result: %s\n' "$result"; failed=1; fi
+          done
+          test -n "$BACKEND_TESTS" && test -n "$FRONTEND_TESTS" || failed=1
+          for report in product-scope.xml product-scope-receipt.json ci-shards.xml docgate-687.xml night-controller.xml; do test -s "$RUNNER_TEMP/$report" || failed=1; done
+          test "$failed" = 0
 
   printer-windows:
     needs: [baseline, scope]
