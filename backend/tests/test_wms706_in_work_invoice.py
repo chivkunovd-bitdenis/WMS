@@ -708,3 +708,82 @@ async def test_c27_out_of_period_charges_keep_invoice_history(async_client):
         if history != {"state": "known", "count": 1}:
             violations.append(f"{service}: потеряна история счёта (фактически {history!r})")
     assert not violations, "сентябрьские строки потеряли выставленный в августе счёт:\n" + "\n".join(violations)
+
+
+@pytest.mark.asyncio
+async def test_c29_early_ozon_invoice_does_not_duplicate_handed_over_pieces_across_months(async_client):
+    """C29, R10: штуки Ozon-заказа учитываются один раз между месяцем счёта и передачи."""
+    headers, tenant_id = await _tenant(async_client)
+    seller_id = await _seller(async_client, headers, "Селлер C29")
+    warehouse_id = await _warehouse(tenant_id)
+    async with SessionLocal() as session:
+        for service in SERVICES:
+            session.add(_tariff(tenant_id, seller_id, service, 1000))
+        session.add(OperationFactCutover(id=1, occurred_at=msk(2026, 8, 26)))
+        await session.commit()
+    order_id = await _in_work_order(
+        tenant_id, seller_id, warehouse_id, number=707901, marketplace="ozon", packed=WORK_DAY,
+    )
+    created = await _create(async_client, headers, _body(seller_id, _sources(order_id)), "c29")
+    assert created.status_code == 201, created.text
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        order.status = "sorted"
+        await charge_handed_over_orders(session, [order], occurred_at=msk(2026, 9, 1, 12))
+        await session.commit()
+
+    august = await _details(async_client, headers, seller_id, period=PERIOD)
+    september = await _details(
+        async_client, headers, seller_id,
+        period={"date_from": "2026-09-01", "date_to": "2026-09-30"},
+    )
+    combined = await _details(
+        async_client, headers, seller_id,
+        period={"date_from": "2026-08-01", "date_to": "2026-09-30"},
+    )
+    august_pieces = august["totals"]["fbs_items"]
+    september_pieces = september["totals"]["fbs_items"]
+    combined_pieces = combined["totals"]["fbs_items"]
+    assert august_pieces + september_pieces == combined_pieces == 1, (
+        "одна физическая штука Ozon-заказа не должна считаться и в месяце раннего счёта, "
+        "и в месяце передачи: "
+        f"август={august_pieces}, сентябрь={september_pieces}, "
+        f"сумма месяцев={august_pieces + september_pieces}, общий период={combined_pieces}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_c30_cancelled_early_invoice_can_be_reissued_for_original_period_after_handover(async_client):
+    """C30, R10: после отмены раннего счёта начисление можно снова включить за август."""
+    headers, tenant_id = await _tenant(async_client)
+    seller_id = await _seller(async_client, headers, "Селлер C30")
+    warehouse_id = await _warehouse(tenant_id)
+    async with SessionLocal() as session:
+        for service in SERVICES:
+            session.add(_tariff(tenant_id, seller_id, service, 1000))
+        session.add(OperationFactCutover(id=1, occurred_at=msk(2026, 8, 26)))
+        await session.commit()
+    order_id = await _in_work_order(
+        tenant_id, seller_id, warehouse_id, number=708001, marketplace="ozon", packed=WORK_DAY,
+    )
+    body = _body(seller_id, _sources(order_id, ("fbs_order",)))
+    first = await _create(async_client, headers, body, "c30-first")
+    assert first.status_code == 201, first.text
+    cancelled = await async_client.post(
+        f"/billing/invoices-v2/{first.json()['id']}/cancel", headers=headers,
+    )
+    assert cancelled.status_code == 200 and cancelled.json()["status"] == "cancelled", cancelled.text
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        order.status = "sorted"
+        await charge_handed_over_orders(session, [order], occurred_at=msk(2026, 9, 1, 12))
+        await session.commit()
+
+    retried = await _create(async_client, headers, body, "c30-retry")
+    assert retried.status_code == 201, (
+        "отменённый августовский источник должен повторно выставляться за исходный период "
+        f"после сентябрьской передачи; ответ {retried.status_code}: {retried.text}"
+    )
+    assert retried.json()["total_amount_kopecks"] == 1000
