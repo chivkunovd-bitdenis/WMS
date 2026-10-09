@@ -5,7 +5,9 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const WMS_666_CONTRACT = '0e078418bcb7ee45fa654b0d829e5de0ec80ebb0'
-const WMS_666_ACCEPTED_BASE = 'bb9cb79979f8d00bba217bd97654b6afcb2ad8a0'
+// Веха принятой границы: слияние продового хотфикса (его коммиты WMS-666 принимались в своей линии, 322bb46d9…fbd5f228b)
+// со стендом (линия bb9cb7997). Оба набора коммитов WMS-666 — предки этой вехи; дальше проверяется всё как прежде.
+const WMS_666_ACCEPTED_BASE = 'd1a32007a1e38d431d1b9c0d364f5992a26b9896'
 const WMS_666_PROOF_FILES = new Set([
   '.github/workflows/wms666-browser-proof.yml',
   'scripts/ci/wms666-browser-proof.mjs',
