@@ -71,7 +71,7 @@ import { DeliveryCheckGroupList } from './FbsDeliveryCheckGroups'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FbsTransferSupplyDialog, makeFbsTransferSupplyDeps } from './FbsTransferSupplyDialog'
 import { FbsAssemblySupplyFrame, type FbsAssemblyFrameControl } from './FbsAssemblySupplyFrame'
-import { imperiyaSourceGroups, usesTabOrderPickList } from './imperiyaPickListOrder'
+import { imperiyaWalkRows, usesTabOrderPickList } from './imperiyaPickListOrder'
 import { fbsAssemblySupplyTitle, fbsCodeBelongsToSupply } from './fbsSupplyAssembly'
 import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStage'
 import { fbsMenuReprintRequest, hasOperatorKiz } from './fbsMenuReprint'
@@ -3228,15 +3228,10 @@ export function FfFbsSupplyWorkspace({
         const item = context.get(row.key)
         return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies, sourceGroups: item.source_groups } : row
       })
-      // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: места в составе и порядке вкладки «Подбор».
+      // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: лист идёт маршрутом вкладки «Подбор».
       // Остальные клиенты печатают как раньше. См. imperiyaPickListOrder.ts.
       if (usesTabOrderPickList(token) && optionList.length) {
-        rows = rows.map((row) => ({
-          ...row,
-          locations: [],
-          inboundSupplies: [],
-          sourceGroups: imperiyaSourceGroups(row.key, optionList, contextList, row.required),
-        }))
+        rows = imperiyaWalkRows(rows, optionList, contextList)
       }
     } catch {
       setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')

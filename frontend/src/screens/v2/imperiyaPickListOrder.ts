@@ -2,14 +2,18 @@
 //
 // Владелец 09.10.2026: «то, что они видят на подборе, точно в этой
 // последовательности у них должно печататься в листе подбора… сделай это
-// фичер-тоглом только для империи львов… сам лист подбора ты не меняешь».
+// фичер-тоглом только для империи львов»; «Инб убирай вообще»; клиент 09.10:
+// «лист подбора вмс не совпадает с печатным листом», «в вмс с какой приемки брать
+// не понятно — вывести номера приемок и номера возвратов»; владелец: «сделай как
+// они просят».
 //
-// Поэтому у Империи ФФ печатный лист подбора берёт те же строки мест, что и
-// раньше (текст строк приходит с сервера, picking-context), но выстраивает их в
-// составе и порядке вкладки «Подбор» (pickRows.cellPickRowsOf — та же функция,
-// что рисует вкладку). Заголовок документа («П: 96 от 06.10.2026») ставится
-// заново каждый раз, когда в этом порядке меняется приёмка/возврат.
-// У всех остальных клиентов печать остаётся прежней байт-в-байт.
+// 1. Печатный лист подбора у Империи идёт тем же маршрутом, что вкладка «Подбор»
+//    (pickRows.cellPickRowsOf — та же функция, что рисует вкладку): место за
+//    местом, в каждой строке — товар из этого места, его приёмка/возврат с датой и
+//    короб. Колонки листа прежние. Заказы, стикер и маркировка — в первой строке
+//    товара (иначе один заказ выглядит как пять). Номер строки — номер товара.
+// 2. На вкладке «Подбор» у Империи к коробу дописана его приёмка/возврат.
+// В строке места нет системного кода INB. У всех остальных клиентов всё прежнее.
 // Реестр исключений: docs/KLIENTSKIE_ISKLYUCHENIYA.md. Не переносить на других
 // клиентов и не удалять без решения владельца.
 //
@@ -18,8 +22,9 @@
 
 import { cellPickRowsOf, rowsOf, pickKey, type PickedMap } from '../ff/unload-pick/pickRows'
 import { cellRef, objRef } from '../ff/unload-pick/pickStub'
-import type { Cell, GoodsLine, ObjKind, PickProduct, WarehouseObject } from '../ff/unload-pick/pickStub'
+import type { Cell, GoodsLine, ObjKind, PickProduct, PlanLine, WarehouseObject } from '../ff/unload-pick/pickStub'
 import type { FbsPickOptionProduct, FbsPickingContext } from './fbsApi'
+import type { FbsPickingListPrintRow } from './fbsUx'
 
 export const IMPERIYA_FF_TENANT_ID = '7b98a8aa-c03c-4649-9677-a645be45c622'
 
@@ -36,41 +41,61 @@ export function tenantIdFromToken(token: string | null | undefined): string | nu
   }
 }
 
-/** ТОЛЬКО Империя ФФ печатает лист подбора в порядке вкладки «Подбор». */
+/** ТОЛЬКО Империя ФФ: лист подбора маршрутом вкладки и приёмка у коробов на вкладке. */
 export function usesTabOrderPickList(token: string | null | undefined): boolean {
   return tenantIdFromToken(token) === IMPERIYA_FF_TENANT_ID
 }
-
-type Group = { key: string; title: string; lines: string[] }
 
 /** «Короб №19 · INB-VSA97KFYK5YRAX · Ж-1-7: 1 шт.» → «Короб №19 · Ж-1-7: 1 шт.» */
 export function withoutInbCode(line: string): string {
   return line.replace(/\s·\s*INB-[0-9A-Z]+/g, '')
 }
+
 type ContextGroup = FbsPickingContext['source_groups'][number] & { date?: string | null; line_keys?: string[] }
 type ApiSource = FbsPickOptionProduct['locations'][number]['sources'][number] & { quantity?: number; picked?: number }
+type PrintRow = FbsPickingListPrintRow & { key: string }
+
+function groupTitle(group: ContextGroup): string {
+  return group.date ? `${group.title.replace(/:\s*$/, '')} от ${group.date}` : group.title
+}
+
+/** Приёмка/возврат каждого короба по контексту печати: id тары → «П: №000090 от 25.09.2026». */
+export function boxReceiptLabels(contexts: FbsPickingContext[]): Map<string, string> {
+  const labels = new Map<string, string>()
+  for (const context of contexts) {
+    for (const group of context.source_groups as ContextGroup[]) {
+      if (!group.key.startsWith('inbound:')) continue
+      for (const key of group.line_keys ?? []) {
+        const containerId = key.split('|')[1]
+        if (containerId && containerId !== 'loose' && !labels.has(containerId)) labels.set(containerId, groupTitle(group))
+      }
+    }
+  }
+  return labels
+}
 
 /**
- * Группы мест одного товара для печати Империи: строки и заголовки из контекста
- * печати, порядок и состав — как на вкладке «Подбор». Если мест нет: полностью
- * подобранный товар печатает «Подобрано», иначе — пустой список (лист покажет
- * прежнее «Нет текущего остатка»).
+ * Строки печатного листа Империи маршрутом вкладки «Подбор».
+ * `rows` — обычные строки листа (по товару, ключ — product_id), `options` — места
+ * подбора (pick-options одной поставки или всех поставок группы), `contexts` —
+ * контекст печати (строки мест, приёмки, ключи мест).
  */
-export function imperiyaSourceGroups(
-  productId: string,
+export function imperiyaWalkRows<T extends PrintRow>(
+  rows: T[],
   options: FbsPickOptionProduct[],
   contexts: FbsPickingContext[],
-  required: number,
-): Group[] {
+): T[] {
   const cellsById = new Map<string, Cell>()
   const objectsById = new Map<string, WarehouseObject>()
-  const stockByHolder = new Map<string, GoodsLine & { pickCapacity?: number }>()
+  const stock = new Map<string, GoodsLine & { pickCapacity?: number }>()
   const picked: PickedMap = {}
   const placeKey = new Map<string, string>()
-  let pickedTotal = 0
+  const pickedByProduct = new Map<string, number>()
+  const skuByProduct = new Map<string, string>()
   for (const option of options) {
-    if (option.product_id !== productId) continue
-    pickedTotal += option.picked_qty
+    pickedByProduct.set(option.product_id, (pickedByProduct.get(option.product_id) ?? 0) + option.picked_qty)
+    const sku = (option as FbsPickOptionProduct & { sku_code?: string | null }).sku_code
+    if (sku) skuByProduct.set(option.product_id, sku)
     for (const location of option.locations) {
       cellsById.set(location.storage_location_id, {
         id: location.storage_location_id,
@@ -92,17 +117,18 @@ export function imperiyaSourceGroups(
         const quantity = source.quantity ?? source.available
         const takenHere = source.picked ?? 0
         if (quantity <= 0 && takenHere <= 0) continue
-        // Групповая сборка: одно и то же физическое место приходит от каждой
-        // поставки — остаток берём один раз, снятое суммируем.
-        const previous = stockByHolder.get(holder)
-        stockByHolder.set(holder, {
-          id: `${productId}-${holder}`,
-          productId,
+        // Групповая сборка: одно физическое место приходит от каждой поставки —
+        // остаток берём один раз, снятое суммируем.
+        const id = `${option.product_id}-${holder}`
+        const previous = stock.get(id)
+        stock.set(id, {
+          id,
+          productId: option.product_id,
           qty: Math.max(previous?.qty ?? 0, quantity),
           pickCapacity: Math.max(previous?.pickCapacity ?? 0, (source.available ?? quantity) + takenHere),
           holder,
         })
-        picked[pickKey(productId, holder)] = (picked[pickKey(productId, holder)] ?? 0) + takenHere
+        picked[pickKey(option.product_id, holder)] = (picked[pickKey(option.product_id, holder)] ?? 0) + takenHere
         const innermost = source.container_path.at(-1)
         placeKey.set(holder, `${location.storage_location_id}|${innermost ? innermost.id : 'loose'}`)
       }
@@ -110,42 +136,71 @@ export function imperiyaSourceGroups(
   }
   const objects = [...objectsById.values()]
   const cells = [...cellsById.values()]
-  const product: PickProduct = { id: productId, name: '', sku: '', sellerArticle: '', barcode: '', photo: '', size: null }
-  const rows = rowsOf([{ id: productId, productId, plan: required }], [...stockByHolder.values()], objects, cells, picked, [product])
+  const products: PickProduct[] = rows.map((row) => ({
+    id: row.key, name: row.name, sku: skuByProduct.get(row.key) ?? '', sellerArticle: '', barcode: '', photo: '', size: row.size,
+  }))
+  const plan: PlanLine[] = rows.map((row) => ({ id: row.key, productId: row.key, plan: row.required }))
+  const screenRows = rowsOf(plan, [...stock.values()], objects, cells, picked, products)
 
-  const byKey = new Map<string, { groupKey: string; title: string; line: string }>()
+  // Строка места из контекста печати (прежний текст, без INB) и её приёмка.
+  const byKey = new Map<string, { title: string; line: string }>()
   for (const context of contexts) {
-    if (context.product_id !== productId) continue
     for (const group of context.source_groups as ContextGroup[]) {
-      const title = group.date ? `${group.title.replace(/:\s*$/, '')} от ${group.date}` : group.title
       group.lines.forEach((line, index) => {
         const key = group.line_keys?.[index]
-        // Владелец 09.10.2026: «Инб убирай вообще». Империя ищет короб по «Короб №N»,
-        // системный код INB-… в строке только переносит её на две. У других клиентов
-        // код остаётся (например, ArtMaks ищет короб по самому коду, см. WMS-565).
-        if (key && !byKey.has(key)) byKey.set(key, { groupKey: group.key, title, line: withoutInbCode(line) })
+        if (key && !byKey.has(`${context.product_id}#${key}`)) {
+          byKey.set(`${context.product_id}#${key}`, { title: groupTitle(group), line: withoutInbCode(line) })
+        }
       })
     }
   }
 
-  const out: Group[] = []
-  // Состав вкладки: свёрнутый раздел «Уже подобрано» сотрудник не видит — не печатаем.
-  for (const item of cellPickRowsOf(rows, objects, cells)) {
-    if (item.kind !== 'goods' || !item.place || item.alreadyPicked) continue
-    const place = item.place
-    const found = byKey.get(placeKey.get(place.key) ?? '')
-    const groupKey = found?.groupKey ?? 'unlinked'
-    const title = found?.title ?? 'Без привязки к документу:'
-    const line = found?.line ?? `${place.standing} · ${place.sourceTitle}: ${place.qty} шт.`
-    const last = out.at(-1)
-    if (last && last.key === groupKey) {
-      if (!last.lines.includes(line)) last.lines.push(line)
-    } else {
-      out.push({ key: groupKey, title, lines: [line] })
-    }
+  // Номер строки — номер товара в обычном листе (как раньше: по штукам).
+  const positionByKey = new Map<string, string>()
+  let position = 1
+  for (const row of rows) {
+    const from = position
+    const to = from + row.required - 1
+    position = to + 1
+    positionByKey.set(row.key, from === to ? `${from}` : `${from}–${to}`)
   }
-  if (!out.length && required > 0 && pickedTotal >= required) {
-    return [{ key: 'picked', title: 'Подобрано', lines: [] }]
+  const rowByKey = new Map(rows.map((row) => [row.key, row]))
+  const emitted = new Set<string>()
+  const out: T[] = []
+  const emit = (row: T, sourceGroups: PrintRow['sourceGroups']) => {
+    const first = !emitted.has(row.key)
+    emitted.add(row.key)
+    out.push({
+      ...row,
+      positionLabel: positionByKey.get(row.key),
+      locations: [],
+      inboundSupplies: [],
+      sourceGroups,
+      ...(first ? {} : { wbOrders: [], stickerCodes: [], marking: '' }),
+    })
+  }
+  // Маршрут вкладки; свёрнутое «Уже подобрано» сотрудник не видит — не печатаем.
+  for (const item of cellPickRowsOf(screenRows, objects, cells)) {
+    if (item.kind !== 'goods' || item.alreadyPicked) continue
+    const row = rowByKey.get(item.row.key)
+    if (!row) continue
+    if (!item.place) {
+      emit(row, [{ key: 'none', title: 'Нет текущего остатка', lines: [] }])
+      continue
+    }
+    const found = byKey.get(`${row.key}#${placeKey.get(item.place.key) ?? ''}`)
+    emit(row, [{
+      key: item.place.key,
+      // Место без приёмки (россыпь и т.п.) подписываем так же, как на вкладке: «Без ячеек», «Ж-1-7».
+      title: found && !found.title.startsWith('Без привязки') ? found.title : item.place.standing,
+      lines: [found?.line ?? `${item.place.standing} · ${item.place.sourceTitle}: ${item.place.qty} шт.`],
+    }])
+  }
+  // Товары, которых на маршруте нет (всё уже подобрано) — в конце, как в обычном листе.
+  for (const row of rows) {
+    if (emitted.has(row.key)) continue
+    const done = row.required > 0 && (pickedByProduct.get(row.key) ?? 0) >= row.required
+    emit(row, [{ key: 'none', title: done ? 'Подобрано' : 'Нет текущего остатка', lines: [] }])
   }
   return out
 }
