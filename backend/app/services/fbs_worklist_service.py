@@ -1125,6 +1125,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         ctx["products"].get(first_position.product_id) if is_ozon and first_position else product,
         ctx,
     )
+    # Writers store meta_details_json as a dict; a stored list carries no stage snapshot.
+    meta_details = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
     return {
         "id": str(order.id),
         "marketplace": order.marketplace,
@@ -1133,7 +1135,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         "status": order.status,
         "wb_status": order.wb_status,
         "supplier_status": order.supplier_status,
-        "ozon_confirmed_stage": (order.meta_details_json or {}).get("ozon_confirmed_stage"),
+        "ozon_confirmed_stage": meta_details.get("ozon_confirmed_stage"),
         "delivered_at": (
             ctx.get("handed_at", {})[order.supply_id].isoformat()
             if ctx.get("handed_at", {}).get(order.supply_id) else None
