@@ -35,6 +35,7 @@ from app.models.fbs_order import FbsOrder, FbsOrderProduct, FbsOrderReservation
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.inventory_reservation import InventoryReservation
+from app.models.operation_fact import OperationFactCutover
 from app.models.user import User
 from app.services.billing_invoice_v2_service import BillingInvoiceV2Error, create_invoice_v2
 from app.services.fbs_cancellation_service import reverse_fbs_order_billing
@@ -475,4 +476,58 @@ async def test_c18_cancel_after_in_work_invoice_keeps_the_invoice(async_client):
     cancelled = await async_client.post(f"/billing/invoices-v2/{invoice_id}/cancel", headers=headers)
     assert cancelled.status_code == 200 and cancelled.json()["status"] == "cancelled", (
         "существующая отмена счёта должна работать как раньше"
+    )
+
+
+@pytest.mark.asyncio
+async def test_c24_early_ozon_invoice_is_not_counted_in_two_adjacent_periods(async_client):
+    """C24, R10: сумма соседних периодов равна общей и единственному начислению 20 ₽.
+
+    Счёт за сборку выставлен 15 августа, передача — 1 сентября, переход на факты
+    операций — 26 августа. Контракт не выбирает месяц признания дохода.
+    """
+    headers, tenant_id = await _tenant(async_client)
+    seller_id = await _seller(async_client, headers, "Селлер C24")
+    warehouse_id = await _warehouse(tenant_id)
+    async with SessionLocal() as session:
+        # Только сборка тарифицируется: одно денежное начисление на 20 ₽.
+        session.add(_tariff(tenant_id, seller_id, "fbs_order", 2000))
+        session.add(OperationFactCutover(id=1, occurred_at=msk(2026, 8, 26)))
+        await session.commit()
+    order_id = await _in_work_order(
+        tenant_id, seller_id, warehouse_id, number=707401, marketplace="ozon", packed=WORK_DAY,
+    )
+    created = await _create(
+        async_client, headers, _body(seller_id, _sources(order_id, ("fbs_order",))), "c24",
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["total_amount_kopecks"] == 2000
+    before = await _charges(order_id)
+    assert len(before) == 1 and before[0]["amount"] == 2000
+    assert before[0]["occurred_at"] == WORK_DAY
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        order.status = "sorted"
+        await charge_handed_over_orders(session, [order], occurred_at=msk(2026, 9, 1, 12))
+        await session.commit()
+    monetary_charges = [row for row in await _charges(order_id) if row["amount"]]
+    assert monetary_charges == before, "передача должна сохранить единственное денежное начисление"
+
+    august = await _details(async_client, headers, seller_id, period=PERIOD)
+    september = await _details(
+        async_client, headers, seller_id,
+        period={"date_from": "2026-09-01", "date_to": "2026-09-30"},
+    )
+    combined = await _details(
+        async_client, headers, seller_id,
+        period={"date_from": "2026-08-01", "date_to": "2026-09-30"},
+    )
+    august_amount = august["totals"]["net_total_kopecks"]
+    september_amount = september["totals"]["net_total_kopecks"]
+    combined_amount = combined["totals"]["net_total_kopecks"]
+    assert august_amount + september_amount == combined_amount == 2000, (
+        "одно начисление 20 ₽ не должно учитываться в двух непересекающихся периодах: "
+        f"август={august_amount}, сентябрь={september_amount}, "
+        f"сумма месяцев={august_amount + september_amount}, общий период={combined_amount} коп."
     )
