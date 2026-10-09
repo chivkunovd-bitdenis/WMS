@@ -1,2 +1,0 @@
-frontend/src/screens/ff/FfBillingScreen.tsx
-frontend/src/screens/ff/FfBillingSellerDetails.tsx
