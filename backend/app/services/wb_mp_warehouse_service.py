@@ -1,17 +1,19 @@
-"""Tenant cache for WB marketplace warehouses (GET /api/v1/warehouses)."""
+"""Append-only tenant cache of FBW warehouses and its historical fallback."""
 
 from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import httpx
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.seller import Seller
+from app.models.tenant import Tenant
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.services import wildberries_client as wb_client
 from app.services.wildberries_client import WildberriesClientError
@@ -20,25 +22,32 @@ from app.services.wildberries_credentials_service import get_decrypted_tokens_fo
 logger = logging.getLogger(__name__)
 
 
+class WbMpWarehousesMethodDisabled(Exception):
+    """WB explicitly disabled the FBW method, independently of a seller key."""
+
+
+@dataclass
+class _DailySweep:
+    method_disabled: bool = False
+
+
 def wb_mp_warehouse_tokens_to_try(
     content_token: str | None,
     supplies_token: str | None,
 ) -> list[str]:
-    """
-    Content key first (seller UI saves it and cards sync works), then supplies.
-    Skip duplicates when both fields hold the same token.
-    """
-    seen: set[str] = set()
+    """Content key first, then supplies; skip empty and duplicate values."""
     out: list[str] = []
     for raw in (content_token, supplies_token):
-        if not raw:
-            continue
-        t = raw.strip()
-        if not t or t in seen:
-            continue
-        seen.add(t)
-        out.append(t)
+        token = (raw or "").strip()
+        if token and token not in out:
+            out.append(token)
     return out
+
+
+def _usable_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    return [row for row in rows if isinstance(row, dict)
+            and isinstance(row.get("ID"), int) and not isinstance(row.get("ID"), bool)
+            and isinstance(row.get("name"), str) and str(row["name"]).strip()]
 
 
 async def count_tenant_mp_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> int:
@@ -54,74 +63,91 @@ async def replace_tenant_mp_warehouses(
     tenant_id: uuid.UUID,
     rows: list[dict[str, object]],
 ) -> None:
-    await session.execute(
-        delete(TenantWbMpWarehouse).where(TenantWbMpWarehouse.tenant_id == tenant_id),
-    )
-    now = datetime.now(tz=UTC)
-    for raw in rows:
-        wid = raw.get("ID")
-        name = raw.get("name")
-        if not isinstance(wid, int) or not isinstance(name, str) or not name.strip():
-            continue
-        addr = raw.get("address")
-        wt = raw.get("workTime")
-        session.add(
-            TenantWbMpWarehouse(
-                tenant_id=tenant_id,
-                wb_warehouse_id=wid,
-                name=name.strip()[:512],
+    """Retain the existing entry point, but only insert missing warehouse numbers.
+
+    The tenant row serializes the read/insert transaction across daily, lazy and
+    background writers, including SQLite. It changes no tenant fields and avoids
+    a unique migration that would require deleting historical duplicates.
+    """
+    rows = _usable_rows(rows)
+    if not rows:
+        return
+    try:
+        await session.execute(update(Tenant).where(Tenant.id == tenant_id).values(id=Tenant.id))
+        existing = set(await session.scalars(select(TenantWbMpWarehouse.wb_warehouse_id).where(
+            TenantWbMpWarehouse.tenant_id == tenant_id,
+        )))
+        now = datetime.now(tz=UTC)
+        for raw in rows:
+            wid = int(str(raw["ID"]))
+            if wid in existing:
+                continue
+            existing.add(wid)
+            addr, wt = raw.get("address"), raw.get("workTime")
+            date = raw.get("fetched_at")
+            session.add(TenantWbMpWarehouse(
+                tenant_id=tenant_id, wb_warehouse_id=wid,
+                name=str(raw["name"]).strip()[:512],
                 address=str(addr) if addr is not None else None,
                 work_time=str(wt)[:128] if wt is not None else None,
                 is_active=bool(raw.get("isActive")),
                 is_transit_active=bool(raw.get("isTransitActive")),
-                fetched_at=now,
-            ),
-        )
-    await session.commit()
+                fetched_at=date if isinstance(date, datetime) else now,
+            ))
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
 
 
 async def fetch_mp_warehouses_try_tokens(
     content_token: str | None,
     supplies_token: str | None,
+    *,
+    tried_tokens: set[str] | None = None,
 ) -> list[dict[str, object]]:
-    """Call WB supplies API with each distinct seller token until one succeeds."""
-    tokens = wb_mp_warehouse_tokens_to_try(content_token, supplies_token)
-    if not tokens:
-        return []
-    last_exc: WildberriesClientError | None = None
+    """Stop on a usable FBW reply or explicit method disablement, not any 404."""
+    tried = tried_tokens if tried_tokens is not None else set()
     async with httpx.AsyncClient() as client:
-        for idx, token in enumerate(tokens):
+        for token in wb_mp_warehouse_tokens_to_try(content_token, supplies_token):
+            if token in tried:
+                continue
+            tried.add(token)
             try:
                 data = await wb_client.fetch_mp_warehouses_list(client, api_token=token)
             except WildberriesClientError as exc:
-                last_exc = exc
-                logger.warning(
-                    "wb mp warehouses fetch failed (attempt %s/%s): %s http=%s",
-                    idx + 1,
-                    len(tokens),
-                    exc.code,
-                    exc.status_code,
-                )
+                if "this method is temporarily disabled" in (exc.response_body or "").casefold():
+                    logger.warning("wb mp warehouses: FBW method temporarily disabled")
+                    raise WbMpWarehousesMethodDisabled from exc
+                logger.warning("wb mp warehouses fetch failed: %s http=%s",
+                               exc.code, exc.status_code)
                 continue
-            except httpx.HTTPError:
-                logger.warning(
-                    "wb mp warehouses transport error (attempt %s/%s)",
-                    idx + 1,
-                    len(tokens),
-                )
+            except (httpx.HTTPError, ValueError):
+                logger.warning("wb mp warehouses: transport or invalid response")
                 continue
-            if data:
-                if idx > 0:
-                    logger.info("wb mp warehouses loaded using fallback token attempt %s", idx + 1)
-                return data
-    if last_exc is not None:
-        logger.warning(
-            "wb mp warehouses: all %s token(s) failed, last=%s http=%s",
-            len(tokens),
-            last_exc.code,
-            last_exc.status_code,
-        )
+            usable = _usable_rows(data)
+            if usable:
+                return usable
     return []
+
+
+async def _copy_known_fbw_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> None:
+    # This canonical table has one writer: the successful FBW loader. FBS,
+    # seller warehouse bindings and Ozon data have their own separate tables.
+    known = await session.scalars(select(TenantWbMpWarehouse).order_by(
+        TenantWbMpWarehouse.fetched_at.desc(), TenantWbMpWarehouse.tenant_id.asc(),
+        TenantWbMpWarehouse.id.asc(),
+    ))
+    rows: dict[int, dict[str, object]] = {}
+    for row in known:
+        if row.wb_warehouse_id not in rows and row.name.strip():
+            rows[row.wb_warehouse_id] = {
+                "ID": row.wb_warehouse_id, "name": row.name, "address": row.address,
+                "workTime": row.work_time, "isActive": row.is_active,
+                "isTransitActive": row.is_transit_active, "fetched_at": row.fetched_at,
+            }
+    if rows:
+        await replace_tenant_mp_warehouses(session, tenant_id, list(rows.values()))
 
 
 async def sync_tenant_mp_warehouses_from_seller_tokens(
@@ -131,11 +157,15 @@ async def sync_tenant_mp_warehouses_from_seller_tokens(
     content_token: str | None,
     supplies_token: str | None,
 ) -> int:
-    """Pull WB warehouses; try content then supplies token."""
-    data = await fetch_mp_warehouses_try_tokens(content_token, supplies_token)
-    if not data:
+    if not wb_mp_warehouse_tokens_to_try(content_token, supplies_token):
         return await count_tenant_mp_warehouses(session, tenant_id)
-    await replace_tenant_mp_warehouses(session, tenant_id, data)
+    try:
+        data = await fetch_mp_warehouses_try_tokens(content_token, supplies_token)
+    except WbMpWarehousesMethodDisabled:
+        await _copy_known_fbw_warehouses(session, tenant_id)
+    else:
+        if data:
+            await replace_tenant_mp_warehouses(session, tenant_id, data)
     return await count_tenant_mp_warehouses(session, tenant_id)
 
 
@@ -146,15 +176,11 @@ async def sync_tenant_mp_warehouses_if_empty_from_seller_tokens(
     content_token: str | None,
     supplies_token: str | None,
 ) -> int:
-    """Если для тенанта ещё нет кэша — один раз тянем склады WB."""
     n_existing = await count_tenant_mp_warehouses(session, tenant_id)
-    if n_existing > 0:
+    if n_existing:
         return n_existing
     return await sync_tenant_mp_warehouses_from_seller_tokens(
-        session,
-        tenant_id,
-        content_token=content_token,
-        supplies_token=supplies_token,
+        session, tenant_id, content_token=content_token, supplies_token=supplies_token,
     )
 
 
@@ -171,51 +197,58 @@ async def get_first_tenant_seller_id(
     return res.scalar_one_or_none()
 
 
+async def _sync_tenant(
+    session: AsyncSession, tenant_id: uuid.UUID, sweep: _DailySweep,
+) -> None:
+    seller_ids = list(await session.scalars(select(Seller.id).where(Seller.tenant_id == tenant_id)
+                                           .order_by(Seller.created_at.asc(), Seller.id.asc())))
+    tried: set[str] = set()
+    for seller_id in seller_ids:
+        pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
+        if pair is None or not wb_mp_warehouse_tokens_to_try(*pair):
+            continue
+        if not sweep.method_disabled:
+            try:
+                data = await fetch_mp_warehouses_try_tokens(*pair, tried_tokens=tried)
+            except WbMpWarehousesMethodDisabled:
+                sweep.method_disabled = True
+            else:
+                if data:
+                    await replace_tenant_mp_warehouses(session, tenant_id, data)
+                    return
+        if sweep.method_disabled:
+            await _copy_known_fbw_warehouses(session, tenant_id)
+            return
+
+
 async def run_wb_mp_warehouses_sync_task(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> None:
-    """Фон: если кэш пуст — токены селлера (content, затем supplies) → склады WB."""
+    """Initial background fill; search only sellers belonging to this tenant."""
     async with SessionLocal() as session:
         seller = await session.get(Seller, seller_id)
         if seller is None or seller.tenant_id != tenant_id:
             return
-        if await count_tenant_mp_warehouses(session, tenant_id) > 0:
-            return
-        pair = await get_decrypted_tokens_for_seller(session, tenant_id, seller_id)
-        if pair is None:
-            return
-        content, supplies = pair
-        await sync_tenant_mp_warehouses_if_empty_from_seller_tokens(
-            session,
-            tenant_id,
-            content_token=content,
-            supplies_token=supplies,
-        )
+        if not await count_tenant_mp_warehouses(session, tenant_id):
+            await _sync_tenant(session, tenant_id, _DailySweep())
 
 
-async def run_daily_wb_mp_warehouses_sync_for_tenant(tenant_id: uuid.UUID) -> None:
-    """Daily: sync WB MP warehouses using first registered seller's tokens."""
+async def run_daily_wb_mp_warehouses_sync_for_tenant(
+    tenant_id: uuid.UUID, *, _sweep: _DailySweep | None = None,
+) -> None:
     async with SessionLocal() as session:
-        first_seller_id = await get_first_tenant_seller_id(session, tenant_id)
-        if first_seller_id is None:
-            return
-        pair = await get_decrypted_tokens_for_seller(session, tenant_id, first_seller_id)
-        if pair is None:
-            return
-        content, supplies = pair
-        await sync_tenant_mp_warehouses_from_seller_tokens(
-            session,
-            tenant_id,
-            content_token=content,
-            supplies_token=supplies,
-        )
+        await _sync_tenant(session, tenant_id, _sweep if _sweep is not None else _DailySweep())
 
 
 async def run_daily_wb_mp_warehouses_sync_all_tenants() -> None:
     async with SessionLocal() as session:
-        stmt = select(Seller.tenant_id).distinct()
-        res = await session.execute(stmt)
-        tenant_ids = [row[0] for row in res.all()]
-    for tid in tenant_ids:
-        await run_daily_wb_mp_warehouses_sync_for_tenant(tid)
+        tenant_ids = list(await session.scalars(select(Seller.tenant_id).distinct()
+                                                .order_by(Seller.tenant_id)))
+    sweep = _DailySweep()
+    for tenant_id in tenant_ids:
+        try:
+            await run_daily_wb_mp_warehouses_sync_for_tenant(tenant_id, _sweep=sweep)
+        except Exception as exc:
+            # Do not log exception messages or SQL parameters containing secrets.
+            logger.warning("wb mp warehouses tenant %s failed: %s", tenant_id, type(exc).__name__)
 
 
 async def list_cached_mp_warehouses(
@@ -231,25 +264,12 @@ async def list_cached_mp_warehouses(
 
 
 async def list_mp_warehouses_for_tenant(
-    session: AsyncSession, tenant_id: uuid.UUID
+    session: AsyncSession, tenant_id: uuid.UUID,
 ) -> list[TenantWbMpWarehouse]:
-    """Return cached WB MP warehouses; lazy-fill from first seller tokens if empty."""
     rows = await list_cached_mp_warehouses(session, tenant_id)
     if rows:
         return rows
-    first_seller_id = await get_first_tenant_seller_id(session, tenant_id)
-    if first_seller_id is None:
-        return []
-    pair = await get_decrypted_tokens_for_seller(session, tenant_id, first_seller_id)
-    if pair is None:
-        return []
-    content, supplies = pair
-    await sync_tenant_mp_warehouses_if_empty_from_seller_tokens(
-        session,
-        tenant_id,
-        content_token=content,
-        supplies_token=supplies,
-    )
+    await _sync_tenant(session, tenant_id, _DailySweep())
     return await list_cached_mp_warehouses(session, tenant_id)
 
 
