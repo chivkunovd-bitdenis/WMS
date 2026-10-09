@@ -95,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_DB: wms_test_517
           POSTGRES_USER: postgres
@@ -106,7 +106,7 @@ jobs:
           --health-cmd "pg_isready -U postgres -d wms_test_517"
           --health-interval 5s --health-timeout 3s --health-retries 20
       postgres662batch:
-        image: postgres:16
+        image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_DB: wms_test_662_batch
           POSTGRES_USER: wms_test
@@ -117,7 +117,7 @@ jobs:
           --health-cmd "pg_isready -U wms_test -d wms_test_662_batch"
           --health-interval 5s --health-timeout 3s --health-retries 20
       postgres662steady:
-        image: postgres:16
+        image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_DB: wms_test_662_steady
           POSTGRES_USER: wms_test
