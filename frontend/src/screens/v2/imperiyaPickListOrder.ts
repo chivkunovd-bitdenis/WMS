@@ -200,7 +200,7 @@ export function imperiyaWalkRows<T extends PrintRow>(
     addSourceGroup(row, {
       key: found?.key ?? item.place.key,
       // Место без приёмки (россыпь и т.п.) подписываем так же, как на вкладке: «Без ячеек», «Ж-1-7».
-      title: found && !found.title.startsWith('Без привязки') ? found.title : item.place.standing,
+      title: found ? found.title : item.place.standing,
       lines: [found?.line ?? `${item.place.standing} · ${item.place.sourceTitle}: ${item.place.qty} шт.`],
     })
   }
