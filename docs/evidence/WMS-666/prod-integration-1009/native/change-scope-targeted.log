@@ -1,0 +1,18 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-prod-integration-1009/frontend
+
+ ✓ src/screens/v2/wms666ChangeScope.test.ts (10 tests) 6110ms
+   ✓ WMS-666 C13: narrow UI-only change boundary > keeps the actual task diff inside the approved packing UI/test/document boundary  457ms
+   ✓ WMS-666 C13: narrow UI-only change boundary > reads advancing task history: foreign backend passes, new task backend or guards fail  2335ms
+   ✓ WMS-666 C13: narrow UI-only change boundary > checks task merge resolutions while ignoring an imported foreign backend tree  527ms
+   ✓ WMS-666 C13: narrow UI-only change boundary > allows reviewed CI preparation paths and rejects unrelated deployment changes  925ms
+   ✓ WMS-666 C13: narrow UI-only change boundary > checks the full task range and still includes later changes  936ms
+   ✓ WMS-666 C13: narrow UI-only change boundary > checks WMS-666 side-branch commits merged into task history  531ms
+   ✓ WMS-666 C13: narrow UI-only change boundary > ignores external history metadata and keeps the non-empty task diff  397ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  04:31:55
+   Duration  6.29s (transform 34ms, setup 0ms, collect 31ms, tests 6.11s, environment 0ms, prepare 44ms)
+
+JSON report written to /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-prod-integration-1009/docs/evidence/WMS-666/prod-integration-1009/native/change-scope-targeted.json

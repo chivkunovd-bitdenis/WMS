@@ -286,7 +286,6 @@
     "frontend/src/components/MarkingPrintDialog.partialAck.wms666.dom.test.tsx": "68740029acf66dff96190979c075e2c1a8caeccb37c212b72780d10e42621cc0",
     "backend/tests/test_wms635_kiz_no_wb_wait.py": "08f38c25b29acef0a5ccbd5164dcd792d29204a47978ab99527a1c1e2f49c644",
     "backend/tests/test_wms546_marking_verdicts.py": "23f8240bc9b2ea447656db646d28c1696ad0a858751c8bba9db77f6ccef45cdb",
-    "frontend/src/screens/v2/wms666ChangeScope.test.ts": "f1a0ab3e20f484ed4b901daeae00d899ce6bfd84b4d8efa920dad7fbfb76cf34",
     "scripts/ci/tests/test_backend_shard_progress.py": "d7083629e4efd4026da8dc5e2693f04b7191127352325661b30132738921c8a8",
     "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx": "1e5663e2fd7e646905e6c65652e7c2081e52d16a9fc6cbca477de49f5ec8c57e",
     "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx": "c5f389f7436e2c4b34727d4d38fce202fa7361e10bb1acb2acd8432976def84b",
@@ -1542,11 +1541,7 @@
         "src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx::WMS-666 permanent ordinary-row scan recovery guards shows the ordinary row validation rejection and makes no commit or print",
         "src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx::WMS-666 permanent ordinary-row scan recovery guards queues Escape behind an accepted row validation, finishes that intent, then routes the next scan to B",
         "src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx::C19: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged",
-        "src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx::does not prepare missing stickers or start work when reopening a taskless delivered supply",
-        "src/screens/v2/wms666ChangeScope.test.ts::WMS-666 C13: narrow UI-only change boundary rejects migrations, backend entities, stock logic and guard registry changes",
-        "src/screens/v2/wms666ChangeScope.test.ts::WMS-666 C13: narrow UI-only change boundary keeps the actual task diff inside the approved packing UI/test/document boundary",
-        "src/screens/v2/wms666ChangeScope.test.ts::WMS-666 C13: narrow UI-only change boundary accepts exact task proofs and rejects adjacent proof and correction namespaces",
-        "src/screens/v2/wms666ChangeScope.test.ts::WMS-666 C13: narrow UI-only change boundary reads advancing task history: foreign backend passes, new task backend or guards fail"
+        "src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx::does not prepare missing stickers or start work when reopening a taskless delivered supply"
       ]
     },
     "print-672": {

@@ -1,0 +1,13 @@
+{
+  "sha": "76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd",
+  "cases": [
+    {
+      "id": "WMS652.geometry[wb-single;1600x1000-long]",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.geometry[wb-single;1600x1000-long]",
+  "status": "PASS"
+}

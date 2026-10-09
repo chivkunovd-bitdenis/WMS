@@ -1,0 +1,554 @@
+{
+  "run_id": 37863891620,
+  "sha": "76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd",
+  "policy_from": "76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd",
+  "artifacts": [
+    {
+      "id": 11587810836,
+      "name": "guard-executed-contracts-76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd-37863891620-1",
+      "size_in_bytes": 7845,
+      "expired": false,
+      "entries": 4,
+      "reports": [
+        "product-scope.xml",
+        "ci-shards.xml",
+        "product-scope-receipt.json",
+        "night-controller.xml"
+      ]
+    },
+    {
+      "id": 11587696195,
+      "name": "printer-windows-contracts-76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd-37863891620-1",
+      "size_in_bytes": 1193,
+      "expired": false,
+      "entries": 1,
+      "reports": [
+        "native-print-windows.xml"
+      ]
+    },
+    {
+      "id": 11587292997,
+      "name": "release-print-76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd-37863891620-1",
+      "size_in_bytes": 41691319,
+      "expired": false,
+      "entries": 205,
+      "reports": [
+        "print/672-native-errors.tap",
+        "print/672-peer-drain.tap",
+        "print/672-raster-resource.tap",
+        "print/672-remaining.tap",
+        "print/672.tap",
+        "print/673.json",
+        "print/critical-fbs/result.json",
+        "print/wms652-cdp-cancellation.tap"
+      ]
+    },
+    {
+      "id": 11586942664,
+      "name": "wms686-executed-contracts-76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd-37863891620-1",
+      "size_in_bytes": 1180,
+      "expired": false,
+      "entries": 1,
+      "reports": [
+        "wms686-model.tap"
+      ]
+    },
+    {
+      "id": 11586854493,
+      "name": "frontend-executed-contracts-76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd-37863891620-1",
+      "size_in_bytes": 107424,
+      "expired": false,
+      "entries": 3,
+      "reports": [
+        "frontend-all.json",
+        "wms672-c5a.json",
+        "wms517-mac.tap"
+      ]
+    },
+    {
+      "id": 11586704745,
+      "name": "backend-checks-contracts-76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd-37863891620-1",
+      "size_in_bytes": 9789,
+      "expired": false,
+      "entries": 13,
+      "reports": [
+        "release-postgres/517-withdrawal.xml",
+        "release-postgres/654.xml",
+        "release-postgres/658.xml",
+        "release-postgres/662-batch.xml",
+        "release-postgres/662-f6.xml",
+        "release-postgres/662.xml",
+        "release-postgres/663-669-670-683.xml",
+        "release-postgres/663-release-retry.xml",
+        "release-postgres/675.xml",
+        "release-postgres/681.xml",
+        "release-postgres/fbs-concurrency.xml",
+        "native-print.xml"
+      ]
+    }
+  ],
+  "identity_errors": [],
+  "product_scope_receipt": {
+    "version": 1,
+    "sha": "76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd",
+    "run_id": 37863891620,
+    "run_attempt": 1,
+    "report": "product-scope.xml"
+  },
+  "suites": {
+    "backend-fbs": {
+      "available": false,
+      "report": "backend-all.xml",
+      "required": 826,
+      "availability_reason": "backend shard jobs still in progress; aggregate producer/report not yet available"
+    },
+    "pg-663-retry": {
+      "available": true,
+      "report": "release-postgres/663-release-retry.xml",
+      "required": 5,
+      "actual": 5,
+      "status_counts": {
+        "passed": 5
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "pg-662-f6": {
+      "available": true,
+      "report": "release-postgres/662-f6.xml",
+      "required": 4,
+      "actual": 4,
+      "status_counts": {
+        "passed": 4
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "pg-663-669-670-683": {
+      "available": true,
+      "report": "release-postgres/663-669-670-683.xml",
+      "required": 6,
+      "actual": 6,
+      "status_counts": {
+        "passed": 6
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "pg-662": {
+      "available": true,
+      "report": "release-postgres/662.xml",
+      "required": 10,
+      "actual": 10,
+      "status_counts": {
+        "passed": 10
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "pg-fbs-concurrency": {
+      "available": true,
+      "report": "release-postgres/fbs-concurrency.xml",
+      "required": 6,
+      "actual": 6,
+      "status_counts": {
+        "passed": 6
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "frontend-fbs": {
+      "available": true,
+      "report": "frontend-all.json",
+      "required": 347,
+      "actual": 1728,
+      "status_counts": {
+        "passed": 1723,
+        "failed": 2,
+        "skipped": 3
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {
+        "src/components/MarkingPrintDialog.availability.dom.test.tsx::WMS-611 FBS print availability builds QR plus barcode for every marked WB product when ЧЗ=0": "failed",
+        "src/components/MarkingPrintDialog.availability.dom.test.tsx::WMS-611 FBS print availability retries only the unconfirmed QR after a successful tape dispatch": "failed",
+        "src/screens/v2/fbsPickingColor.wms673.pdf.test.ts::WMS-673 digital print controls C7 control: externally rendered actual PDF is as A4 landscape before color implementation": "skipped",
+        "src/screens/v2/fbsPickingColor.wms673.pdf.test.ts::WMS-673 business RED PDF contract C7: real renderer keeps size657 fixed geometry and complete color within eleven columns": "skipped",
+        "src/screens/v2/fbsPickingColor.wms673.pdf.test.ts::WMS-673 business RED PDF contract C7/C11: multipage PDF repeats headers, preserves every row/color/size and page boundary": "skipped"
+      },
+      "format_issues": [
+        "Vitest overall success=false"
+      ]
+    },
+    "print-672": {
+      "available": true,
+      "report": "print/672.tap",
+      "required": 11,
+      "actual": 11,
+      "status_counts": {
+        "passed": 11
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "print-672-remaining": {
+      "available": true,
+      "report": "print/672-remaining.tap",
+      "required": 6,
+      "actual": 6,
+      "status_counts": {
+        "passed": 6
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "print-673": {
+      "available": true,
+      "report": "print/673.json",
+      "required": 5,
+      "actual": 5,
+      "status_counts": {
+        "passed": 5
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "native-linux": {
+      "available": true,
+      "report": "native-print.xml",
+      "required": 30,
+      "actual": 30,
+      "status_counts": {
+        "passed": 30
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "native-windows": {
+      "available": true,
+      "report": "native-print-windows.xml",
+      "required": 29,
+      "actual": 29,
+      "status_counts": {
+        "passed": 29
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "real-fbs-browser": {
+      "available": true,
+      "report": "print/critical-fbs/result.json",
+      "required": 43,
+      "actual": 43,
+      "status_counts": {
+        "passed": 42,
+        "FAIL": 1
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {
+        "WMS652.geometry[wb-single;1600x1000-long]": "FAIL"
+      },
+      "all_nonpass": {
+        "WMS652.geometry[wb-single;1600x1000-long]": "FAIL"
+      },
+      "format_issues": [
+        "browser status not PASS"
+      ]
+    },
+    "pg-675": {
+      "available": true,
+      "report": "release-postgres/675.xml",
+      "required": 1,
+      "actual": 1,
+      "status_counts": {
+        "passed": 1
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "pg-517-withdrawal": {
+      "available": true,
+      "report": "release-postgres/517-withdrawal.xml",
+      "required": 5,
+      "actual": 5,
+      "status_counts": {
+        "passed": 5
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "ci-shards": {
+      "available": true,
+      "report": "ci-shards.xml",
+      "required": 118,
+      "actual": 118,
+      "status_counts": {
+        "passed": 116,
+        "failure": 2
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {
+        "scripts.ci.tests.test_retain_web_assets::test_deploy_stages_before_traffic_and_cleans_temporary_container[True]": "failure",
+        "scripts.ci.tests.test_retain_web_assets::test_deploy_stages_before_traffic_and_cleans_temporary_container[False]": "failure"
+      },
+      "all_nonpass": {
+        "scripts.ci.tests.test_retain_web_assets::test_deploy_stages_before_traffic_and_cleans_temporary_container[False]": "failure",
+        "scripts.ci.tests.test_retain_web_assets::test_deploy_stages_before_traffic_and_cleans_temporary_container[True]": "failure"
+      },
+      "format_issues": []
+    },
+    "product-scope": {
+      "available": true,
+      "report": "product-scope.xml",
+      "required": 51,
+      "actual": 51,
+      "status_counts": {
+        "passed": 51
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "mac-517-helper": {
+      "available": true,
+      "report": "wms517-mac.tap",
+      "required": 110,
+      "actual": 110,
+      "status_counts": {
+        "passed": 110
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "wms686-model": {
+      "available": true,
+      "report": "wms686-model.tap",
+      "required": 11,
+      "actual": 11,
+      "status_counts": {
+        "passed": 11
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "pg-654": {
+      "available": true,
+      "report": "release-postgres/654.xml",
+      "required": 3,
+      "actual": 3,
+      "status_counts": {
+        "passed": 3
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "print-672-c5a": {
+      "available": true,
+      "report": "wms672-c5a.json",
+      "required": 1,
+      "actual": 7,
+      "status_counts": {
+        "skipped": 6,
+        "passed": 1
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {
+        "tests-e2e/wms672-dom.test.tsx::C1 inbound 200: one complete ordered tape, no box creation": "skipped",
+        "tests-e2e/wms672-dom.test.tsx::C1 inbound 300: one complete ordered tape, no box creation": "skipped",
+        "tests-e2e/wms672-dom.test.tsx::C1 return 200: one complete ordered tape, no box creation": "skipped",
+        "tests-e2e/wms672-dom.test.tsx::C1 return 300: one complete ordered tape, no box creation": "skipped",
+        "tests-e2e/wms672-dom.test.tsx::C5 300 labels: decode failure at 150 cannot write successful marks before transfer": "skipped",
+        "tests-e2e/wms672-dom.test.tsx::C8 300 labels: lost mark response retry cannot silently send a second tape": "skipped"
+      },
+      "format_issues": []
+    },
+    "docgate-687": {
+      "available": false,
+      "report": "docgate-687.xml",
+      "required": 22,
+      "availability_reason": "guard producer completed failure; step not executed, report absent"
+    },
+    "wms681-postgres-c6": {
+      "available": true,
+      "report": "release-postgres/681.xml",
+      "required": 1,
+      "actual": 1,
+      "status_counts": {
+        "passed": 1
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "pg-658-identity": {
+      "available": true,
+      "report": "release-postgres/658.xml",
+      "required": 9,
+      "actual": 9,
+      "status_counts": {
+        "passed": 9
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "print-672-native-errors": {
+      "available": true,
+      "report": "print/672-native-errors.tap",
+      "required": 7,
+      "actual": 7,
+      "status_counts": {
+        "passed": 7
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "print-672-peer-drain": {
+      "available": true,
+      "report": "print/672-peer-drain.tap",
+      "required": 2,
+      "actual": 2,
+      "status_counts": {
+        "passed": 2
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "print-672-raster-resource": {
+      "available": true,
+      "report": "print/672-raster-resource.tap",
+      "required": 3,
+      "actual": 3,
+      "status_counts": {
+        "passed": 3
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "fbs-cdp-cancellation": {
+      "available": true,
+      "report": "print/wms652-cdp-cancellation.tap",
+      "required": 7,
+      "actual": 7,
+      "status_counts": {
+        "passed": 7
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "postgres-wms662-batch": {
+      "available": true,
+      "report": "release-postgres/662-batch.xml",
+      "required": 1,
+      "actual": 1,
+      "status_counts": {
+        "passed": 1
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    },
+    "night-controller": {
+      "available": true,
+      "report": "night-controller.xml",
+      "required": 54,
+      "actual": 54,
+      "status_counts": {
+        "passed": 54
+      },
+      "missing": [],
+      "unexpected": [],
+      "required_nonpass": {},
+      "all_nonpass": {},
+      "format_issues": []
+    }
+  },
+  "violations": [
+    "frontend-fbs",
+    "real-fbs-browser",
+    "ci-shards"
+  ],
+  "final_backend_audit": {
+    "sha": "76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd",
+    "run_id": 37863891620,
+    "run_attempt": 1,
+    "artifact_id": 11587970883,
+    "junit_sha256": "b2a9e102fcfb4d5d263b6aa4ca2c71ee4dbe6653f0bb136fee3960e39a8281f4",
+    "outcomes": {
+      "passed": 4600,
+      "skipped": 210
+    },
+    "mandatory_backend_cases": 826,
+    "all_mandatory_pass": true
+  }
+}

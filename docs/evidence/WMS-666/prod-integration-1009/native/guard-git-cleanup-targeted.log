@@ -1,0 +1,27 @@
+test_automated_class_requires_test_reference (test_check_task_documents.DocumentTests.test_automated_class_requires_test_reference) ... ok
+test_classified_checks_resolve_test_file_and_name (test_check_task_documents.DocumentTests.test_classified_checks_resolve_test_file_and_name) ... ok
+test_empty_conclusion_does_not_consume_next_section (test_check_task_documents.DocumentTests.test_empty_conclusion_does_not_consume_next_section) ... ok
+test_empty_table (test_check_task_documents.DocumentTests.test_empty_table) ... ok
+test_empty_verdict (test_check_task_documents.DocumentTests.test_empty_verdict) ... ok
+test_escaped_pipe_in_description (test_check_task_documents.DocumentTests.test_escaped_pipe_in_description) ... ok
+test_explanatory_test_column_suffix_keeps_reference_validation (test_check_task_documents.DocumentTests.test_explanatory_test_column_suffix_keeps_reference_validation) ... ok
+test_extra_columns_case_whitespace_and_aliases (test_check_task_documents.DocumentTests.test_extra_columns_case_whitespace_and_aliases) ... ok
+test_fenced_example_is_not_evidence (test_check_task_documents.DocumentTests.test_fenced_example_is_not_evidence) ... ok
+test_filled_failed_verdict_is_valid (test_check_task_documents.DocumentTests.test_filled_failed_verdict_is_valid) ... ok
+test_missing_cell (test_check_task_documents.DocumentTests.test_missing_cell) ... ok
+test_missing_separator_is_actionable_error (test_check_task_documents.DocumentTests.test_missing_separator_is_actionable_error) ... ok
+test_no_prose_checks (test_check_task_documents.DocumentTests.test_no_prose_checks) ... ok
+test_one_check_can_reference_several_tests_with_html_breaks (test_check_task_documents.DocumentTests.test_one_check_can_reference_several_tests_with_html_breaks) ... ok
+test_second_table_also_requires_verdicts (test_check_task_documents.DocumentTests.test_second_table_also_requires_verdicts) ... ok
+test_test_reference_requires_existing_file_and_test_name (test_check_task_documents.DocumentTests.test_test_reference_requires_existing_file_and_test_name) ... ok
+test_base_after_rollout_checks_only_new_commits (test_check_task_documents.GitTests.test_base_after_rollout_checks_only_new_commits) ... ok
+test_multiple_tasks_and_missing_document (test_check_task_documents.GitTests.test_multiple_tasks_and_missing_document) ... ok
+test_old_task_referenced_again_needs_contract (test_check_task_documents.GitTests.test_old_task_referenced_again_needs_contract) ... ok
+test_pre_rollout_history_ignored_but_introduction_checked (test_check_task_documents.GitTests.test_pre_rollout_history_ignored_but_introduction_checked) ... ok
+test_rules_mismatch (test_check_task_documents.GitTests.test_rules_mismatch) ... ok
+test_uncommitted_checker_does_not_backfill_history (test_check_task_documents.GitTests.test_uncommitted_checker_does_not_backfill_history) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 3.134s
+
+OK
