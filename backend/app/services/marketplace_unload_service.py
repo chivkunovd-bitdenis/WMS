@@ -656,6 +656,22 @@ async def add_line(
     except IntegrityError:
         await session.rollback()
         raise MarketplaceUnloadError("duplicate_line") from None
+    if req.status in RESERVE_STATUSES:
+        # WMS-530 review F1: the request already holds live reservations for
+        # its other lines (planned/confirmed/collecting) — this new line must
+        # get its own reservation now, in the same transaction as the
+        # availability check above, or the unit stays visible as free to
+        # every other document even though this one now also claims it.
+        session.add(
+            MarketplaceUnloadReservation(
+                tenant_id=tenant_id,
+                marketplace_unload_line_id=line.id,
+                product_id=product_id,
+                warehouse_id=req.warehouse_id,
+                quantity=int(quantity),
+            )
+        )
+        schedule_seller_stock_publish(session, tenant_id, req.seller_id)
     if allow_ff_confirmed and req.status == STATUS_CONFIRMED:
         req.ff_modified = True
     await session.commit()

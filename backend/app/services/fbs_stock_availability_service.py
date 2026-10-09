@@ -10,10 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import FbsOrderProductReservation, FbsOrderReservation
 from app.models.inventory_balance import InventoryBalance
+from app.models.inventory_reservation import InventoryReservation
+from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
+from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
+from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
+from app.models.product import Product
+from app.models.stock_direction import StockDirection
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.services import stock_direction_service
 from app.services.defect_warehouse_service import DEFECT_WAREHOUSE_CODE
+from app.services.marketplace_unload_status import RESERVE_STATUSES
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 
 
@@ -284,12 +291,18 @@ async def fbs_available_qty_for_product(
 
 # --- WMS-530: один расчёт «Остаток / Резерв / Доступно» на организацию -----
 #
-# Всё выше в этом файле считает по ОДНОМУ складу ФФ (нужно только для
-# ремонта псевдоскладов WMS-516, см. physical_warehouse_repair_service).
-# Каталог, панели распределения, окно «Остаток для FBS», публикация WB/Ozon,
-# бронь заказов FBS, отгрузка на МП и старая «Отгрузка», инвентаризация и
-# рабочий список FBS берут числа только отсюда (R1-R4): склад, зона, тара и
-# признак рабочего склада на три числа не влияют.
+# Всё выше в этом файле считает по ОДНОМУ складу ФФ. Основной оставшийся
+# потребитель этого — ремонт псевдоскладов WMS-516 (physical_warehouse_
+# repair_service), которому нужно сравнить остаток именно source/target
+# склада. Ревью WMS-530 (раунд 1) также нашло два второстепенных места,
+# ещё не переведённых на общий расчёт: fbs_supply_validator_service.
+# _availability_by_order (число нигде не влияет на итог — compute_selection_
+# blockers его не читает) и мёртвый wb_marketplace_orders_service.
+# available_qty_for_fbs_reserve (вызывающих мест в приложении нет). Каталог,
+# панели распределения, окно «Остаток для FBS», публикация WB/Ozon, бронь
+# заказов FBS, отгрузка на МП и старая «Отгрузка», инвентаризация и рабочий
+# список FBS берут числа только отсюда (R1-R4): склад, зона, тара и признак
+# рабочего склада на три числа не влияют.
 
 
 @dataclass(frozen=True)
@@ -435,3 +448,87 @@ async def organization_stock_totals_by_product(
             available=on_hand - reserved,
         )
     return result
+
+
+async def product_ids_with_any_reserve(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None = None,
+    product_ids: list[uuid.UUID] | None = None,
+) -> set[uuid.UUID]:
+    """R3/R4 addendum: товары с бронью, но без единой строки InventoryBalance.
+
+    ``list_balances_total`` находит товары через INNER JOIN на InventoryBalance
+    и поэтому никогда не покажет тех, у кого физического остатка не осталось
+    ни в одной строке (полностью списан или расход, а бронь при этом старше
+    и ещё не снята). Такой товар должен показать Остаток 0, Резерв N,
+    Доступно -N (как окно «Остаток для FBS», которое читает Product напрямую),
+    а не молча пропасть из сводки каталога/кабинета продавца.
+    """
+    from app.services.inventory_service import OUTBOUND_RESERVE_STATUSES
+
+    if product_ids is not None and not product_ids:
+        return set()
+
+    mp_stmt = (
+        select(MarketplaceUnloadReservation.product_id)
+        .join(
+            MarketplaceUnloadLine,
+            MarketplaceUnloadLine.id == MarketplaceUnloadReservation.marketplace_unload_line_id,
+        )
+        .join(
+            MarketplaceUnloadRequest,
+            MarketplaceUnloadRequest.id == MarketplaceUnloadLine.request_id,
+        )
+        .where(
+            MarketplaceUnloadReservation.tenant_id == tenant_id,
+            MarketplaceUnloadRequest.status.in_(RESERVE_STATUSES),
+        )
+    )
+    outbound_stmt = (
+        select(InventoryReservation.product_id)
+        .join(
+            OutboundShipmentLine,
+            OutboundShipmentLine.id == InventoryReservation.outbound_shipment_line_id,
+        )
+        .join(
+            OutboundShipmentRequest,
+            OutboundShipmentRequest.id == OutboundShipmentLine.request_id,
+        )
+        .where(
+            InventoryReservation.tenant_id == tenant_id,
+            OutboundShipmentRequest.status.in_(OUTBOUND_RESERVE_STATUSES),
+        )
+    )
+    fbs_stmt = select(FbsOrderReservation.product_id).where(
+        FbsOrderReservation.tenant_id == tenant_id
+    )
+    fbs_position_stmt = select(FbsOrderProductReservation.product_id).where(
+        FbsOrderProductReservation.tenant_id == tenant_id
+    )
+    direction_stmt = select(StockDirection.product_id).where(
+        StockDirection.tenant_id == tenant_id
+    )
+    if product_ids is not None:
+        mp_stmt = mp_stmt.where(MarketplaceUnloadReservation.product_id.in_(product_ids))
+        outbound_stmt = outbound_stmt.where(InventoryReservation.product_id.in_(product_ids))
+        fbs_stmt = fbs_stmt.where(FbsOrderReservation.product_id.in_(product_ids))
+        fbs_position_stmt = fbs_position_stmt.where(
+            FbsOrderProductReservation.product_id.in_(product_ids)
+        )
+        direction_stmt = direction_stmt.where(StockDirection.product_id.in_(product_ids))
+
+    combined = union_all(
+        mp_stmt, outbound_stmt, fbs_stmt, fbs_position_stmt, direction_stmt
+    ).subquery()
+    stmt = select(combined.c.product_id.distinct())
+    if seller_id is not None:
+        stmt = (
+            select(combined.c.product_id.distinct())
+            .select_from(combined)
+            .join(Product, Product.id == combined.c.product_id)
+            .where(Product.tenant_id == tenant_id, Product.seller_id == seller_id)
+        )
+    result = await session.execute(stmt)
+    return {row[0] for row in result.all()}
