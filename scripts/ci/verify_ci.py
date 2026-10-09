@@ -13,8 +13,10 @@ if __package__ in (None, ''):
 
 from scripts.ci.ci_scope import is_generated_evidence_output, is_prose
 
-REQUIRED_JOBS = {"baseline", "backlog", "scope", "backend", "frontend-build", "охрана",
-                 "print-regressions", "printer-windows", "wms686-mockup", "process-proof"}
+# backlog is advisory (continue-on-error) and wms686-mockup runs only when its own
+# directory changes, so neither can be required for the exact-SHA release check.
+REQUIRED_JOBS = {"baseline", "scope", "backend", "frontend-build", "охрана",
+                 "print-regressions", "printer-windows", "process-proof"}
 HEAVY_JOBS = REQUIRED_JOBS - {"baseline", "backlog", "scope", "охрана", "process-proof"}
 WORKFLOW_PATH = ".github/workflows/ci.yml"
 ACTIONS_APP_ID = 15368
