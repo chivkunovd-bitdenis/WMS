@@ -561,6 +561,16 @@ async def _load_worklist_context(
     sticker_assets = await _load_sticker_assets(session, tenant_id, order_ids)
     # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
     ozon_photos = await load_ozon_primary_image_urls(session, tenant_id, product_ids)
+    supply_ids = {order.supply_id for order in orders if order.supply_id}
+    handed_at: dict[uuid.UUID, datetime | None] = {}
+    if supply_ids:
+        handed_at = {
+            supply_id: delivered_at for supply_id, delivered_at in await session.execute(
+                select(FbsSupply.id, FbsSupply.delivered_at).where(
+                    FbsSupply.tenant_id == tenant_id, FbsSupply.id.in_(supply_ids),
+                )
+            )
+        }
     return {
         "sellers": sellers,
         "warehouses": warehouses,
@@ -571,6 +581,7 @@ async def _load_worklist_context(
         "packed_positions": packed_positions,
         "cards": cards,
         "ozon_photos": ozon_photos,
+        "handed_at": handed_at,
         "availability": availability,
         "locations": locations,
         "markings": markings,
@@ -1114,6 +1125,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         ctx["products"].get(first_position.product_id) if is_ozon and first_position else product,
         ctx,
     )
+    # Writers store meta_details_json as a dict; a stored list carries no stage snapshot.
+    meta_details = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
     return {
         "id": str(order.id),
         "marketplace": order.marketplace,
@@ -1122,6 +1135,11 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         "status": order.status,
         "wb_status": order.wb_status,
         "supplier_status": order.supplier_status,
+        "ozon_confirmed_stage": meta_details.get("ozon_confirmed_stage"),
+        "delivered_at": (
+            ctx.get("handed_at", {})[order.supply_id].isoformat()
+            if ctx.get("handed_at", {}).get(order.supply_id) else None
+        ),
         "seller": {
             "id": str(order.seller_id),
             "name": seller.name if seller else "Селлер не найден",

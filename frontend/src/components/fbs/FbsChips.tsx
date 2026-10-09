@@ -69,9 +69,52 @@ const ORDER_STATUS_META: Record<
   defect: { label: 'Дефект', color: 'error' },
 }
 
+const OZON_ORDER_STATUS_META: Record<string, { label: string; color: ChipProps['color'] }> = {
+  ozon_awaiting_approve: { label: 'Ожидает подтверждения', color: 'primary' },
+  ozon_awaiting_verification: { label: 'Создано', color: 'primary' },
+  ozon_awaiting_registration: { label: 'Ожидает регистрации', color: 'primary' },
+  ozon_ready: { label: 'Готов к сдаче', color: 'primary' },
+  ozon_shipped: { label: 'Отгружен', color: 'primary' },
+  ozon_transferring_to_delivery: { label: 'Передаётся в доставку', color: 'primary' },
+  ozon_transferring_to_courier: { label: 'Передаётся курьеру', color: 'primary' },
+  ozon_acceptance_in_progress: { label: 'Идёт приёмка', color: 'primary' },
+  ozon_driver_pickup: { label: 'У водителя', color: 'primary' },
+  ozon_delivering: { label: 'В доставке', color: 'primary' },
+  ozon_sent_by_seller: { label: 'В доставке', color: 'primary' },
+  ozon_posting_delivered: { label: 'Доставлен', color: 'success' },
+  ozon_posting_received: { label: 'Получен', color: 'success' },
+  ozon_split: { label: 'Разделён', color: 'default' },
+  ozon_arbitration: { label: 'Арбитраж', color: 'primary' },
+  ozon_client_arbitration: { label: 'Клиентский арбитраж', color: 'primary' },
+  ozon_not_accepted: { label: 'Не принят на сортировочном центре', color: 'primary' },
+  ozon_unknown: { label: 'Статус уточняется', color: 'default' },
+  ozon_posting_acceptance_in_progress: { label: 'Идёт приёмка', color: 'primary' },
+  ozon_posting_in_arbitration: { label: 'Арбитраж', color: 'primary' },
+  ozon_posting_in_client_arbitration: { label: 'Клиентский арбитраж', color: 'primary' },
+  ozon_posting_created: { label: 'Создано', color: 'primary' },
+  ozon_posting_split_pending: { label: 'Создано', color: 'primary' },
+  ozon_posting_in_carriage: { label: 'В перевозке', color: 'primary' },
+  ozon_posting_not_in_carriage: { label: 'Не добавлен в перевозку', color: 'primary' },
+  ozon_posting_registered: { label: 'Зарегистрирован', color: 'primary' },
+  ozon_posting_awaiting_passport_data: { label: 'Ожидает паспортных данных', color: 'primary' },
+  ozon_posting_awaiting_registration: { label: 'Ожидает регистрации', color: 'primary' },
+  ozon_posting_registration_error: { label: 'Ошибка регистрации', color: 'primary' },
+  ozon_posting_canceled: { label: 'Отменён', color: 'default' },
+  ozon_posting_conditionally_delivered: { label: 'Условно доставлен', color: 'primary' },
+  ozon_posting_in_courier_service: { label: 'Курьер в пути', color: 'primary' },
+  ozon_posting_transferred_to_courier_service: { label: 'Передаётся в службу доставки', color: 'primary' },
+  ozon_posting_driver_pick_up: { label: 'У водителя', color: 'primary' },
+  ozon_posting_in_pickup_point: { label: 'В пункте выдачи', color: 'primary' },
+  ozon_posting_on_way_to_city: { label: 'В пути в город', color: 'primary' },
+  ozon_posting_on_way_to_pickup_point: { label: 'В пути в пункт выдачи', color: 'primary' },
+  ozon_posting_returned_to_warehouse: { label: 'Возвращён на склад', color: 'primary' },
+  ozon_posting_not_in_sort_center: { label: 'Не принят на сортировочном центре', color: 'primary' },
+  ozon_ship_failed: { label: 'Сборка не удалась', color: 'primary' },
+}
+
 export function FbsStatusChip({ status }: { status: string }) {
-  const meta = ORDER_STATUS_META[status as FbsOrderStatus] ?? {
-    label: status,
+  const meta = ORDER_STATUS_META[status as FbsOrderStatus] ?? OZON_ORDER_STATUS_META[status] ?? {
+    label: status.startsWith('ozon_') ? 'Статус уточняется' : status,
     color: 'default' as ChipProps['color'],
   }
   return (
