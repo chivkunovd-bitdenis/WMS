@@ -553,6 +553,7 @@ async def list_linked_wb_catalog_page_rows(
     seller_id: uuid.UUID | None = None,
     search: str | None = None,
     category: str | None = None,
+    categories: list[str] | None = None,
     marketplace: str | None = None,
     stock_publication: str | None = None,
     has_stock: bool = False,
@@ -641,10 +642,11 @@ async def list_linked_wb_catalog_page_rows(
                 ozon_link_matches,
             )
         )
-    normalized_category = (category or "").strip()
-    if normalized_category:
+    selected_categories = categories if categories is not None else [category or ""]
+    normalized_categories = {value.strip() for value in selected_categories if value.strip()}
+    if normalized_categories:
         filters.append(
-            SellerWildberriesImportedCard.raw_json["subjectName"].as_string() == normalized_category
+            SellerWildberriesImportedCard.raw_json["subjectName"].as_string().in_(normalized_categories)
         )
 
     matched_ids = (
