@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.fbs_picking_service import _load_supply, _planned_qty_by_product
 from app.services.sorting_location_service import SORTING_LOCATION_CODE, UNASSIGNED_LABEL
 
-
 # WMS-710: retain document links for picked-to-zero places only in Imperiya's picking context.
 IMPERIYA_PICK_LIST_TENANT_IDS = frozenset(
     {uuid.UUID("7b98a8aa-c03c-4649-9677-a645be45c622")}
@@ -31,8 +30,7 @@ async def get_picking_context(
     }
     groups: dict[uuid.UUID, dict[str, dict[str, Any]]] = {pid: {} for pid in product_ids}
     params = {"tenant": tenant_id, "seller": supply.seller_id,
-              "warehouse": supply.warehouse_id, "products": product_ids,
-              "include_zero_quantity_places": tenant_id in IMPERIYA_PICK_LIST_TENANT_IDS}
+              "warehouse": supply.warehouse_id, "products": product_ids}
     receipts = await session.execute(text("""
         SELECT DISTINCT l.product_id, r.id, r.display_number, r.document_number,
                r.posted_at, r.created_at, r.operation_type
@@ -61,6 +59,10 @@ async def get_picking_context(
             "key": key, "title": f"{kind}: {number or date}", "lines": [],
             "date": date, "line_keys": [],
         }
+    places_params = {
+        **params,
+        "include_zero_quantity_places": tenant_id in IMPERIYA_PICK_LIST_TENANT_IDS,
+    }
     places = await session.execute(text("""
         SELECT b.product_id, b.quantity, s.code AS location_code,
                s.id AS storage_location_id,
@@ -104,7 +106,7 @@ async def get_picking_context(
           AND (b.quantity > 0 OR
                (:include_zero_quantity_places AND b.quantity = 0))
         ORDER BY s.code, ib.box_number, cp.place_number, barcode, b.id
-    """).bindparams(bindparam("products", expanding=True)), params)
+    """).bindparams(bindparam("products", expanding=True)), places_params)
     for row in places.mappings():
         location = (UNASSIGNED_LABEL if row["location_code"] == SORTING_LOCATION_CODE
                     else row["location_code"])
