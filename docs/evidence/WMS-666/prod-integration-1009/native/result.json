@@ -1,0 +1,40 @@
+{
+  "sha": "4e7fcfdfc376c5b2623eaf370cd35d4dd29580c9",
+  "cases": [
+    {
+      "id": "WMS666.manual.selected.ordinary",
+      "status": "PASS",
+      "boundary": "browser HTML/window.print",
+      "scopedOrders": [
+        [
+          "wb-a-order"
+        ]
+      ],
+      "htmlPrints": 1
+    },
+    {
+      "id": "WMS666.manual.selected.group",
+      "status": "PASS",
+      "boundary": "browser HTML/window.print",
+      "scopedOrders": [
+        [
+          "wb-a-order"
+        ],
+        [
+          "wb-next-order"
+        ]
+      ],
+      "htmlPrints": 2
+    },
+    {
+      "id": "WMS666.manual.cancel-stops-group",
+      "status": "PASS",
+      "tapeRequestsAfterCancel": 0,
+      "newPrintsAfterCancel": 0
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS666.manual.cancel-stops-group",
+  "status": "PASS"
+}

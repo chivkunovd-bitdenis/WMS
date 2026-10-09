@@ -1,0 +1,5 @@
+PASS normal rollback and idempotent repeat
+PASS partial deployment before seal
+PASS retry after partial compose failure
+PASS retry after transient health failure
+PASS foreign later image rejected before any tag mutation

@@ -238,7 +238,10 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
     await act(async () => release()); expect(printed).toHaveLength(0)
     waitPick = null; closed = false; await print(); expect(printed).toHaveLength(1)
   })
-  it('C11 WMS610: common print stays available on composition/picking/packing/boxes, old screen quantity headers', async () => {
+  it('C11 WMS610: common print stays available on composition/picking/packing/boxes, WMS-709 plan/remaining screen quantity headers', async () => {
+    // An already prepared supply keeps this print-only scenario read-only when
+    // entering packing; production otherwise creates the missing task on entry.
+    fixtures[0].supply.packaging_task_id = 'task-wms673'
     await open('group')
     for (const stage of ['Состав', 'Подбор', 'Упаковка и маркировка', 'Короба']) {
       const tab = [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find((node) => node.textContent === stage)
@@ -247,7 +250,9 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
       expect(button?.disabled, stage).toBe(false)
       if (stage === 'Подбор') {
         const headers = [...document.querySelectorAll('thead th')].map((th) => th.textContent?.trim())
-        expect(headers.slice(-3).map(value => value?.replace(/\s+/g, ''))).toEqual(['Остатоквкоробе', 'Собрать', 'Собрано'])
+        expect(headers.slice(-3).map(value => value?.replace(/\s+/g, ''))).toEqual(['Осталось', 'Остатоквкоробе', 'Собрано'])
+        expect(headers).toContain('План')
+        expect(headers).not.toContain('Собрать')
         expect(headers).not.toContain('Цвет')
       }
       await print()

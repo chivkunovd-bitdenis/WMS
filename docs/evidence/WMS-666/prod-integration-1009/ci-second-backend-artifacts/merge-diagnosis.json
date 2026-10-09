@@ -1,0 +1,55 @@
+{
+  "identity": {
+    "sha": "854fe86ebba07b6819bcc07839aeb8a66ec1eec7",
+    "run_id": 37862038933,
+    "run_attempt": 1
+  },
+  "required_cases": 825,
+  "shards": [
+    {
+      "index": 0,
+      "receipt": {
+        "sha": "854fe86ebba07b6819bcc07839aeb8a66ec1eec7",
+        "run_id": 37862038933,
+        "run_attempt": 1,
+        "version": 1,
+        "count": 2,
+        "index": 0,
+        "exit_code": 0
+      },
+      "collection_count": 4810,
+      "selected_count": 2405,
+      "junit_cases": 2405,
+      "property_counts": {
+        "nodeid_properties_1": 2405
+      },
+      "collection_digest": "08790ad6becfc549d166bf2b426f9d03c5240f625925baca3f52dc497a345910"
+    },
+    {
+      "index": 1,
+      "receipt": {
+        "sha": "854fe86ebba07b6819bcc07839aeb8a66ec1eec7",
+        "run_id": 37862038933,
+        "run_attempt": 1,
+        "version": 1,
+        "count": 2,
+        "index": 1,
+        "exit_code": 0
+      },
+      "collection_count": 4810,
+      "selected_count": 2405,
+      "junit_cases": 2405,
+      "property_counts": {
+        "nodeid_properties_1": 2405
+      },
+      "collection_digest": "08790ad6becfc549d166bf2b426f9d03c5240f625925baca3f52dc497a345910"
+    }
+  ],
+  "duplicate_junit_names": [],
+  "required_missing_or_nonpass": [
+    {
+      "case": "tests.test_wms666_workspace_marking_pool::test_current_order_kiz_can_be_allocated_when_task_line_has_no_remaining_need",
+      "status": "missing"
+    }
+  ]
+}
