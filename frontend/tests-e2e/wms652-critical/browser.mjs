@@ -30,13 +30,16 @@ let requestLog=[],printLog=[],trace=[],blocked=[],errors=[],state,heldLookup,hol
 let receiptMode='', heldPrint, acceptedPrints=new Map(), lostAck=false, boundOrders=new Map(), restored=false;
 const markingIds={'wb-a-order':'66600000-0000-4000-8000-000000000001','wb-next-order':'66600000-0000-4000-8000-000000000002'};
 let cdp, mode='qr', selectionState, failedGroup, groupAttempts, addAttempts, createdRefs, heldAdd;
-const report={sha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),cases:[],physicalPaper:'NOT_TESTED',externalApi:'SYNTHETIC'};
+let leftoverPauses=0, leftoverRequests=[], leftoverErrors=[];
+const report={sha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),cases:[],isolation:[],physicalPaper:'NOT_TESTED',externalApi:'SYNTHETIC'};
 const previewOnly=process.env.WMS652_PREVIEW_ONLY==='1';
 class CDP {
   constructor(url) {
     this.ws = new WebSocket(url); this.next = 0; this.pending = new Map(); this.listeners = new Map();
     // Ownership lives in this one CDP session. Never infer cancellation from an error string.
     this.generation = 0; this.paused = new Map(); this.network = new Map(); this.terminals = new WeakMap(); this.transport = [];
+    this.isolationMode = false; this.isolationErrors = []; this.drainRequested = false; this.drainErrorStart = 0;
+    this.lastPauseAt = 0;
     this.ready = new Promise((resolve, reject) => { this.ws.onopen = resolve; this.ws.onerror = reject; });
     this.ws.onmessage = async event => {
       const msg = JSON.parse(event.data);
@@ -57,7 +60,7 @@ class CDP {
       } else {
         this.observe(msg.method,msg.params);
         for (const f of this.listeners.get(msg.method) ?? []) Promise.resolve(f(msg.params)).catch(e => {
-          errors.push(String(e));
+          (this.isolationMode ? this.isolationErrors : errors).push(String(e));
           const request = msg.method === 'Fetch.requestPaused' ? this.paused.get(msg.params.requestId) : undefined;
           this.record({kind:'event-handler-error',eventMethod:msg.method,error:String(e),requestId:request?.requestId,
             networkId:request?.networkId,frameId:request?.frameId,generation:request?.generation,caseId:request?.caseId});
@@ -87,6 +90,7 @@ class CDP {
     if (method === 'Page.frameNavigated' || method === 'Runtime.executionContextsCleared') {
       this.generation++; this.record({kind:'generation-boundary',method,generation:this.generation,caseId:this.currentCase()});
     } else if (method === 'Fetch.requestPaused') {
+      this.lastPauseAt = Date.now();
       const token = {requestId:params.requestId,networkId:params.networkId,frameId:params.frameId,
         generation:this.generation,caseId:this.currentCase(),attempts:0,disposition:'paused'};
       let resolveTerminal;
@@ -118,6 +122,10 @@ class CDP {
   }
   async send(method, params = {}) {
     await this.ready; const id = ++this.next;
+    if (method === 'Page.navigate' && params.url === 'about:blank' && this.drainRequested && errors.length > this.drainErrorStart) {
+      this.drainRequested = false;
+      throw Error(`current case emitted ${errors.length - this.drainErrorStart} error(s) before leaving its page`);
+    }
     if (method === 'Page.navigate') this.generation++;
     const token = method.startsWith('Fetch.') && params.requestId ? this.paused.get(params.requestId) : undefined;
     const identity = {requestId:params.requestId,networkId:token?.networkId,frameId:token?.frameId,
@@ -134,6 +142,12 @@ class CDP {
       }, 12000);
       this.pending.set(id, {resolve,reject,timer,method,identity,token,retirableCandidate});
       this.ws.send(JSON.stringify({id,method,params}));
+      // Start classifying teardown events only after the leave-page command is on the wire.
+      // Events from the completed case before this point remain in its strict error collector.
+      if (method === 'Page.navigate' && params.url === 'about:blank' && this.drainRequested) {
+        this.isolationMode = true;
+        this.drainRequested = false;
+      }
     });
   }
   on(method, callback) { this.listeners.set(method, [...this.listeners.get(method) ?? [], callback]); }
@@ -164,7 +178,58 @@ function prepareState(many) {
 }
 function bindingTarget(one){return {order_id:one.id,wb_order_id:one.wb_order_id,product:one.product,
  current_kiz:null,needs_confirmation:false,can_bind:true,block_reason:null,requires_honest_sign:true};}
+// Case isolation. The page of a finished case can leave one silent refresh in flight: FfFbsSupplyAssembly and
+// FfFbsSupplyWorkspace re-read their supplies every 15 s (setInterval). Page.navigate cancels that request in
+// Chrome, but its Fetch.requestPaused can still reach this session after the next document has committed. The
+// next case then inherited it: the stale read entered requestLog and its fulfill failed with -32602
+// Invalid InterceptionId, which failed the next case's errors check (1 !== 0). Every case boundary and every
+// boundary between finished cases first moves to about:blank, which issues no requests. Isolation starts only
+// after that leave-page command is sent. Errors observed before that boundary stay in the strict case collector;
+// a pause arriving afterward belongs to teardown and is answered as aborted and recorded in report.isolation.
+// The drain ends only when no command is pending and no pause arrived for QUIET_MS.
+const QUIET_MS = 600;
+async function drainLeftovers(label) {
+  if (errors.length) throw Error(`current case ${report.currentCase ?? '<initial>'} still has ${errors.length} error(s) before isolation`);
+  cdp.isolationMode = false;
+  cdp.drainRequested = true; cdp.drainErrorStart = errors.length;
+  leftoverPauses = 0; leftoverRequests = []; leftoverErrors = [];
+  cdp.isolationErrors = leftoverErrors;
+  try {
+    await cdp.send('Page.navigate', { url: 'about:blank' });
+    await until(`location.href==='about:blank'`);
+    if (!cdp.isolationMode) throw Error(`isolation boundary for ${label} was not reached`);
+    const committed = Date.now();
+    while (cdp.pending.size > 0 || Date.now() - Math.max(cdp.lastPauseAt, committed) < QUIET_MS) {
+      if (Date.now() - committed > 15000) throw Error(`leftovers before ${label} did not settle: pending=${cdp.pending.size}`);
+      await sleep(25);
+    }
+  } finally { cdp.isolationMode = false; cdp.drainRequested = false; }
+  // Remove only events collected after the explicit leave-page boundary. Earlier errors are never reclassified.
+  const drainErrors = errors.splice(cdp.drainErrorStart);
+  const entry = { label, fromCase: report.currentCase ?? null, leftoverPauses,
+    leftoverRequests: [...leftoverRequests], leftoverErrors: [...leftoverErrors], drainErrors };
+  report.isolation.push(entry);
+  return entry;
+}
+function resetCaseLogs() {
+  requestLog = []; printLog = []; trace = []; blocked = []; errors = []; assetResponses = [];
+  heldLookup = undefined; heldPrint = undefined; heldAdd = undefined;
+  acceptedPrints = new Map(); boundOrders = new Map(); restored = false; lostAck = false; receiptMode = '';
+}
+// Errors counted before the drain were already asserted by the finished case; they are kept in the isolation record.
+async function isolateCase(label) {
+  const finishedCaseErrors = [...errors];
+  if (finishedCaseErrors.length) throw Error(`finished case ${report.currentCase ?? '<initial>'} failed before isolation: ${finishedCaseErrors.length} error(s)`);
+  const entry = await drainLeftovers(label);
+  entry.finishedCaseErrors = finishedCaseErrors;
+  resetCaseLogs();
+}
 async function intercept({requestId,request}) {
+  if (cdp.isolationMode) {
+    leftoverPauses++;
+    leftoverRequests.push({requestId,url:request.url,method:request.method});
+    return cdp.send('Fetch.failRequest', { requestId, errorReason: 'Aborted' }).catch(e => { leftoverErrors.push(String(e)); });
+  }
   const u=new URL(request.url),path=u.pathname.replace(/^\/api/,'');
   if(u.origin===ORIGIN&&!u.pathname.startsWith('/api/')&&!path.startsWith('/assets/qr-'))return cdp.send('Fetch.continueRequest',{requestId});
   if(u.origin==='http://127.0.0.1:17843'&&path==='/print'){
@@ -271,10 +336,11 @@ try {
   let tabs;for(let i=0;i<100;i++){try{tabs=await(await fetch('http://127.0.0.1:16687/json/list')).json();break}catch{await sleep(100)}}
   assert(tabs?.length,`Chrome unavailable: ${chromeLog}`);
   cdp=new CDP(tabs.find(t=>t.type==='page').webSocketDebuggerUrl);cdp.on('Fetch.requestPaused',intercept);
-  cdp.on('Runtime.exceptionThrown',e=>errors.push(e.exceptionDetails));
+  cdp.on('Runtime.exceptionThrown',e=>(cdp.isolationMode?leftoverErrors:errors).push(e.exceptionDetails));
   await cdp.send('Page.enable');await cdp.send('Runtime.enable');await cdp.send('Network.enable');
   await cdp.send('Fetch.enable',{patterns:[{urlPattern:'*',requestStage:'Request'}]});
   await cdp.send('Page.addScriptToEvaluateOnNewDocument',{source:`
+    if(location.protocol==='http:'){
     const q=new URLSearchParams(location.search);
     if(!q.has('preserve')){localStorage.clear();sessionStorage.clear();}
     const flags={alloff:{printQr:false,printChz:false,reprintChz:false},qr:{printQr:true,printChz:false,reprintChz:false},reprint:{printQr:false,printChz:false,reprintChz:true},'qr+reprint':{printQr:true,printChz:false,reprintChz:true},pool:{printQr:false,printChz:true,reprintChz:false},'qr+pool':{printQr:true,printChz:true,reprintChz:false}};
@@ -283,11 +349,13 @@ try {
     const p=new URLSearchParams(location.search),ids=(p.get('supply_ids')||p.get('supply_id')||'').split(',');
     sessionStorage.setItem('wms:fbs:assembly:'+ids.join(',')+':stage','packing');
     ids.forEach(id=>sessionStorage.setItem('wms:fbs:'+id+':stage','packing'));
+    }
   `});
   await cdp.send('Emulation.setDeviceMetricsOverride',{width:1600,height:1000,deviceScaleFactor:1,mobile:false});
   const browserCases=previewOnly?[['print-preview-valid-fixture','supply_id=wb-a',false]]:[['supply_id=A','supply_id=wb-a',false],['supply_ids=A','supply_ids=wb-a',false],['supply_ids=A,B','supply_ids=wb-a,wb-b',true]];
   for(const [id,query,many] of browserCases){
     try {
+    await isolateCase(previewOnly?'WMS652.printPreview[valid-fixture]':`WMS652.realQr[${id}]`);
     prepareState(many);requestLog=[];printLog=[];trace=[];blocked=[];errors=[];assetResponses=[];heldLookup=undefined;holdFirst=true;
     report.currentCase=previewOnly?'WMS652.printPreview[valid-fixture]':`WMS652.realQr[${id}]`;
     await cdp.send('Page.navigate',{url:`${ORIGIN}/app/ff/fbs?${query}`});
@@ -363,7 +431,7 @@ try {
   if(!previewOnly){
   await selectionContracts();
   await flagContracts();
-  await geometryContracts({cdp,evaluate,until,click,clickElement,report,dir,origin:ORIGIN,
+  await geometryContracts({cdp,evaluate,until,click,clickElement,report,dir,origin:ORIGIN,isolate:isolateCase,
     startPacking(data){mode='geometry-packing';state={...state,...data};resetGeometry();},
     startSelection(data,list=false){mode=list?'geometry-list':'selection';selectionState=data;failedGroup='';groupAttempts={};addAttempts=0;createdRefs=[];heldAdd=undefined;resetGeometry();},
     logs:()=>({requestLog,printLog,trace,blocked,errors}),
@@ -430,6 +498,7 @@ async function clickElement(expression, label, allowDisabled=false){
 }
 async function click(selector,allowDisabled=false){await clickElement(`document.querySelector(${JSON.stringify(selector)})`,selector,allowDisabled);}
 async function freshSelection(id){
+  await isolateCase(id);
   mode='selection';selectionState=selectionFixtures();state={...state};failedGroup='';groupAttempts={};addAttempts=0;createdRefs=[];heldAdd=undefined;
   requestLog=[];printLog=[];blocked=[];errors=[];trace=[];report.currentCase=id;
   await cdp.send('Page.navigate',{url:`${ORIGIN}/app/ff/fbs`});
@@ -506,6 +575,7 @@ async function flagContracts(){
   const entries=[['supply_id=A','supply_id=wb-a',false],['supply_ids=A','supply_ids=wb-a',false],['supply_ids=A,B','supply_ids=wb-a,wb-b',true]];
   const variants=['alloff','qr','reprint','qr+reprint','pool','qr+pool','held-receipt','lost-accepted-ack','remount-after-lost-ack'];
   for(const variant of variants)for(const [entry,query,many] of entries){
+    await isolateCase(`WMS652.realQrFlags[${variant};${entry}]`);
     mode='qr';prepareState(many);requestLog=[];printLog=[];trace=[];blocked=[];errors=[];
     heldLookup=undefined;holdFirst=false;heldPrint=undefined;acceptedPrints=new Map();boundOrders=new Map();restored=false;lostAck=false;
     const recovery=['held-receipt','lost-accepted-ack','remount-after-lost-ack'].includes(variant);

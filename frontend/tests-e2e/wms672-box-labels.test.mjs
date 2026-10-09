@@ -253,7 +253,8 @@ async function allMarks(f, job, polling = 'raf') {
     try { return JSON.parse(value)?.labelAttempt; } catch { return null; }
   }).find(Boolean));
   assert.equal(attempt.id, job.attempt.id, 'completion retains original attempt ID');
-  assert.equal(attempt.html, job.html, 'completion retains original source');
+  // WMS-743: the label HTML and images are never kept in localStorage (hundreds of base64 barcodes overflow its quota).
+  assert.equal(attempt.html, undefined, 'completion keeps no label source in storage');
   assert.deepEqual(attempt.paths, []);
 }
 
