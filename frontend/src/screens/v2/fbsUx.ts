@@ -302,6 +302,8 @@ export type FbsPickingListPrintRow = {
   locations: string[]
   inboundSupplies?: string[]
   sourceGroups?: Array<{ key: string; title: string; lines: string[] }>
+  /** WMS-710, только Империя ФФ: строка маршрута повторяет товар — номер берётся у товара, счётчик не двигается. */
+  positionLabel?: string
   required: number
   picked: number
   /** Historical field name; Ozon rows store the posting identifier here. */
@@ -502,7 +504,8 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
     { grow: 2 },
     { width: compactPrintWidth('Артикул', input.rows.map(articleFor), 25, 12) },
     { width: compactPrintWidth('Цвет', input.rows.map((row) => row.color), 22, 12) },
-    { width: compactPrintWidth('Размер', input.rows.map((row) => row.size), 20, 20) },
+    // Шапка печатается заглавными — запас под «РАЗМЕР», иначе при коротких размерах она рвётся на «РАЗМЕ Р».
+    { width: compactPrintWidth('Размер', input.rows.map((row) => row.size), 20, 20, 3, 13) },
     { grow: 1.3 },
     { width: 25 },
     { width: compactPrintWidth(`Заказы ${marketplaceLabel}`, input.rows.flatMap((row) => row.wbOrders), 24, 12) },

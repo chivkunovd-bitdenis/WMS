@@ -1,0 +1,22 @@
+{
+  "report_origin": "Actual node --test --test-reporter=tap invocation, exit0; no conversion",
+  "report_sha256": "366e400268b6af058df53b66269813433f7bb5ab1fb038f6b57451e552b81818",
+  "old_policy_rejected": "fbs-cdp-cancellation: unexpected cases: ['case boundary waits for both observed post-pack reads to finish; earlier or merely fulfilled reads do not settle it']",
+  "updated_policy_verify_reports_subset": {
+    "fbs-cdp-cancellation": [
+      "CDP1 exact observed Fetch-to-Network abort returns a distinct retired disposition with native diagnostic and no retry",
+      "CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error",
+      "CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures",
+      "CDP4 native fulfillment success after navigation preserves the exact valid response and one command",
+      "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry",
+      "CDP6 reused observed FetchID after native send and before error reply remains a strict failure",
+      "CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure",
+      "case boundary waits for both observed post-pack reads to finish; earlier or merely fulfilled reads do not settle it"
+    ]
+  },
+  "exact": true,
+  "format": "node-tap",
+  "count": 8,
+  "other_suites": "not replayed",
+  "policy_blob": "f32d4ac719acd1b8a5833f73f5713d63c55a3a11"
+}

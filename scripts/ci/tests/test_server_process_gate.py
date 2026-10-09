@@ -41,12 +41,13 @@ class ServerGateTests(unittest.TestCase):
     def verify(self):
         return self.m.verify_server_ci(self.f.get, REPO, SHA)
 
-    def test_exact_push_sha_jobs_and_current_proof_metadata_accept(self):
+    def test_exact_push_sha_and_successful_jobs_accept_without_process_artifacts(self):
         result = self.verify()
         self.assertEqual(result['sha'], SHA)
-        self.assertEqual(result['artifact_id'], 90)
         self.assertGreaterEqual(self.f.run_reads, 4)
         self.assertTrue(any('/attempts/1/jobs?' in path for path in self.f.paths))
+        # WMS-735 R10: per-attempt process artifacts are no longer required by the gate.
+        self.assertFalse(any('/artifacts?' in path for path in self.f.paths))
 
     def test_every_required_extra_job_missing_failed_skipped_neutral_or_pending_refuses(self):
         for name in ['print-regressions', 'printer-windows', 'process-proof']:
@@ -82,24 +83,6 @@ class ServerGateTests(unittest.TestCase):
                 elif mutation == 'event': self.f.run['event'] = 'pull_request'
                 else: self.f.run['head_branch'] = 'main'
                 with self.assertRaises(GateError): self.verify()
-
-    def test_current_attempt_artifact_missing_expired_duplicate_wrong_sha_run_or_attempt_refuses(self):
-        for mutation in ['missing', 'expired', 'duplicate', 'sha', 'run', 'attempt', 'oversize']:
-            with self.subTest(mutation=mutation):
-                self.f = ServerFixture()
-                row = self.f.artifacts[0]
-                if mutation == 'missing': self.f.artifacts = []
-                elif mutation == 'expired': row['expired'] = True
-                elif mutation == 'duplicate': self.f.artifacts.append({**row, 'id': 91})
-                elif mutation == 'sha': row['workflow_run']['head_sha'] = 'b'*40
-                elif mutation == 'run': row['workflow_run']['id'] = 11
-                elif mutation == 'attempt': row['name'] = f'process-proof-{SHA}-10-2'
-                else: row['size_in_bytes'] = 10**10
-                with self.assertRaises(GateError): self.verify()
-
-    def test_attempt_changed_after_artifact_refuses(self):
-        self.f.change_after_artifact = True
-        with self.assertRaises(GateError): self.verify()
 
     def test_extra_job_other_sha_run_or_duplicate_refuses(self):
         for mutation in ['sha', 'run', 'duplicate']:

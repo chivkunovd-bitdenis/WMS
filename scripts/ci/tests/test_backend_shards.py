@@ -187,14 +187,14 @@ class BackendWorkflowContracts(unittest.TestCase):
         proof = raw.split('\n  process-proof:\n', 1)[1]
         self.assertIn('frontend-build, guards, print-regressions, printer-windows', proof)
 
-    def test_guard_installs_pytest_before_discovery_and_uploads_real_product_scope_junit(self):
+    def test_guard_installs_pytest_before_discovery_and_uploads_retained_web_assets_junit(self):
         raw = (ROOT/'.github/workflows/ci.yml').read_text()
         guard = raw.split('\n  guards:\n', 1)[1].split('\n  printer-windows:', 1)[0]
         self.assertLess(guard.index('pip install pytest'), guard.index('python -m unittest discover'))
-        self.assertIn('pytest -q scripts/ci/tests/test_product_scope.py --junitxml=', guard)
-        self.assertIn('product-scope.xml', guard)
-        self.assertIn('night-controller.xml', guard)
+        self.assertIn('pytest -q scripts/ci/tests/test_retain_web_assets.py --junitxml=', guard)
+        self.assertIn('retain-web-assets.xml', guard)
         self.assertIn('actions/upload-artifact@v4', guard)
+        self.assertNotIn('product_scope', guard)
         proof = raw.split('\n  process-proof:\n', 1)[1]
         self.assertIn('name: ${{ steps.select.outputs.guards }}', proof)
 

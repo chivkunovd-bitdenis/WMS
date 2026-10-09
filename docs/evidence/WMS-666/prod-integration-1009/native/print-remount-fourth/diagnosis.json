@@ -1,0 +1,50 @@
+{
+  "ci_run": "37865536532",
+  "ci_source": "b61330e31323a7c8dd52a9ed2bd4efeedcfdeaa4",
+  "primary_assertion": "browser.mjs:507 errors.length expected0 actual1; business assertions before it succeeded",
+  "primary_error": [
+    "Error: {\"code\":-32602,\"message\":\"Invalid InterceptionId.\"}"
+  ],
+  "accepted_keys": [
+    "scan-wb-a-order",
+    "scan-wb-next-order"
+  ],
+  "attempt_keys": [
+    "scan-wb-a-order",
+    "scan-wb-a-order",
+    "scan-wb-next-order"
+  ],
+  "diagnosis": "Cross-case pending readback canceled by next navigation; unknown-ID retirement remains forbidden",
+  "old_case_completion": "fixture pack request was logged before response and fire-and-forget workspace/task refresh",
+  "fix": "Before flags-case PASS, require both observed post-pack reads of final supply to reach Network.loadingFinished; next case reset/navigation then starts",
+  "in_case_remount_changed": false,
+  "cdp_retirement_guard_changed": false,
+  "business_assertions_changed": false,
+  "runtime_changed": false,
+  "unit_red": "readback-contract-red.log",
+  "unit_green": "readback-contract-green.log",
+  "unit_pass": 8,
+  "scoped_replay": {
+    "sha": "b61330e31323a7c8dd52a9ed2bd4efeedcfdeaa4",
+    "cases": [
+      {
+        "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+        "status": "PASS"
+      }
+    ],
+    "physicalPaper": "NOT_TESTED",
+    "externalApi": "SYNTHETIC",
+    "currentCase": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+    "status": "PASS"
+  },
+  "blobs": {
+    "frontend/tests-e2e/wms652-critical/browser.mjs": "1e72055e7f8065a09e41dd7599367fb0723308d5",
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "1dabe87bab8bb2539ae6ad9847760bd4799ec5ca"
+  },
+  "review": "requested from fresh Astra; no review claim",
+  "commit": "parent owns; local diff only"
+}

@@ -1,0 +1,29 @@
+{
+  "ci_run": "37863891620",
+  "diagnosis": "test async completion/isolation; second failure before retry",
+  "old_waits_ms": [
+    50,
+    20,
+    20
+  ],
+  "fix": "Await onBusyChange(false) from print/ack finally inside React act; all business assertions unchanged",
+  "runtime_changed": false,
+  "worktree_blobs": {
+    "frontend/src/components/MarkingPrintDialog.tsx": "0e12c64bd3211d942ee0055ec75be66ff1cace10",
+    "frontend/src/utils/useMarkingCodePrint.tsx": "906204ff9e22cdca5909d6d15b58536b5ebfb78c",
+    "frontend/src/components/MarkingPrintDialog.availability.dom.test.tsx": "164ba8af99bcb22c9954476856f3328d47064b53"
+  },
+  "head_blobs": {
+    "frontend/src/components/MarkingPrintDialog.tsx": "0e12c64bd3211d942ee0055ec75be66ff1cace10",
+    "frontend/src/utils/useMarkingCodePrint.tsx": "906204ff9e22cdca5909d6d15b58536b5ebfb78c",
+    "frontend/src/components/MarkingPrintDialog.availability.dom.test.tsx": "4b87e0a82e7af7b6f87b4ae57d96f3acd9c0c1c9"
+  },
+  "test_files": 1,
+  "tests": 7,
+  "passed": 7,
+  "failed": 0,
+  "success": true,
+  "log": "marking-availability-targeted.log",
+  "independent_review": "requested; no review claim",
+  "git_commit": "parent owns; child did not commit"
+}

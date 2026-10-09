@@ -1,0 +1,143 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-10-01T22%3A47%3A29.333Z&to=2026-10-08T22%3A47%3A29.333Z",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-b/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-b/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-b",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/print-templates/resolve?product_id=wb-a-product-a&seller_id=wb-a-seller",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/order-print-tape",
+      "body": {
+        "order_ids": [
+          "wb-a-order"
+        ],
+        "layout_json": {
+          "units": [
+            {
+              "block": "cz",
+              "copies": 2
+            }
+          ]
+        },
+        "allow_partial": false,
+        "include_order_qr": true,
+        "reprint": false
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/assets/qr-wb-a-order.png",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/print-templates/resolve?product_id=product-next&seller_id=wb-b-seller",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-b/order-print-tape",
+      "body": {
+        "order_ids": [
+          "wb-next-order"
+        ],
+        "layout_json": {
+          "units": [
+            {
+              "block": "cz",
+              "copies": 2
+            }
+          ]
+        },
+        "allow_partial": false,
+        "include_order_qr": true,
+        "reprint": false
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/assets/qr-wb-next-order.png",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-b",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-b/workspace",
+      "body": null
+    }
+  ],
+  "printLog": [],
+  "trace": [],
+  "blocked": [],
+  "errors": []
+}

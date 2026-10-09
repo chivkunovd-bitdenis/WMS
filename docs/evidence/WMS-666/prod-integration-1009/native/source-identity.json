@@ -1,0 +1,10 @@
+{
+  "candidate_sha": "322bb46d96178fc25f007aaf2807c9ce7dfe9bc0",
+  "product_tree_clean": true,
+  "handler_blob": "81ebff2bb9c638f1d6d41e2f22f618282a5ba476",
+  "handler_sha256": "ee7d1fb1ef1d603231e428e445c03e9dde95fd745f454b58c8aeea02faff35b2",
+  "runner_base": "frontend/tests-e2e/wms652-critical/browser.mjs",
+  "api": "SYNTHETIC",
+  "sink": "EMULATED",
+  "physical_paper": "NOT_TESTED"
+}
