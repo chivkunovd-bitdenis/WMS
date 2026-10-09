@@ -1154,8 +1154,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         "supplier_status": order.supplier_status,
         "ozon_confirmed_stage": (order.meta_details_json or {}).get("ozon_confirmed_stage"),
         "delivered_at": (
-            ctx["handed_at"][order.supply_id].isoformat()
-            if ctx["handed_at"].get(order.supply_id) else None
+            ctx.get("handed_at", {})[order.supply_id].isoformat()
+            if ctx.get("handed_at", {}).get(order.supply_id) else None
         ),
         "seller": {
             "id": str(order.seller_id),
