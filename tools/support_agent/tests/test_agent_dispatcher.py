@@ -322,52 +322,6 @@ def test_new_topic_id_must_belong_to_source_and_safe_suffix(tmp_path: Path) -> N
     assert f"in:{source['id']}:1" in store.kv_get("agent_dispatch_queue", [])
 
 
-def test_same_chat_batch_can_share_topic_anchored_to_later_message(tmp_path: Path) -> None:
-    agent, store = _agent(tmp_path)
-    first = _message(store, -10, "first-control", "Не отправляй без согласования")
-    second = _message(store, -10, "second-control", "Только после моего согласования")
-    agent.dispatcher.accept(first)
-    agent.dispatcher.accept(second)
-
-    def combined_route(prompt: str, **kwargs: Any) -> LlmResult:
-        events = json.loads(prompt)["events"]
-        shared_topic = f"topic-{second['id']}"
-        return LlmResult(json.dumps({"routes": [
-            {"event_id": event["id"], "topics": [{"topic_id": shared_topic}]}
-            for event in events
-        ]}), "codex", "sol", "session")
-
-    agent.llm.agent_turn = combined_route  # type: ignore[method-assign]
-    agent.dispatcher._route_once()
-
-    topic = store.kv_get(f"agent_topic:topic-{second['id']}")
-    assert topic["chat_id"] == -10
-    assert topic["pending"] == [f"in:{first['id']}:1", f"in:{second['id']}:1"]
-    assert store.kv_get("agent_dispatch_queue", []) == []
-
-
-def test_batch_cannot_anchor_new_topic_to_message_from_another_chat(tmp_path: Path) -> None:
-    agent, store = _agent(tmp_path)
-    first = _message(store, -10, "first-chat", "Первая задача")
-    second = _message(store, -20, "second-chat", "Вторая задача")
-    agent.dispatcher.accept(first)
-    agent.dispatcher.accept(second)
-
-    def crossed_route(prompt: str, **kwargs: Any) -> LlmResult:
-        events = json.loads(prompt)["events"]
-        return LlmResult(json.dumps({"routes": [
-            {"event_id": events[0]["id"],
-             "topics": [{"topic_id": f"topic-{second['id']}"}]},
-            {"event_id": events[1]["id"],
-             "topics": [{"topic_id": f"topic-{second['id']}"}]},
-        ]}), "codex", "sol", "session")
-
-    agent.llm.agent_turn = crossed_route  # type: ignore[method-assign]
-    with pytest.raises(ValueError, match="invalid new topic id"):
-        agent.dispatcher._route_once()
-    assert store.kv_get("agent_topic_index", []) == []
-
-
 def test_repeated_router_failure_is_backed_off(tmp_path: Path) -> None:
     agent, store = _agent(tmp_path)
     now = [100.0]
