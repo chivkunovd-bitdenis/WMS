@@ -1,0 +1,13 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/print-templates/resolve?product_id=wb-a-product-a&seller_id=wb-a-seller",
+      "body": null
+    }
+  ],
+  "printLog": [],
+  "trace": [],
+  "blocked": [],
+  "errors": []
+}

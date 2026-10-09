@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-10-08T23:07:47.069559+00:00",
+  "production_baseline": "9971abed35e003abd5be8d2bc3e0032f3ca9f5c7",
+  "source_blobs": [
+    {
+      "path": "frontend/src/screens/v2/fbsUx.ts",
+      "production_blob": "c69063f0d05b73b127cf26bf0ba529527d38ad3c",
+      "candidate_blob": "c69063f0d05b73b127cf26bf0ba529527d38ad3c",
+      "equal": true
+    },
+    {
+      "path": "frontend/src/utils/printProductThermalLabel.ts",
+      "production_blob": "e6314c4c4f5126f5f951a342707a1e77db831ea8",
+      "candidate_blob": "e6314c4c4f5126f5f951a342707a1e77db831ea8",
+      "equal": true
+    },
+    {
+      "path": "frontend/src/screens/ff/unload-pick/pickRows.ts",
+      "production_blob": "51ba5ca7bf04c9a658ac546cef082c4eda63f870",
+      "candidate_blob": "51ba5ca7bf04c9a658ac546cef082c4eda63f870",
+      "equal": true
+    }
+  ],
+  "classification": "pre-existing hotfix counterpart mismatch; no runtime regression in identical helpers",
+  "changes": {
+    "WMS702": "require calc(mm * body-scale) margins, keep no gap and line protection",
+    "WMS689": "require current header; supply valid empty picking-context read fixture; still assert GET-only auth and no mutation",
+    "WMS709": "require Plan/Remaining, retain counters and print availability on all tabs",
+    "WMS657": "use numeric WB order fixture657000001; retain full-text PDF and all geometry assertions",
+    "WMS673_C11": "Prepared packaging_task_id fixture only for C11 all-tabs print; retains GET-only checks elsewhere"
+  },
+  "ci_artifact673": {
+    "artifact_id": 11584283310,
+    "local_json": "../ci-print-first-673.json",
+    "total": 5,
+    "passed_pdf_geometry_cases": 3,
+    "failed_input_header_cases": 2
+  },
+  "validation": {
+    "input_thermal_pdf": {
+      "success": true,
+      "passed": 17,
+      "failed": 0,
+      "pending_external_render": 3,
+      "json": "../print-input-tests-targeted.json"
+    },
+    "four_file_batch": {
+      "status": "incomplete_environment",
+      "log": "../print-tests-targeted.log",
+      "chrome": "macOS --dump-dom timeout30s, allocator/display errors",
+      "dom": "parent inspector: Node24.13.1 ESM packageResolve/defaultResolve/getOrCreateModuleJob/syncLink, before React/test assertions",
+      "stopped_own_processes": [
+        {
+          "pid": 6106,
+          "ppid": 43550,
+          "command": "node (vitest)            "
+        },
+        {
+          "pid": 6112,
+          "ppid": 6106,
+          "command": "/Users/deniscivkunov/Projects/WMS/frontend/node_modules/@esbuild/darwin-arm64/bin/esbuild --service=0.28.1 --ping"
+        },
+        {
+          "pid": 9328,
+          "ppid": 6106,
+          "command": "node (vitest 1)     "
+        }
+      ],
+      "stopped_at": "2026-10-08T23:12:14.250194+00:00"
+    },
+    "pending": "exact test package LinuxCI DOM673 and WMS657 real browser geometry/PDF; no business assertions disabled"
+  },
+  "runtime_changes": false
+}

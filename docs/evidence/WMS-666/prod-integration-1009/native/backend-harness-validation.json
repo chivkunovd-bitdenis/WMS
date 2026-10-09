@@ -1,0 +1,42 @@
+{
+  "runs": [
+    {
+      "name": "backend-harness-targeted",
+      "tests": 176,
+      "failures": 3,
+      "errors": 0,
+      "skipped": 3,
+      "seconds": 114.514,
+      "log": "backend-harness-targeted.log",
+      "xml": "backend-harness-targeted.xml"
+    },
+    {
+      "name": "backend-old-history-targeted",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.675,
+      "log": "backend-old-history-targeted.log",
+      "xml": "backend-old-history-targeted.xml"
+    }
+  ],
+  "aggregate": "173 passed cases established across one affected-module batch and only3 corrected case repeats; 3 unchanged PostgreSQL skips; exactfinalLinuxCI stillrequired",
+  "stable_file_blobs": {
+    "backend/tests/conftest.py": "a884212e2d564862d5e4ac5e33e491db58f5842f",
+    "backend/tests/test_fbs_create_http_connection.py": "d6abd0528eff31a60675a4559bc1f74d155b2d71",
+    "backend/tests/test_withdrawal_ledger.py": "fdae94fac3ef3b3562844a38e43b9d5b704bbafc",
+    "backend/tests/test_wms517_sales_contract.py": "ec8d682f7aaaa428fafff58d4a5c683604aa0f55",
+    "backend/tests/test_wms517_sales_partial_decimal_regressions.py": "a5e8a3b2e54e3f5b94c64c0aa8b8715f09719035",
+    "tasks/fbs-operator-flow/openapi/fbs-operations.openapi.json": "383e04ab638f075ed9fd18f3ea4b67f018a5477e"
+  },
+  "runtime_dirty_files": [],
+  "ruff": "allownedtestfiles passed; diffcheckpassed",
+  "git": "no commit/push bysubagent",
+  "review": "Astrareceived stable5filebatch and additional singleoldhistoryfile separately",
+  "generator_versions": {
+    "local": "FastAPI0.135.1 Pydantic2.12.5 Python3.14.3",
+    "firstCI": "FastAPI0.143.0 Pydantic2.14.0 Python3.11.17",
+    "exactpathgate": "localPASS after export; finalCI authoritative"
+  }
+}

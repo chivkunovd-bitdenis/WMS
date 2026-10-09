@@ -1,0 +1,29 @@
+2026-10-09T00:01:29.7707796Z  FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 preexisting controls (must PASS without product edits) > C6/C10 single: print reads only, keeps fixtures and old cell semantics including fresh options
+2026-10-09T00:01:29.7711577Z  FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 preexisting controls (must PASS without product edits) > C6/C10 group: print reads only, keeps fixtures and old cell semantics including fresh options
+2026-10-09T00:01:29.7713206Z AssertionError: expected [ [ '1', '—', …(9) ], …(1) ] to deeply equal [ [ '1', '—', …(9) ], …(1) ]
+2026-10-09T00:01:29.7713620Z
+2026-10-09T00:01:29.7713767Z - Expected
+2026-10-09T00:01:29.7714040Z + Received
+2026-10-09T00:01:29.7714176Z
+2026-10-09T00:01:29.7714335Z @@ -3,11 +3,11 @@
+2026-10-09T00:01:29.7714607Z       "1",
+2026-10-09T00:01:29.7715112Z       "—",
+2026-10-09T00:01:29.7715638Z       "Товар red WB 1673 · WB-CODE-red",
+2026-10-09T00:01:29.7716010Z       "ART-red",
+2026-10-09T00:01:29.7716295Z       "46",
+2026-10-09T00:01:29.7716611Z -     "Нет свободного остатка",
+2026-10-09T00:01:29.7716972Z +     "Нет текущего остатка",
+2026-10-09T00:01:29.7717302Z       "№673000",
+2026-10-09T00:01:29.7717591Z       "S673 0000",
+2026-10-09T00:01:29.7717861Z       "1",
+2026-10-09T00:01:29.7718118Z       "1 / 1",
+2026-10-09T00:01:29.7718385Z       "sgtin",
+2026-10-09T00:01:29.7718529Z
+2026-10-09T00:01:29.7718980Z  ❯ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:186:38
+2026-10-09T00:01:29.7853039Z     184|     expect(requests.every((r) => r.method === 'GET' && r.auth === 'Bea…
+2026-10-09T00:01:29.7855298Z     185|     expect(JSON.stringify(fixtures)).toBe(before)
+2026-10-09T00:01:29.7857619Z     186|     expect(cellsWithoutColor(doc())).toEqual([
+2026-10-09T00:01:29.7858512Z
+2026-10-09T00:01:29.7859339Z        |                                      ^
+2026-10-09T00:01:29.7860817Z     187|       ['1', '—', 'Товар red WB 1673 · WB-CODE-red', 'ART-red', '46', '…
+2026-10-09T00:01:29.7876933Z     188|       ['2', '—', 'Товар blue WB 1673 · WB-CODE-blue', 'ART-blue', '46'…

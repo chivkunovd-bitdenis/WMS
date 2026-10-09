@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Этикетка товара</title>
+    <style>
+  @page { size: 58mm 40mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
+  .label {
+    width: 58mm;
+    height: 40mm;
+    padding: 1.2mm 1.8mm 0.8mm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .label:last-child { page-break-after: auto; break-after: auto; }
+  
+  .barcode-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 0.45mm;
+  }
+  .barcode-wrap img {
+    width: 52mm;
+    max-width: 100%;
+    height: auto;
+    max-height: 12mm;
+    object-fit: contain;
+    display: block;
+  }
+  .digits {
+    margin: 0.3mm 0 0;
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.2;
+  }
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    margin-top: 0.39mm;
+    line-height: 1.35;
+    font-size: 7.6pt;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  /*
+   * Межстрочный зазор — через margin-bottom, а не flex "gap": рендер термопринтера
+   * (и старые движки печати) часто игнорируют flex gap → строки слипаются и длинное
+   * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
+   */
+  .body > p {
+    margin: 0 0 0.2mm;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+  }
+  .body > p:last-child {
+    margin-bottom: 0;
+  }
+  .seller {
+    font-size: 7.6pt;
+    line-height: 1.35;
+    
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /*
+   * Без max-height/overflow: название уже обрезано по символам в JS, поэтому строк
+   * ровно столько, сколько влезает, и они идут обычным потоком — «Артикул» всегда
+   * ниже названия и не может напечататься поверх (баг на термопринтере).
+   */
+  .name {
+    font-size: 7.8pt;
+    font-weight: 400;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .meta {
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta-composition {
+    white-space: nowrap;
+  }
+  .footer {
+    flex: 0 0 auto;
+    margin: 0.35mm 0 0;
+    font-size: 7.2pt;
+    text-align: left;
+    line-height: 1.2;
+  }
+
+</style>
+  </head>
+  <body><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAP4AAAA0CAYAAACq5YWDAAACt0lEQVR4AeyTAWrrMBBETY+Q+58xV/iflL5SJlYVl8jIq1cIw2rHtvZt5+OffxKQwHIEPjb/JCCB5QgY/OVW7sAS2DaD73+BBBYk8BT82+22ff0+FSacUaOcp9JHX+3jR/M56lf7+NDe8+nDj2afOhU/Sj9rztHsU6P4UrNP3dJ8nhp/1r3zUf3WPfge2vPRR3vP4UNbfvoovpbiQ9PHeWr6qPG16jzH/xR8GqoEJFCXgMGvu1snk0CTgMFvorEhgboE/hr8ukScTAILEDD4CyzZESWQBAx+ErGWwAIEDP4CS3ZECSSBEcHPb1hLQAKTETD4ky3E60jgDAIG/wzKfkMCkxEw+JMtxOtI4AwCZwf/jJn8hgQk0CFg8DuAbEugIgGDX3GrziSBDgGD3wFkWwIVCcwU/Ip8nUkCUxIw+FOuxUtJYCwBgz+Wr2+XwJQEDP6Ua/FSEhhL4CrBH0vBt0tgMQIGf7GFO64EHgQM/oOCPwksRsDgL7Zwx5XAg0CF4D/m8CcBCRwgYPAPwNIqgSoEDH6VTTqHBA4QMPgHYGmVQBUC1YNfZU/OIYG3EjD4b8XpyyRwDQIG/xp78pYSeCsBg/9WnL5MAtcgsHLwr7EhbymBAQQM/gCovlICsxMw+LNvyPtJYAABgz8Aqq+UwOwEDP7+hjyVQGkCBr/0eh1OAvsEDP4+F08lUJqAwS+9XoeTwD4Bg7/P5bdTexK4PAGDf/kVOoAEjhMw+MeZ+YQELk/A4F9+hQ4ggeMEnoJ/v9+3nz9eyRk1ynkqffTVPn40n6N+tY8P7T2fPvxo9qm/9FvwozSy5hzNPjWKLzX71C3N56nxZ907H9Vv3YPvoT0ffbT3HD605aeP4mspPjR9nKemjxpfq85z/E/Bp6FKQAJ1CRj8urt1Mgk0CRj8JhobEqhL4D8AAAD///EYPvAAAAAGSURBVAMAA3GYvIqrOVIAAAAASUVORK5CYII=" alt="barcode" />
+    <p class="digits">2056553496539</p>
+  </div>
+  <div class="body">
+    <p class="seller" title="ИП Горячкина Т.И.">ИП Горячкина Т.И.</p><p class="name" title="Леггинсы со штрипками утягивающие спортивные">Леггинсы со штрипками утягивающие…</p><p class="meta">Артикул: LEG_BL_AV</p><p class="meta">Размер: S</p><p class="meta">Цвет: черный; черный сапфир; черный м…</p><p class="meta">Бренд: Alte Vette</p><p class="meta meta-composition">Состав: полиэстер</p>
+  </div>
+  <p class="footer">Пожалуйста оставьте отзыв</p>
+</section><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAP4AAAA0CAYAAACq5YWDAAACt0lEQVR4AeyTAWrrMBBETY+Q+58xV/iflL5SJlYVl8jIq1cIw2rHtvZt5+OffxKQwHIEPjb/JCCB5QgY/OVW7sAS2DaD73+BBBYk8BT82+22ff0+FSacUaOcp9JHX+3jR/M56lf7+NDe8+nDj2afOhU/Sj9rztHsU6P4UrNP3dJ8nhp/1r3zUf3WPfge2vPRR3vP4UNbfvoovpbiQ9PHeWr6qPG16jzH/xR8GqoEJFCXgMGvu1snk0CTgMFvorEhgboE/hr8ukScTAILEDD4CyzZESWQBAx+ErGWwAIEDP4CS3ZECSSBEcHPb1hLQAKTETD4ky3E60jgDAIG/wzKfkMCkxEw+JMtxOtI4AwCZwf/jJn8hgQk0CFg8DuAbEugIgGDX3GrziSBDgGD3wFkWwIVCcwU/Ip8nUkCUxIw+FOuxUtJYCwBgz+Wr2+XwJQEDP6Ua/FSEhhL4CrBH0vBt0tgMQIGf7GFO64EHgQM/oOCPwksRsDgL7Zwx5XAg0CF4D/m8CcBCRwgYPAPwNIqgSoEDH6VTTqHBA4QMPgHYGmVQBUC1YNfZU/OIYG3EjD4b8XpyyRwDQIG/xp78pYSeCsBg/9WnL5MAtcgsHLwr7EhbymBAQQM/gCovlICsxMw+LNvyPtJYAABgz8Aqq+UwOwEDP7+hjyVQGkCBr/0eh1OAvsEDP4+F08lUJqAwS+9XoeTwD4Bg7/P5bdTexK4PAGDf/kVOoAEjhMw+MeZ+YQELk/A4F9+hQ4ggeMEnoJ/v9+3nz9eyRk1ynkqffTVPn40n6N+tY8P7T2fPvxo9qm/9FvwozSy5hzNPjWKLzX71C3N56nxZ907H9Vv3YPvoT0ffbT3HD605aeP4mspPjR9nKemjxpfq85z/E/Bp6FKQAJ1CRj8urt1Mgk0CRj8JhobEqhL4D8AAAD///EYPvAAAAAGSURBVAMAA3GYvIqrOVIAAAAASUVORK5CYII=" alt="barcode" />
+    <p class="digits">2056553496539</p>
+  </div>
+  <div class="body">
+    <p class="seller" title="ИП Горячкина Т.И.">ИП Горячкина Т.И.</p><p class="name" title="Леггинсы со штрипками утягивающие спортивные">Леггинсы со штрипками утягивающие…</p><p class="meta">Артикул: LEG_BL_AV</p><p class="meta">Размер: S</p><p class="meta">Цвет: черный; черный сапфир; черный м…</p><p class="meta">Бренд: Alte Vette</p><p class="meta meta-composition">Состав: полиэстер</p>
+  </div>
+  <p class="footer">Пожалуйста оставьте отзыв</p>
+</section></body>
+</html>

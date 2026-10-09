@@ -397,8 +397,7 @@ async def print_fbs_order_tape(
             continue
         line = line_by_product.get(order.product_id)
         if (honest_sign_skipped and existing is not None) or (
-            line is None
-            and getattr(supply, "marketplace", "wb") == "wb"
+            getattr(supply, "marketplace", "wb") == "wb"
             and getattr(supply, "status", None)
             in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
         ):
@@ -421,8 +420,7 @@ async def print_fbs_order_tape(
                 ))
                 continue
             if (
-                line is None
-                and getattr(supply, "marketplace", "wb") == "wb"
+                getattr(supply, "marketplace", "wb") == "wb"
                 and getattr(supply, "status", None)
                 in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
                 and (existing is None or existing.marking_code is None)

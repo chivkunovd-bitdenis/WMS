@@ -1,4 +1,6 @@
-import { Box, Stack, Typography } from '@mui/material'
+import { useState } from 'react'
+import { Box, ListItemButton, Stack, Typography } from '@mui/material'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import GridViewOutlined from '@mui/icons-material/GridViewOutlined'
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
 import LayersOutlined from '@mui/icons-material/LayersOutlined'
@@ -34,7 +36,10 @@ export function FbsCellPickTable({
   canUndo: (row: PickRow, place: PickPlace | null) => boolean
   onUndo: (row: PickRow) => void
 }) {
+  // WMS-709: раздел «Уже подобрано» свёрнут, пока его не раскроют.
+  const [pickedOpen, setPickedOpen] = useState(false)
   const displayRows = cellPickRowsOf(rows, objects, cells)
+    .filter((item) => pickedOpen || !(item.kind === 'goods' && item.alreadyPicked))
   // Столбцы называет владелец задачи WMS-610: «Остаток в коробе», «Собрать»,
   // «Собрано». Отмена последней правки живёт в той же ячейке справа от поля,
   // чтобы не заводить отдельную пустую колонку правее «Собрано».
@@ -67,6 +72,22 @@ export function FbsCellPickTable({
                 </Typography>
               </Stack>
             </>
+          ) : item.kind === 'picked' ? (
+            <ListItemButton
+              dense
+              onClick={() => setPickedOpen((open) => !open)}
+              aria-expanded={pickedOpen}
+              sx={{ px: 0, py: 0.5, gap: 1, flexGrow: 0 }}
+              data-testid="fbs-pick-already-picked-toggle"
+            >
+              <ExpandMoreIcon fontSize="small" color="action" sx={{ transform: pickedOpen ? 'rotate(180deg)' : 'none' }} />
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {item.title}
+                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  {item.qty} шт
+                </Typography>
+              </Typography>
+            </ListItemButton>
           ) : (
             <>
               {item.kind === 'cell'
@@ -95,6 +116,18 @@ export function FbsCellPickTable({
       render: (item) => item.kind === 'goods' ? item.row.product.size : null,
     },
     {
+      // WMS-709: «План» — сколько товара нужно в поставку всего; одинаков во
+      // всех строках товара.
+      key: 'plan', header: 'План', align: 'right', width: 72,
+      render: (item) => item.kind === 'goods' ? <QtyCell value={item.row.plan} muted /> : null,
+    },
+    {
+      // WMS-709: «Осталось» — план минус снятое со всех мест товара. Меняется
+      // сразу, как только в любой строке этого товара меняют «Собрано».
+      key: 'left', header: 'Осталось', align: 'right', width: 96,
+      render: (item) => item.kind === 'goods' ? <QtyCell value={item.row.left} /> : null,
+    },
+    {
       // «Остаток в коробе» — физический остаток именно того места, откуда
       // снимаем (короб, палета или сама ячейка при россыпи). Значение уже
       // приходит без вычетов текущей смены, повторно отнимать «Собрано» нельзя.
@@ -104,13 +137,6 @@ export function FbsCellPickTable({
       render: (item) => item.kind === 'goods' && item.place ? <QtyCell value={item.place.qty} /> : null,
     },
     {
-      // «Собрать» — общий план по товару из документа отгрузки. Строк места
-      // у одного товара может быть несколько, план у них общий: снятие с
-      // любого места учитывается в этот же план.
-      key: 'toPick', header: 'Собрать', align: 'right', width: 88,
-      render: (item) => item.kind === 'goods' ? <QtyCell value={item.row.plan} muted /> : null,
-    },
-    {
       // «Собрано» — редактируемое поле по конкретному месту: сколько уже снято
       // с этого короба/палеты/россыпи. Верхняя граница — сколько ещё можно снять
       // отсюда с учётом плана товара (та же логика, что была у столбца «Снять»).
@@ -118,7 +144,7 @@ export function FbsCellPickTable({
       // колонки правее и без «пустой» ячейки в шапке.
       key: 'picked', header: 'Собрано', align: 'right', width: 132,
       render: (item) => {
-        if (item.kind !== 'goods' || !item.place) return null
+        if (item.kind !== 'goods' || !item.place || item.alreadyPicked) return null
         const ceiling = item.place.picked + Math.min(item.place.left, item.row.left)
         return (
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
