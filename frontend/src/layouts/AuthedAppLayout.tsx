@@ -172,7 +172,6 @@ export function AuthedAppLayout({
                 {userRoleLabel ? <span> · {userRoleLabel}</span> : null}
               </Box>
             ) : null}
-            <MuiButton component={NavLink} to={`${base}/chat`}>Чат</MuiButton>
             <NotificationBell portal="fulfillment" notificationsPath={`${base}/notifications`} />
             <MuiButton
               type="button"

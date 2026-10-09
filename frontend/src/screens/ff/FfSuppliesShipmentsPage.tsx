@@ -59,7 +59,6 @@ import { FfMarketplaceUnloadBoxAddDialog } from './FfMarketplaceUnloadBoxAddDial
 import { FfUnloadPickPage } from './unload-pick/FfUnloadPickPage'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
 import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
-import { ChatDocumentAction } from '../../components/chat/ChatDocumentAction'
 import type { LabelSize } from '../../utils/labelSize'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
@@ -271,9 +270,6 @@ type Props = {
   initialMarketplaceUnloadId?: string | null
   onInitialMarketplaceUnloadOpened?: () => void
   addressStorageEnabled?: boolean
-  // WMS-397/399 gap 1: chat entry point in the marketplace-unload dialog.
-  chatAuthHeaders?: (token: string) => Record<string, string>
-  currentUserId?: string | null
 }
 
 export function FfSuppliesShipmentsPage({
@@ -297,19 +293,8 @@ export function FfSuppliesShipmentsPage({
   initialMarketplaceUnloadId = null,
   onInitialMarketplaceUnloadOpened,
   addressStorageEnabled = true,
-  chatAuthHeaders,
-  currentUserId = null,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams()
-  useEffect(() => {
-    const id = searchParams.get('open_outbound')
-    if (!id) return
-    onOpenOutbound(id)
-    const next = new URLSearchParams(searchParams)
-    next.delete('open_outbound')
-    setSearchParams(next, { replace: true })
-  }, [searchParams, setSearchParams, onOpenOutbound])
-
   const isMpShipmentsPage = pageVariant === 'mp-shipments'
   const [kind, setKind] = useState<QuickFilterKind>(isMpShipmentsPage ? 'marketplace_unload' : 'all')
   const [sellerFilter, setSellerFilter] = useState<string>('all')
@@ -2355,15 +2340,7 @@ export function FfSuppliesShipmentsPage({
         onClose={closeDocModal}
         fullScreen
       >
-        <DialogTitle>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Box sx={{ flex: 1, minWidth: 0 }}>{docTitle}</Box>
-            {chatAuthHeaders && token && docModal === 'marketplace_unload' && unloadDetail ? (
-              <ChatDocumentAction token={token} authHeaders={chatAuthHeaders}
-                currentUserId={currentUserId} kind="marketplace_unload" documentId={unloadDetail.id} />
-            ) : null}
-          </Stack>
-        </DialogTitle>
+        <DialogTitle>{docTitle}</DialogTitle>
         <DialogContent dividers data-testid="ff-supplies-doc-dialog">
           {modalError ? (
             <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-mp-modal-error">

@@ -1,4 +1,3 @@
-import { ChatDocumentAction } from '../../components/chat/ChatDocumentAction'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
@@ -716,8 +715,6 @@ export function SellerInboundDraftScreen({
       <Typography variant="h5" gutterBottom>
         {pageTitle}
       </Typography>
-      {requestId && detail && <ChatDocumentAction token={token} authHeaders={authHeaders} currentUserId={null}
-        kind="inbound_intake" documentId={requestId} />}
       {localError && !showLoadError ? (
         <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-inbound-draft-error">
           {localError}

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChatDocumentAction } from './chat/ChatDocumentAction'
 import {
   Alert,
   Button,
@@ -709,10 +708,7 @@ export function SellerMarketplaceUnloadDialog({
   return (
     <>
       <Dialog open={open} onClose={onClose} fullScreen data-testid="seller-mp-unload-dialog">
-        <DialogTitle>Отгрузка на маркетплейс
-          {detail && <ChatDocumentAction key={catalogScopeKey} token={token} authHeaders={authHeaders}
-            currentUserId={null} kind="marketplace_unload" documentId={detail.id} />}
-        </DialogTitle>
+        <DialogTitle>Отгрузка на маркетплейс</DialogTitle>
         <DialogContent dividers data-testid="seller-mp-plan-only">
           {modalError ? (
             <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-mp-unload-error">

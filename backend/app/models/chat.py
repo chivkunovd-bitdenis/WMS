@@ -29,7 +29,6 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
-    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -38,6 +37,7 @@ from app.models.base import Base
 if TYPE_CHECKING:
     from app.models.seller import Seller
     from app.models.tenant import Tenant
+    from app.models.user import User
 
 
 CHAT_KIND_MAIN = "main"
@@ -61,8 +61,8 @@ class ChatConversation(Base):
             "tenant_id",
             "seller_id",
             unique=True,
-            postgresql_where=text("kind = 'main'"),
-            sqlite_where=text("kind = 'main'"),
+            postgresql_where="kind = 'main'",
+            sqlite_where="kind = 'main'",
         ),
         Index("ix_chat_conversations_seller", "tenant_id", "seller_id"),
     )
@@ -105,9 +105,9 @@ class ChatConversation(Base):
 class ChatParticipant(Base):
     """Membership row.
 
-    Main-chat access is implicit for tenant FF users and the owning seller.
-    Extra chats require an explicit row for every reader/writer, including
-    administrators; main chats do not store participant rows.
+    For main chats FF portal members always have access implicitly and only
+    the seller-side user is stored explicitly. Extra chats require an explicit
+    row for every reader/writer.
     """
 
     __tablename__ = "chat_participants"

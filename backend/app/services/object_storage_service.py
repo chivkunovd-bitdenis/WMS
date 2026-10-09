@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import stat
 from pathlib import Path
 from typing import Any, Protocol, cast
 
@@ -14,8 +13,6 @@ class ObjectStorageBackend(Protocol):
     def put_bytes(self, key: str, content: bytes, *, content_type: str) -> None: ...
 
     def get_bytes(self, key: str) -> bytes: ...
-
-    def object_exists(self, key: str) -> bool: ...
 
     def delete_object(self, key: str) -> None: ...
 
@@ -43,16 +40,10 @@ class LocalObjectStorage:
             raise FileNotFoundError(key)
         return target.read_bytes()
 
-    def object_exists(self, key: str) -> bool:
-        # stat avoids reading bytes and does not hide permission/I/O failures.
-        try:
-            return stat.S_ISREG(self._resolve(key).stat().st_mode)
-        except FileNotFoundError:
-            return False
-
     def delete_object(self, key: str) -> None:
         target = self._resolve(key)
-        target.unlink(missing_ok=True)
+        if target.is_file():
+            target.unlink()
 
 
 class S3ObjectStorage:
@@ -114,30 +105,8 @@ class S3ObjectStorage:
         body = response["Body"].read()
         return bytes(body)
 
-    def object_exists(self, key: str) -> bool:
-        from botocore.exceptions import ClientError
-
-        try:
-            self._client.head_object(Bucket=self._bucket, Key=self._full_key(key))
-        except ClientError as exc:
-            if str(exc.response.get("Error", {}).get("Code")) in {"404", "NoSuchKey", "NotFound"}:
-                return False
-            # 403, throttling and transport failures are not proof of absence.
-            raise
-        return True
-
     def delete_object(self, key: str) -> None:
-        from botocore.exceptions import ClientError
-
-        try:
-            self._client.delete_object(Bucket=self._bucket, Key=self._full_key(key))
-        except ClientError as exc:
-            if str(exc.response.get("Error", {}).get("Code")) not in {
-                "404",
-                "NoSuchKey",
-                "NotFound",
-            }:
-                raise
+        self._client.delete_object(Bucket=self._bucket, Key=self._full_key(key))
 
 
 def get_object_storage_backend() -> ObjectStorageBackend | None:

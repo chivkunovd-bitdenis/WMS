@@ -14,7 +14,6 @@ import {
 import type { SellerPermissions } from '../utils/sellerPermissions'
 
 export type Me = {
-  id?: string
   email: string
   organization_name: string
   role: string
