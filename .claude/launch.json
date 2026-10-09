@@ -2,10 +2,22 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "wms-frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--port", "5199", "--strictPort"],
-      "port": 5199
+      "name": "pc-emulator",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["PYTHONPATH=/Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002", "WB_EMULATOR_DB_PATH=/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/ee1de9f2-5b1d-4881-a8fc-8a618ce5877f/scratchpad/stand/wb_emulator.sqlite", "WB_EMULATOR_ADMIN_TOKEN=fbs-e2e-admin", "WB_EMULATOR_TOKEN_MAP_FILE=/Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/wb_emulator/seed/tokens.json", "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python", "-m", "uvicorn", "wb_emulator.main:app", "--app-dir", "/Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002", "--host", "127.0.0.1", "--port", "18381"],
+      "port": 18381
+    },
+    {
+      "name": "pc-api",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["WMS_AUTO_CREATE_SCHEMA=1", "WMS_ALLOW_PUBLIC_REGISTRATION=1", "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/ee1de9f2-5b1d-4881-a8fc-8a618ce5877f/scratchpad/stand/wms.db", "JWT_SECRET_KEY=local-prodcheck-jwt-secret-key-minimum-32-characters", "WILDBERRIES_MARKETPLACE_API_BASE=http://127.0.0.1:18381", "WMS_DATA_DIR=/private/tmp/claude-501/-Users-deniscivkunov-Projects-WMS/ee1de9f2-5b1d-4881-a8fc-8a618ce5877f/scratchpad/stand/data", "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python", "-m", "uvicorn", "app.main:app", "--app-dir", "/Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/backend", "--host", "127.0.0.1", "--port", "18380"],
+      "port": 18380
+    },
+    {
+      "name": "pc-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["VITE_API_PROXY=http://127.0.0.1:18380", "npm", "--prefix", "/Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/frontend", "run", "dev", "--", "--port", "5380", "--strictPort"],
+      "port": 5380
     }
   ]
 }

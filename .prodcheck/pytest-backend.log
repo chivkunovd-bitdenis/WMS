@@ -1,0 +1,148 @@
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  2%]
+................................................s....................... [  5%]
+....................................ss.................................. [  8%]
+........................................................................ [ 11%]
+.......s.s.............................................................. [ 14%]
+......................................................................F. [ 17%]
+.........................x........s..................................... [ 20%]
+.................s.....ss............s.ss.......s..s..s....s............ [ 22%]
+........................................................................ [ 25%]
+......................................s................................. [ 28%]
+........................................................................ [ 31%]
+...........................s.s..ss...............s.........ss........... [ 34%]
+........s..............s................................................ [ 37%]
+...................s.................................................... [ 40%]
+........................................................................ [ 43%]
+.......s...................................s..s...............s......... [ 45%]
+.s..s................................................................... [ 48%]
+........................................................................ [ 51%]
+........................................................................ [ 54%]
+..................s..................................................... [ 57%]
+......................ss................................................ [ 60%]
+...............................................s....ss.................. [ 63%]
+....................................s................................... [ 66%]
+...................s.................................................... [ 68%]
+..............................ss........................................ [ 71%]
+.........................s....s......................................... [ 74%]
+..sssssssssssssssssssssssssssss........ssssssss......................... [ 77%]
+......ss..................................ss.....sss............sssss... [ 80%]
+..............................s......................................... [ 83%]
+................................................s............s.s........ [ 86%]
+...................s..........s........s.s....s.......................s. [ 88%]
+.s.........s...........................................s...s............ [ 91%]
+........................................................................ [ 94%]
+........................................................................ [ 97%]
+...................................................ss.......             [100%]
+=================================== FAILURES ===================================
+______________ test_exported_fbs_openapi_file_matches_live_schema ______________
+[gw5] darwin -- Python 3.14.3 /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python
+
+    def test_exported_fbs_openapi_file_matches_live_schema() -> None:
+        assert EXPORT_PATH.is_file(), "run backend/scripts/export_fbs_openapi.py first"
+        exported = json.loads(EXPORT_PATH.read_text(encoding="utf-8"))
+        live = create_app().openapi()
+        live_paths = {
+            path: ops
+            for path, ops in live["paths"].items()
+            if path.startswith("/operations/fbs-")
+        }
+>       assert exported["paths"] == live_paths
+E       AssertionError: assert {'/operations...], ...}}, ...} == {'/operations...], ...}}, ...}
+E         
+E         Omitting 90 identical items, use -vv to show
+E         Right contains 2 more items:
+E         {'/operations/fbs-supplies/{supply_id}/scan-auto-print/{scan_id}/cancel': {'post': {'description': 'WMS-631 '
+E                                                                                                            'R20: '
+E                                                                                                            'Escape '
+E                                                                                                            'releases '...
+E         
+E         ...Full output truncated (95 lines hidden), use '-vv' to show
+
+tests/test_fbs_openapi_contract.py:77: AssertionError
+=============================== warnings summary ===============================
+app/main.py:19
+app/main.py:19
+app/main.py:19
+app/main.py:19
+app/main.py:19
+app/main.py:19
+app/main.py:19
+app/main.py:19
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491: 18 warnings
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491: 18 warnings
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+tests/test_wms516_physical_warehouse.py: 31 warnings
+  /Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/backend/app/services/physical_warehouse_repair_service.py:524: SAWarning: Skipped unsupported reflection of expression-based index uq_inventory_balance_loc_product_container
+    return [dict(index) for index in inspect(connection).get_indexes(table_name)]
+
+tests/test_wms516_physical_warehouse.py::test_prepare_evaluates_expression_unique_allocation_index
+tests/test_wms516_physical_warehouse.py::test_container_reference_lifecycle[allocation-terminal]
+tests/test_wms516_physical_warehouse.py::test_container_reference_lifecycle[allocation-cancelled]
+  /Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/backend/app/services/physical_warehouse_repair_service.py:524: SAWarning: Skipped unsupported reflection of expression-based index uq_mp_unload_pick_req_product_loc_container
+    return [dict(index) for index in inspect(connection).get_indexes(table_name)]
+
+tests/test_wms516_physical_warehouse.py::test_container_reference_lifecycle[count_line-terminal]
+tests/test_wms516_physical_warehouse.py::test_container_reference_lifecycle[count_line-cancelled]
+  /Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/backend/app/services/physical_warehouse_repair_service.py:524: SAWarning: Skipped unsupported reflection of expression-based index uq_inventory_count_line_scope
+    return [dict(index) for index in inspect(connection).get_indexes(table_name)]
+
+tests/test_wms535_cli.py::test_duplicate_merge_discovers_and_moves_product_foreign_keys
+tests/test_wms535_cli.py::test_duplicate_merge_dry_run_reports_same_unique_conflict_as_apply
+  /Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/backend/app/cli/merge_duplicate_wb_chrt_products.py:94: SAWarning: Skipped unsupported reflection of expression-based index uq_inventory_balance_loc_product_container
+    *inspector.get_unique_constraints(reference.table),
+
+tests/test_wms535_cli.py::test_duplicate_merge_discovers_and_moves_product_foreign_keys
+tests/test_wms535_cli.py::test_duplicate_merge_dry_run_reports_same_unique_conflict_as_apply
+  /Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/backend/app/cli/merge_duplicate_wb_chrt_products.py:97: SAWarning: Skipped unsupported reflection of expression-based index uq_inventory_balance_loc_product_container
+    for index in inspector.get_indexes(reference.table)
+
+tests/test_wms535_cli.py::test_duplicate_merge_discovers_and_moves_product_foreign_keys
+tests/test_wms535_cli.py::test_duplicate_merge_dry_run_reports_same_unique_conflict_as_apply
+  /Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/backend/app/cli/merge_duplicate_wb_chrt_products.py:94: SAWarning: Skipped unsupported reflection of expression-based index uq_inventory_count_line_scope
+    *inspector.get_unique_constraints(reference.table),
+
+tests/test_wms535_cli.py::test_duplicate_merge_discovers_and_moves_product_foreign_keys
+tests/test_wms535_cli.py::test_duplicate_merge_dry_run_reports_same_unique_conflict_as_apply
+  /Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/backend/app/cli/merge_duplicate_wb_chrt_products.py:97: SAWarning: Skipped unsupported reflection of expression-based index uq_inventory_count_line_scope
+    for index in inspector.get_indexes(reference.table)
+
+tests/test_wms535_cli.py::test_duplicate_merge_discovers_and_moves_product_foreign_keys
+tests/test_wms535_cli.py::test_duplicate_merge_dry_run_reports_same_unique_conflict_as_apply
+  /Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/backend/app/cli/merge_duplicate_wb_chrt_products.py:94: SAWarning: Skipped unsupported reflection of expression-based index uq_mp_unload_pick_req_product_loc_container
+    *inspector.get_unique_constraints(reference.table),
+
+tests/test_wms535_cli.py::test_duplicate_merge_discovers_and_moves_product_foreign_keys
+tests/test_wms535_cli.py::test_duplicate_merge_dry_run_reports_same_unique_conflict_as_apply
+  /Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/backend/app/cli/merge_duplicate_wb_chrt_products.py:97: SAWarning: Skipped unsupported reflection of expression-based index uq_mp_unload_pick_req_product_loc_container
+    for index in inspector.get_indexes(reference.table)
+
+tests/test_wms538_ff_catalog_batch.py::test_ff_catalog_rejects_huge_unscoped_tenant_with_413_wms538
+  /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:352: StarletteDeprecationWarning: 'HTTP_413_REQUEST_ENTITY_TOO_LARGE' is deprecated. Use 'HTTP_413_CONTENT_TOO_LARGE' instead.
+    return await dependant.call(**values)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_fbs_openapi_contract.py::test_exported_fbs_openapi_file_matches_live_schema
+1 failed, 2396 passed, 110 skipped, 1 xfailed, 103 warnings in 843.53s (0:14:03)
+EXIT 1

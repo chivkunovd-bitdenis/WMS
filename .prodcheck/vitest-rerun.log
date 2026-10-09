@@ -1,0 +1,588 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/prodcheck-20261002/frontend
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx (20 tests | 18 failed) 14608ms
+   ✓ WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: фокус на «Выбрать всё» — стикер A, ЧЗ A, стикер B без единого клика  2442ms
+   ✓ WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C6/R6: стикер A и ЧЗ A подряд, пока сервер отвечает, — оба обработаны по порядку, ЧЗ у заказа A  2678ms
+   × WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C7/R7: хвост ЧЗ в строке сразу по ответу commit, до ответа перечитывания; следующий скан не ждёт его 5946ms
+     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   × WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле 2476ms
+     → expected null to be 'order-a' // Object.is equality
+   × WMS-575 · R11 стрелка «Перепечатать ЧЗ» у кода оператора > сервер отдал id кода оператора — стрелка в строке этого заказа 64ms
+     → expected null not to be null
+   × WMS-575 · R11 стрелка «Перепечатать ЧЗ» у кода оператора > без id — как отвечал сервер до правки — стрелки нет 72ms
+     → expected null not to be null
+   × WMS-575 · исправления по ревью ночного кандидата > P1: русская раскладка — ЧЗ с «/», «?», «&» уходит на validate и commit сырым, как из поля скана 73ms
+     → expected null not to be null
+   × WMS-575 · исправления по ревью ночного кандидата > P1: латинская раскладка — тот же ЧЗ уходит без изменений 63ms
+     → expected null not to be null
+   × WMS-575 · исправления по ревью ночного кандидата > P2: сканер дважды прочитал стикер, пока шёл поиск, — второй не уходит как ЧЗ (механизм сборки, R4) 64ms
+     → expected null not to be null
+   × WMS-575 · исправления по ревью ночного кандидата > P2: стикер и ЧЗ подряд во время поиска — как раньше, ЧЗ привязывается к заказу 59ms
+     → expected null not to be null
+   × WMS-630 · КИЗ в строке точного заказа > выбирает второй заказ того же товара и сразу, без окна, заменяет только его (R18) 57ms
+     → expected null not to be null
+   × WMS-630 · КИЗ в строке точного заказа > при смене поля и ручном вводе с Enter берёт последнюю выбранную строку 63ms
+     → expected null not to be null
+   × WMS-630 · КИЗ в строке точного заказа > ошибка валидации сохраняет старый КИЗ; Escape освобождает выбор 60ms
+     → expected null not to be null
+   × WMS-630 · КИЗ в строке точного заказа > R18: ни окна подтверждения, ни window.confirm при замене КИЗ строкой 65ms
+     → expected null not to be null
+   × WMS-630 · КИЗ в строке точного заказа > крестик сохраняет отдельное удаление, отказ WB=false 78ms
+     → expected null not to be null
+   × WMS-630 · КИЗ в строке точного заказа > крестик сохраняет отдельное удаление, отказ WB=true 63ms
+     → expected null not to be null
+   × WMS-630 · КИЗ в строке точного заказа > не добавляет поля Ozon 65ms
+     → expected null not to be null
+   × WMS-630 · КИЗ в строке точного заказа > unified registerScanner: точный confirmed commit, быстрый следующий скан при delayed commit=false 66ms
+     → expected null not to be null
+   × WMS-630 · КИЗ в строке точного заказа > unified registerScanner: точный confirmed commit, быстрый следующий скан при delayed commit=true 65ms
+     → expected null not to be null
+   × WMS-604 unified packing presentation > prepares missing stickers without a supply Start button and keeps rows and scanner registered 86ms
+     → expected  to have a length of 2 but got +0
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R2: клик по треугольнику не забирает фокус у поля скана
+An update to ForwardRef(TouchRipple) inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R6/R7: новый КИЗ в поле красной строки, WB принял — строка ушла; N = 0 выключает фильтр
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R6/R7: новый КИЗ в поле красной строки, WB принял — строка ушла; N = 0 выключает фильтр
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R6/R7: новый КИЗ в поле красной строки, WB принял — строка ушла; N = 0 выключает фильтр
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R6/R7: новый КИЗ в поле красной строки, WB принял — строка ушла; N = 0 выключает фильтр
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R6/R7: новый КИЗ в поле красной строки, WB принял — строка ушла; N = 0 выключает фильтр
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R6/R7: новый КИЗ в поле красной строки, WB принял — строка ушла; N = 0 выключает фильтр
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R6/R7: новый КИЗ в поле красной строки, WB принял — строка ушла; N = 0 выключает фильтр
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R6/R7: новый КИЗ в поле красной строки, WB принял — строка ушла; N = 0 выключает фильтр
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R6/R7: новый КИЗ в поле красной строки, WB принял — строка ушла; N = 0 выключает фильтр
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx (7 tests | 4 failed) 9235ms
+   ✓ WMS-636 · фильтр «Не принятые WB КИЗ» > R1/R3: без непринятых треугольника нет, лента как раньше  856ms
+   ✓ WMS-636 · фильтр «Не принятые WB КИЗ» > R1/R2/R3/R4: треугольник N, клик — только непринятые под шапкой, повторный клик — обычная лента  1143ms
+   ✓ WMS-636 · фильтр «Не принятые WB КИЗ» > R2: клик по треугольнику не забирает фокус у поля скана  803ms
+   × WMS-636 · фильтр «Не принятые WB КИЗ» > R5: скан в фильтре — тот же обработчик; строка скана зелёная сверху, отклонённая WB уходит к красным 5103ms
+     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   × WMS-636 · фильтр «Не принятые WB КИЗ» > R6/R7: новый КИЗ в поле красной строки, WB принял — строка ушла; N = 0 выключает фильтр 989ms
+     → expected [ 'order-a', 'order-b', …(2) ] to deeply equal [ 'fbs-wb-rejected-kiz-header', …(1) ]
+   × WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу 281ms
+     → Cannot read properties of null (reading 'dataset')
+   × WMS-636 · фильтр «Не принятые WB КИЗ» > C10: рамка сборки — фильтр общий, шапка только у назначенной поставки, зелёная только у поднятой 58ms
+     → expected [] to deeply equal [ 'order-a', 'order-b', …(2) ]
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.size.test.ts (19 tests | 2 failed) 16ms
+   ✓ C4 · размер есть хотя бы у одного товара WB > показывает столбец всей вкладке и держит прочерк у остальных строк 1ms
+   ✓ C4 · размер есть хотя бы у одного товара WB > не считает размером пробелы из карточки 0ms
+   ✓ C5 · размеров нет, затем появился > прячет столбец на пустом наборе и показывает после добавления заказа с размером 0ms
+   ✓ C6 · Ozon с несколькими позициями > отдаёт размер каждой позиции в порядке строк, пустую оставляет прочерком 0ms
+   ✓ C6 · Ozon с несколькими позициями > не подставляет размер первой позиции всему отправлению 0ms
+   ✓ C6 · Ozon с несколькими позициями > видит размер у любой позиции, не только у первой 0ms
+   × C4 · столбец «Размер» стоит на одной вертикали во всех строках > держит одинаковые слоты справа при ЧЗ, без ЧЗ и с отметкой печати 8ms
+     → expected [ 'Box:118px', 'Box:150px', …(3) ] to deeply equal [ 'Box:118px', 'Box:150px', …(3) ]
+   ✓ C4 · столбец «Размер» стоит на одной вертикали во всех строках > оставляет слот «Доступно ЧЗ» пустым у строки без ЧЗ, а не выкидывает его 1ms
+   ✓ C4 · столбец «Размер» стоит на одной вертикали во всех строках > держит ячейку размера фиксированной, значение — прочерк без размера 1ms
+   ✓ C4 · столбец «Размер» стоит на одной вертикали во всех строках > переносит длинный размер WB внутри колонки и не режет значение 1ms
+   ✓ C4 · столбец «Размер» стоит на одной вертикали во всех строках > не двигает столбец длинным названием товара 0ms
+   × C5 · поставка без ЧЗ и без размеров > не резервирует пустой слот ЧЗ, если он не нужен ни одной строке 1ms
+     → expected [ 'Box:150px', 'Box:150px', …(2) ] to deeply equal [ 'Box:150px', 'Box:118px', …(2) ]
+   ✓ C5 · поставка без ЧЗ и без размеров > убирает ячейку размера, когда столбец скрыт 0ms
+   ✓ WMS-489 · перепечатка уже привязанного КИЗ на FBS-упаковке > показывает маленькую круговую стрелку только у KIZ, внесённого оператором 0ms
+   ✓ WMS-489 · перепечатка уже привязанного КИЗ на FBS-упаковке > ставит стрелку слева от показанного KIZ и открывает стандартную печать в reprint-режиме 0ms
+   ✓ C6 · Ozon: размер стоит у своей позиции > даёт каждой позиции свою ячейку размера в том же порядке 0ms
+   ✓ C6 · Ozon: размер стоит у своей позиции > связывает размер именно со своей позицией 0ms
+   ✓ C6 · Ozon: размер стоит у своей позиции > переносит длинный размер второй позиции, не задевая короткий и прочерк 0ms
+   ✓ C6 · Ozon: размер стоит у своей позиции > держит одну вертикаль у отправлений с ЧЗ и без него 0ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 24 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C7/R7: хвост ЧЗ в строке сразу по ответу commit, до ответа перечитывания; следующий скан не ждёт его
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:297:3
+    295|   })
+    296| 
+    297|   it('C7/R7: хвост ЧЗ в строке сразу по ответу commit, до ответа переч…
+       |   ^
+    298|     delays = { workspace: 400 }
+    299|     await openPackingTab()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+AssertionError: expected null to be 'order-a' // Object.is equality
+
+[32m- Expected:[39m 
+"order-a"
+
+[31m+ Received:[39m 
+null
+
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:329:25
+    327| 
+    328|     expect(kizCalls().map((call) => call.path.split('?')[0])).toEqual(…
+    329|     expect(activeRow()).toBe('order-a')
+       |                         ^
+    330|     expect(input.value).toBe('')
+    331|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · R11 стрелка «Перепечатать ЧЗ» у кода оператора > сервер отдал id кода оператора — стрелка в строке этого заказа
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:342:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · R11 стрелка «Перепечатать ЧЗ» у кода оператора > без id — как отвечал сервер до правки — стрелки нет
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:353:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · исправления по ревью ночного кандидата > P1: русская раскладка — ЧЗ с «/», «?», «&» уходит на validate и commit сырым, как из поля скана
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:387:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · исправления по ревью ночного кандидата > P1: латинская раскладка — тот же ЧЗ уходит без изменений
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:402:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · исправления по ревью ночного кандидата > P2: сканер дважды прочитал стикер, пока шёл поиск, — второй не уходит как ЧЗ (механизм сборки, R4)
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:414:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · исправления по ревью ночного кандидата > P2: стикер и ЧЗ подряд во время поиска — как раньше, ЧЗ привязывается к заказу
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:427:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > выбирает второй заказ того же товара и сразу, без окна, заменяет только его (R18)
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:442:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > при смене поля и ручном вводе с Enter берёт последнюю выбранную строку
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:463:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > ошибка валидации сохраняет старый КИЗ; Escape освобождает выбор
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:482:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > R18: ни окна подтверждения, ни window.confirm при замене КИЗ строкой
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:498:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > крестик сохраняет отдельное удаление, отказ WB=false
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > крестик сохраняет отдельное удаление, отказ WB=true
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:512:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > не добавляет поля Ozon
+AssertionError: expected null not to be null
+ ❯ openPackingTab src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:240:74
+    238|   })
+    239|   await settle(50)
+    240|   expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).n…
+       |                                                                          ^
+    241| }
+    242| 
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:527:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > unified registerScanner: точный confirmed commit, быстрый следующий скан при delayed commit=false
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > unified registerScanner: точный confirmed commit, быстрый следующий скан при delayed commit=true
+AssertionError: expected null not to be null
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:557:34
+    555|     await act(async () => root.render(<Unified />))
+    556|     await settle(50)
+    557|     expect(input('order-b')).not.toBeNull()
+       |                                  ^
+    558|     focus('order-b')
+    559|     expect(activeRow()).toBe('order-b')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-604 unified packing presentation > prepares missing stickers without a supply Start button and keeps rows and scanner registered
+AssertionError: expected  to have a length of 2 but got +0
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 2[39m
+[31m+ 0[39m
+
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx:604:61
+    602|     expect(document.querySelector('[data-testid="fbs-assembly-supply-s…
+    603|     expect(document.body.textContent).not.toContain('Начать работу с п…
+    604|     expect(packingHost.querySelectorAll('[data-order-id]')).toHaveLeng…
+       |                                                             ^
+    605|     expect(packingHost.textContent).toContain('5001')
+    606|     expect(registerScanner.mock.calls.some(([, controller]) => Boolean…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.size.test.ts > C4 · столбец «Размер» стоит на одной вертикали во всех строках > держит одинаковые слоты справа при ЧЗ, без ЧЗ и с отметкой печати
+AssertionError: expected [ 'Box:118px', 'Box:150px', …(3) ] to deeply equal [ 'Box:118px', 'Box:150px', …(3) ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "Box:118px",[22m
+[2m    "Box:150px",[22m
+[32m-   "Box:118px",[39m
+[31m+   "Box:150px",[39m
+[2m    "Typography:16px",[22m
+[2m    "Stack:по содержимому",[22m
+[2m  ][22m
+
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.size.test.ts:256:49
+    254|     expect(columnsAfterProduct(rowPrintedWithoutMarking)).toEqual(colu…
+    255|     expect(columnsAfterProduct(rowPlain)).toEqual(columnsAfterProduct(…
+    256|     expect(columnsAfterProduct(rowWithMarking)).toEqual([
+       |                                                 ^
+    257|       'Box:118px', 'Box:150px', 'Box:118px', 'Typography:16px', 'Stack…
+    258|     ])
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.size.test.ts > C5 · поставка без ЧЗ и без размеров > не резервирует пустой слот ЧЗ, если он не нужен ни одной строке
+AssertionError: expected [ 'Box:150px', 'Box:150px', …(2) ] to deeply equal [ 'Box:150px', 'Box:118px', …(2) ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "Box:150px",[22m
+[32m-   "Box:118px",[39m
+[31m+   "Box:150px",[39m
+[2m    "Typography:16px",[22m
+[2m    "Stack:по содержимому",[22m
+[2m  ][22m
+
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.size.test.ts:302:38
+    300|   it('не резервирует пустой слот ЧЗ, если он не нужен ни одной строке'…
+    301|     const row = packingRow()
+    302|     expect(columnsAfterProduct(row)).toEqual(['Box:150px', 'Box:118px'…
+       |                                      ^
+    303|     expect(columnsAfterProduct(packingRow({ printed: true }))).toEqual…
+    304|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R5: скан в фильтре — тот же обработчик; строка скана зелёная сверху, отклонённая WB уходит к красным
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx:237:3
+    235|   })
+    236| 
+    237|   it('R5: скан в фильтре — тот же обработчик; строка скана зелёная све…
+       |   ^
+    238|     const run = async (filter: boolean) => {
+    239|       await open()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R6/R7: новый КИЗ в поле красной строки, WB принял — строка ушла; N = 0 выключает фильтр
+AssertionError: expected [ 'order-a', 'order-b', …(2) ] to deeply equal [ 'fbs-wb-rejected-kiz-header', …(1) ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[32m-   "fbs-wb-rejected-kiz-header",[39m
+[2m    "order-a",[22m
+[31m+   "order-b",[39m
+[31m+   "order-c",[39m
+[31m+   "order-d",[39m
+[2m  ][22m
+
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx:277:25
+    275|     await open()
+    276|     click(toggle()!)
+    277|     expect(listOrder()).toEqual(['fbs-wb-rejected-kiz-header', 'order-…
+       |                         ^
+    278|     const field = document.querySelector<HTMLElement>('[data-order-id=…
+    279|     act(() => field.focus())
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > R10/R11: одно «Назад» откатывает весь скан — КИЗ снят, выбора нет, хвост ушёл из строки сразу
+TypeError: Cannot read properties of null (reading 'dataset')
+ ❯ tail src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx:295:87
+    293|     scan(KIZ)
+    294|     await settle(120)
+    295|     const tail = () => document.querySelector<HTMLElement>('[data-orde…
+       |                                                                                       ^
+    296|     expect(tail()).toBe(KIZ.slice(-8))
+    297|     expect(q('fbs-kiz-scan-active')).toBeNull()
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx:296:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/24]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx > WMS-636 · фильтр «Не принятые WB КИЗ» > C10: рамка сборки — фильтр общий, шапка только у назначенной поставки, зелёная только у поднятой
+AssertionError: expected [] to deeply equal [ 'order-a', 'order-b', …(2) ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [[39m
+[32m-   "order-a",[39m
+[32m-   "order-b",[39m
+[32m-   "order-c",[39m
+[32m-   "order-d",[39m
+[32m- ][39m
+[31m+ [][39m
+
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx:331:21
+    329|     await act(async () => root.render(frame({ active: false, count: 5,…
+    330|     await settle(50)
+    331|     expect(shown()).toEqual([...IDS])
+       |                     ^
+    332|     // Треугольник рамки не рисует: он в общей полосе скана сборки.
+    333|     expect(toggle()).toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/24]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  24 failed | 22 passed (46)
+   Start at  19:44:13
+   Duration  668.79s (transform 2.85s, setup 0ms, collect 641.51s, tests 23.86s, environment 1.53s, prepare 417ms)
+
+EXIT 1
