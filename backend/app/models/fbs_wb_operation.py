@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from app.models.tenant import Tenant
     from app.models.user import User
 
+WB_OPERATION_KIND_SUPPLY_TRANSFER_ORDERS = "supply_transfer_orders"
+
 WB_OPERATION_STATE_PENDING = "pending"
 WB_OPERATION_STATE_CONFIRMED = "confirmed"
 WB_OPERATION_STATE_FAILED = "failed"

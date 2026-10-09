@@ -45,6 +45,7 @@ from app.models.fbs_supply import (
 )
 from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import (
+    WB_OPERATION_KIND_SUPPLY_TRANSFER_ORDERS,
     WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING,
@@ -269,6 +270,24 @@ async def delete_empty_supply(
     if await session.scalar(select(exists().where(FbsOrder.supply_id == supply_id))):
         raise FbsSupplyError(
             "supply_not_empty", message="Можно удалить только пустую поставку.", http_status=409
+        )
+    pending_transfer = await session.scalar(select(exists().where(
+        FbsWbOperation.tenant_id == tenant_id,
+        FbsWbOperation.operation_kind == WB_OPERATION_KIND_SUPPLY_TRANSFER_ORDERS,
+        FbsWbOperation.state.in_([
+            WB_OPERATION_STATE_PENDING, WB_OPERATION_STATE_PENDING_CONFIRMATION,
+        ]),
+        or_(
+            (FbsWbOperation.local_entity_type == "fbs_supply")
+            & (FbsWbOperation.local_entity_id == supply_id),
+            FbsWbOperation.request_summary_json["target_supply_id"].as_string() == str(supply_id),
+            FbsWbOperation.response_summary_json["target_supply_id"].as_string() == str(supply_id),
+        ),
+    )))
+    if pending_transfer:
+        raise FbsSupplyError(
+            "supply_not_empty", http_status=409,
+            message="Перенос заказов с этой поставкой ещё не завершён. Проверьте его результат.",
         )
     # Bulk deletes preserve physical containers and shared assembly tasks. No
     # marketplace operation is made; remove only this card's dependent records.

@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 from sqlalchemy import delete, select, update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -21,11 +22,12 @@ from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_packing_box import FbsPackingBoxItem
 from app.models.fbs_supply import FbsSupply
-from app.models.fbs_wb_operation import FbsWbOperation
+from app.models.fbs_wb_operation import WB_OPERATION_KIND_SUPPLY_TRANSFER_ORDERS, FbsWbOperation
 from app.services.fbs_packaging_integration_service import _decrement_packaging_line_for_product
 from app.services.fbs_supply_service import (
     FbsSupplyError,
     _apply_existing_packaging_task_projection,
+    _lock_supply,
     _require_marketplace_token,
 )
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
@@ -40,7 +42,7 @@ from app.services.wildberries_fbs_client import (
     split_marketplace_order_id_batches,
 )
 
-_KIND = "supply_transfer_orders"
+_KIND = WB_OPERATION_KIND_SUPPLY_TRANSFER_ORDERS
 # WMS-581: переносить можно в любую открытую поставку WB — пока её не передали
 # в доставку и не закрыли. Тот же набор, что у привязки заказа к поставке WB.
 _OPEN_TARGET_STATUSES = ("draft", "assembling", "packed")
@@ -251,23 +253,42 @@ async def _find_created_supply(
     return next(iter(matches)) if len(matches) == 1 else None
 
 
+async def _lock_transfer_supplies(
+    session: AsyncSession, tenant_id: uuid.UUID, supply_ids: list[uuid.UUID]
+) -> None:
+    ids = sorted(set(supply_ids))
+    if session.get_bind().dialect.name == "sqlite":
+        # SQLite ignores FOR UPDATE. Match deletion's no-op write before reading.
+        for supply_id in ids:
+            await _lock_supply(session, tenant_id, supply_id)
+    try:
+        rows = list(await session.scalars(
+            select(FbsSupply)
+            .where(FbsSupply.tenant_id == tenant_id, FbsSupply.id.in_(ids))
+            .order_by(FbsSupply.id)
+            .with_for_update(nowait=True)
+            .execution_options(populate_existing=True)
+        ))
+    except DBAPIError as exc:
+        if getattr(exc.orig, "sqlstate", None) != "55P03":
+            raise
+        # Add-orders can hold a supply while waiting for this seller lock.
+        # Never wait back on that row and form a deadlock. Durable transfer
+        # intent/dispatch stays pending; a retry will read WB before replaying.
+        await session.rollback()
+        raise FbsSupplyError("operation_in_progress", http_status=409, retryable=True) from exc
+    if {row.id for row in rows} != set(ids):
+        raise FbsSupplyError("supply_not_found", http_status=404)
+
+
 async def _apply_confirmed(
     session: AsyncSession,
     source: FbsSupply,
     target: FbsSupply,
     orders: list[FbsOrder],
 ) -> None:
-    # start-work locks its supply before creating a task. Serialize the local
-    # projection with that lock and reload the task/status after WB returns.
-    await session.execute(
-        select(FbsSupply)
-        .where(
-            FbsSupply.id.in_([source.id, target.id]),
-        )
-        .order_by(FbsSupply.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
+    # Refresh both live rows before projecting a confirmed external result.
+    await _lock_transfer_supplies(session, source.tenant_id, [source.id, target.id])
     ids = [order.id for order in orders if order.supply_id != target.id]
     if not ids:
         return
@@ -418,6 +439,12 @@ async def transfer_orders(
         is_new = operation is None
         target = None
         if is_new:
+            # Delete uses the same row lock. Commit the durable pending intent
+            # while holding it, so there is no empty-card gap before WB waits.
+            await _lock_transfer_supplies(
+                session, tenant_id, [source_id, *([target_supply_id] if target_supply_id else [])]
+            )
+            source = await _source(session, tenant_id, source_id)
             if any(order.supply_id != source_id for order in orders):
                 raise FbsSupplyError("order_not_in_source_supply", http_status=409)
             if source.status not in {"draft", "assembling", "packed"}:

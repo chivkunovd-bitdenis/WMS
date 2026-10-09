@@ -605,6 +605,7 @@ export function FfFbsSupplyWorkspace({
   const [clearMarkingOrders, setClearMarkingOrders] = useState<FbsWorkspace['orders'] | null>(null)
   const [boxCount, setBoxCount] = useState('1')
   const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
+  const [boxAssignError, setBoxAssignError] = useState<string | null>(null)
   const [boxProductSearch, setBoxProductSearch] = useState('')
   const [boxProductQty, setBoxProductQty] = useState<Record<string, string>>({})
   const [boxSelectedPositionIds, setBoxSelectedPositionIds] = useState<Set<string>>(() => new Set())
@@ -720,6 +721,7 @@ export function FfFbsSupplyWorkspace({
     setBoxProductQty({})
     setBoxSelectedPositionIds(new Set())
     setBoxAssignTarget(null)
+    setBoxAssignError(null)
   }
   const closeAddOrders = () => {
     if (!confirmDiscardChanges(addableSelected.size > 0)) return
@@ -954,6 +956,7 @@ export function FfFbsSupplyWorkspace({
     setClearMarkingOrders(null)
     setBoxCount('1')
     setBoxAssignTarget(null)
+    setBoxAssignError(null)
     setBoxProductSearch('')
     setBoxProductQty({})
     setBoxSelectedPositionIds(new Set())
@@ -2643,12 +2646,15 @@ export function FfFbsSupplyWorkspace({
 
   const assignBoxOrders = async () => {
     if (boxOperationsDisabled || !workspace || !boxAssignTarget || (isOzonSupply ? boxAssignSelectedPositionIds.length === 0 : boxAssignSelectedOrderIds.length === 0)) return
+    setBoxAssignError(null)
     const next = await run(
       () => assignFbsPackingBoxOrders(token, authHeaders, workspace.supply.id, boxAssignTarget, isOzonSupply ? [] : boxAssignSelectedOrderIds, isOzonSupply ? boxAssignSelectedPositionIds : undefined),
       '',
+      (cause) => setBoxAssignError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось добавить товары в короб.'),
     )
     if (next) {
       setBoxAssignTarget(null)
+      setBoxAssignError(null)
       setBoxProductSearch('')
       setBoxProductQty({})
       setBoxSelectedPositionIds(new Set())
@@ -4525,6 +4531,7 @@ export function FfFbsSupplyWorkspace({
                               disabled={boxEditingDisabled || busy || box.without_distribution || box.ozon_assembled}
                               onClick={() => {
                                 setBoxAssignTarget(box.id)
+                                setBoxAssignError(null)
                                 setBoxProductSearch('')
                                 setBoxProductQty({})
                                 setBoxSelectedPositionIds(new Set())
@@ -5028,6 +5035,7 @@ export function FfFbsSupplyWorkspace({
         <DialogTitle>Добавить товары в короб {boxAssignName}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.5} sx={{ pt: 1 }}>
+            {boxAssignError ? <Alert severity="error">{boxAssignError}</Alert> : null}
             <TextField
               autoFocus
               fullWidth
