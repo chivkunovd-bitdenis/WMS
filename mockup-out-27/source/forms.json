@@ -1,0 +1,27 @@
+[
+  {
+    "id": "fbo",
+    "label": "FBO · Wildberries",
+    "kind": "marketplace_unload"
+  },
+  {
+    "id": "outbound",
+    "label": "Отгрузка со склада",
+    "kind": "operational_outbound"
+  },
+  {
+    "id": "receiving",
+    "label": "Приёмка · лист",
+    "kind": "receiving"
+  },
+  {
+    "id": "inbound",
+    "label": "Приёмка · накладная",
+    "kind": "inbound_intake"
+  },
+  {
+    "id": "packaging",
+    "label": "Упаковка · лист отгрузки",
+    "kind": "packaging"
+  }
+]

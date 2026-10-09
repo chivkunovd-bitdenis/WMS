@@ -1,0 +1,11 @@
+{
+  "documentChecks": 20,
+  "interactions": [
+    "variant-inline.html: form switch, before/after and selected-document print",
+    "variant-columns.html: form switch, before/after and selected-document print"
+  ],
+  "status": "passed",
+  "browserVisualCheck": "not performed: Chromium cannot launch in sandbox",
+  "physicalPrinting": "not performed",
+  "scope": "synthetic mockups only"
+}

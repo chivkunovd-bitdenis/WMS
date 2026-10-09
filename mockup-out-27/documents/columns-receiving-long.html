@@ -1,0 +1,440 @@
+<!doctype html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Лист приёмки — ДЕМО-ПР-0027 · Размер и цвет в колонках · Демо</title>
+    <style>
+      /* Ориентацию выбирает оператор в диалоге печати — не форсируем landscape в @page
+         (иначе при Portrait в диалоге карточки уезжают за область печати). */
+      @page { size: A4; margin: 7mm 8mm 8mm; }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        font-size: 10.5px;
+        color: #111;
+        margin: 0;
+        width: 100%;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      h1 { font-size: 15px; margin: 0 0 5px; }
+      .rs-head {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 3px 12px;
+        margin: 0 0 8px;
+        padding: 6px 8px;
+        border: 1px solid #cfcfcf;
+        background: #f6f6f6;
+      }
+      .rs-head dt { margin: 0; color: #555; font-size: 9px; text-transform: uppercase; }
+      .rs-head dd { margin: 0; font-weight: 700; word-break: break-word; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      th,
+      td {
+        border: 1px solid #cfcfcf;
+        padding: 4px 5px;
+        vertical-align: top;
+      }
+      th {
+        background: #ececec;
+        font-size: 9px;
+        text-align: left;
+        text-transform: uppercase;
+        color: #444;
+      }
+      tr {
+        page-break-inside: avoid;
+        break-inside: avoid-page;
+      }
+      .rs-photo-cell { width: 24mm; }
+      .rs-product-cell { width: auto; }
+      .rs-barcode-cell { width: 30mm; word-break: break-word; font-weight: 700; }
+      .rs-expected-cell { width: 20mm; text-align: right; font-weight: 700; font-size: 13px; }
+      .rs-fact-cell { width: 20mm; min-height: 24mm; }
+      .rs-photo {
+        width: 21mm;
+        height: 21mm;
+        object-fit: contain;
+        border: 1px solid #eee;
+        display: block;
+        margin: 0;
+      }
+      .rs-photo-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        font-size: 11px;
+        background: #f5f5f5;
+      }
+      .rs-name { font-weight: 700; margin: 0 0 2px; word-break: break-word; }
+      .rs-meta { margin: 0; color: #555; word-break: break-word; }
+      .rs-empty { color: #555; }
+    </style>
+  <style>
+    @page { size: A4; margin: 7mm 8mm 8mm; }
+    * { box-sizing: border-box; }
+    body { margin:0; line-height:1.4; font-variant-numeric:tabular-nums; }
+    @media screen { html { background:#e8ecf4; } body { width:210mm; min-height:297mm; padding:7mm 8mm 8mm; margin:12px auto; background:white; box-shadow:0 2px 8px #0f172a18; } }
+    .invoice-table { table-layout:fixed; }
+    .invoice-table th,.invoice-table td { width:auto; vertical-align:top; overflow-wrap:anywhere; white-space:normal; }
+    .invoice-table th { line-height:1.3; }
+    thead { display:table-header-group; }
+    tr { break-inside:avoid; page-break-inside:avoid; }
+    .variant-attributes { margin-top:6px; line-height:1.45; }
+    .attribute-label { font-weight:600; }
+    .variant-size,.variant-color { font-size:inherit; line-height:1.45; }
+    .rs-photo,.pk-photo { max-width:100%; height:19mm; }
+    .rs-meta,.pk-meta { font-size:9px; }
+    @media print { html,body { width:auto; min-height:0; padding:0; margin:0; background:#fff; box-shadow:none; } }
+  </style></head>
+  <body>
+    <h1>Лист приёмки</h1>
+    <dl class="rs-head">
+      <div><dt>Номер</dt><dd>ДЕМО-ПР-0027</dd></div>
+      <div><dt>Селлер</dt><dd>Демо-селлер «Образец»</dd></div>
+      <div><dt>Склад</dt><dd>Учебный склад (DEMO)</dd></div>
+      <div><dt>Дата</dt><dd>06.10.2026</dd></div>
+    </dl>
+    <table data-testid="receiving-sheet-table" class="invoice-table"><colgroup><col style="width: 10%;"><col style="width: 27%;"><col style="width: 13%;"><col style="width: 19%;"><col style="width: 17%;"><col style="width: 7%;"><col style="width: 7%;"></colgroup>
+      <thead>
+        <tr>
+          <th>Фото</th>
+          <th>Товар</th>
+          <th class="variant-size">Размер</th><th class="variant-color">Цвет</th><th>ШК</th>
+          <th>Заявлено</th>
+          <th>Факт</th>
+        </tr>
+      </thead>
+      <tbody><tr data-testid="rs-sheet-card" data-row-index="0" data-sku="DEMO-100101">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100101</span> · <span>Артикул WB: 900000001</span></p>
+  </td>
+  <td class="variant-size">M / 46–48</td><td class="variant-color">Молочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000001</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">24</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="1" data-sku="DEMO-100102">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100102</span> · <span>Артикул WB: 900000002</span></p>
+  </td>
+  <td class="variant-size">L / 50–52</td><td class="variant-color">Графитовый</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000002</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">18</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="2" data-sku="DEMO-100103">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Кардиган свободного кроя с удлинёнными рукавами и контрастной отделкой</p>
+    <p class="rs-meta"><span>Арт.: DEMO-CARD-02</span> · <span>SKU: DEMO-100103</span> · <span>Артикул WB: 900000003</span></p>
+  </td>
+  <td class="variant-size">Универсальный (российский 42–54)</td><td class="variant-color">Серо-зелёный меланж с контрастной отделкой цвета слоновой кости</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000003</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">12</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="3" data-sku="DEMO-100104">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Сумка тканевая с внутренним карманом</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BAG-03</span> · <span>SKU: DEMO-100104</span> · <span>Артикул WB: 900000004</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">Песочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000004</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">10</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="4" data-sku="DEMO-100105">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Носки хлопковые, комплект из трёх пар</p>
+    <p class="rs-meta"><span>Арт.: DEMO-SOCK-04</span> · <span>SKU: DEMO-100105</span> · <span>Артикул WB: 900000005</span></p>
+  </td>
+  <td class="variant-size">39–42</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000005</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">8</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="5" data-sku="DEMO-100106">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Органайзер для хранения вещей</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BOX-05</span> · <span>SKU: DEMO-100106</span> · <span>Артикул WB: 900000006</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000006</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">20</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="6" data-sku="DEMO-100107">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100107</span> · <span>Артикул WB: 900000001</span></p>
+  </td>
+  <td class="variant-size">M / 46–48</td><td class="variant-color">Молочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000001</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">24</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="7" data-sku="DEMO-100108">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100108</span> · <span>Артикул WB: 900000002</span></p>
+  </td>
+  <td class="variant-size">L / 50–52</td><td class="variant-color">Графитовый</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000002</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">18</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="8" data-sku="DEMO-100109">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Кардиган свободного кроя с удлинёнными рукавами и контрастной отделкой</p>
+    <p class="rs-meta"><span>Арт.: DEMO-CARD-02</span> · <span>SKU: DEMO-100109</span> · <span>Артикул WB: 900000003</span></p>
+  </td>
+  <td class="variant-size">Универсальный (российский 42–54)</td><td class="variant-color">Серо-зелёный меланж с контрастной отделкой цвета слоновой кости</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000003</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">12</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="9" data-sku="DEMO-100110">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Сумка тканевая с внутренним карманом</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BAG-03</span> · <span>SKU: DEMO-100110</span> · <span>Артикул WB: 900000004</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">Песочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000004</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">10</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="10" data-sku="DEMO-100111">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Носки хлопковые, комплект из трёх пар</p>
+    <p class="rs-meta"><span>Арт.: DEMO-SOCK-04</span> · <span>SKU: DEMO-100111</span> · <span>Артикул WB: 900000005</span></p>
+  </td>
+  <td class="variant-size">39–42</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000005</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">8</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="11" data-sku="DEMO-100112">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Органайзер для хранения вещей</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BOX-05</span> · <span>SKU: DEMO-100112</span> · <span>Артикул WB: 900000006</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000006</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">20</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="12" data-sku="DEMO-100113">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100113</span> · <span>Артикул WB: 900000001</span></p>
+  </td>
+  <td class="variant-size">M / 46–48</td><td class="variant-color">Молочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000001</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">24</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="13" data-sku="DEMO-100114">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100114</span> · <span>Артикул WB: 900000002</span></p>
+  </td>
+  <td class="variant-size">L / 50–52</td><td class="variant-color">Графитовый</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000002</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">18</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="14" data-sku="DEMO-100115">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Кардиган свободного кроя с удлинёнными рукавами и контрастной отделкой</p>
+    <p class="rs-meta"><span>Арт.: DEMO-CARD-02</span> · <span>SKU: DEMO-100115</span> · <span>Артикул WB: 900000003</span></p>
+  </td>
+  <td class="variant-size">Универсальный (российский 42–54)</td><td class="variant-color">Серо-зелёный меланж с контрастной отделкой цвета слоновой кости</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000003</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">12</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="15" data-sku="DEMO-100116">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Сумка тканевая с внутренним карманом</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BAG-03</span> · <span>SKU: DEMO-100116</span> · <span>Артикул WB: 900000004</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">Песочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000004</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">10</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="16" data-sku="DEMO-100117">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Носки хлопковые, комплект из трёх пар</p>
+    <p class="rs-meta"><span>Арт.: DEMO-SOCK-04</span> · <span>SKU: DEMO-100117</span> · <span>Артикул WB: 900000005</span></p>
+  </td>
+  <td class="variant-size">39–42</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000005</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">8</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="17" data-sku="DEMO-100118">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Органайзер для хранения вещей</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BOX-05</span> · <span>SKU: DEMO-100118</span> · <span>Артикул WB: 900000006</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000006</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">20</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="18" data-sku="DEMO-100119">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100119</span> · <span>Артикул WB: 900000001</span></p>
+  </td>
+  <td class="variant-size">M / 46–48</td><td class="variant-color">Молочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000001</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">24</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="19" data-sku="DEMO-100120">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100120</span> · <span>Артикул WB: 900000002</span></p>
+  </td>
+  <td class="variant-size">L / 50–52</td><td class="variant-color">Графитовый</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000002</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">18</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="20" data-sku="DEMO-100121">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Кардиган свободного кроя с удлинёнными рукавами и контрастной отделкой</p>
+    <p class="rs-meta"><span>Арт.: DEMO-CARD-02</span> · <span>SKU: DEMO-100121</span> · <span>Артикул WB: 900000003</span></p>
+  </td>
+  <td class="variant-size">Универсальный (российский 42–54)</td><td class="variant-color">Серо-зелёный меланж с контрастной отделкой цвета слоновой кости</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000003</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">12</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="21" data-sku="DEMO-100122">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Сумка тканевая с внутренним карманом</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BAG-03</span> · <span>SKU: DEMO-100122</span> · <span>Артикул WB: 900000004</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">Песочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000004</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">10</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="22" data-sku="DEMO-100123">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Носки хлопковые, комплект из трёх пар</p>
+    <p class="rs-meta"><span>Арт.: DEMO-SOCK-04</span> · <span>SKU: DEMO-100123</span> · <span>Артикул WB: 900000005</span></p>
+  </td>
+  <td class="variant-size">39–42</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000005</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">8</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="23" data-sku="DEMO-100124">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Органайзер для хранения вещей</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BOX-05</span> · <span>SKU: DEMO-100124</span> · <span>Артикул WB: 900000006</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000006</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">20</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="24" data-sku="DEMO-100125">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100125</span> · <span>Артикул WB: 900000001</span></p>
+  </td>
+  <td class="variant-size">M / 46–48</td><td class="variant-color">Молочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000001</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">24</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="25" data-sku="DEMO-100126">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100126</span> · <span>Артикул WB: 900000002</span></p>
+  </td>
+  <td class="variant-size">L / 50–52</td><td class="variant-color">Графитовый</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000002</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">18</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="26" data-sku="DEMO-100127">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Кардиган свободного кроя с удлинёнными рукавами и контрастной отделкой</p>
+    <p class="rs-meta"><span>Арт.: DEMO-CARD-02</span> · <span>SKU: DEMO-100127</span> · <span>Артикул WB: 900000003</span></p>
+  </td>
+  <td class="variant-size">Универсальный (российский 42–54)</td><td class="variant-color">Серо-зелёный меланж с контрастной отделкой цвета слоновой кости</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000003</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">12</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="27" data-sku="DEMO-100128">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Сумка тканевая с внутренним карманом</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BAG-03</span> · <span>SKU: DEMO-100128</span> · <span>Артикул WB: 900000004</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">Песочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000004</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">10</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="28" data-sku="DEMO-100129">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Носки хлопковые, комплект из трёх пар</p>
+    <p class="rs-meta"><span>Арт.: DEMO-SOCK-04</span> · <span>SKU: DEMO-100129</span> · <span>Артикул WB: 900000005</span></p>
+  </td>
+  <td class="variant-size">39–42</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000005</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">8</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="29" data-sku="DEMO-100130">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Органайзер для хранения вещей</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BOX-05</span> · <span>SKU: DEMO-100130</span> · <span>Артикул WB: 900000006</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000006</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">20</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="30" data-sku="DEMO-100131">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100131</span> · <span>Артикул WB: 900000001</span></p>
+  </td>
+  <td class="variant-size">M / 46–48</td><td class="variant-color">Молочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000001</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">24</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="31" data-sku="DEMO-100132">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Футболка базовая из хлопка</p>
+    <p class="rs-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100132</span> · <span>Артикул WB: 900000002</span></p>
+  </td>
+  <td class="variant-size">L / 50–52</td><td class="variant-color">Графитовый</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000002</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">18</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="32" data-sku="DEMO-100133">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Кардиган свободного кроя с удлинёнными рукавами и контрастной отделкой</p>
+    <p class="rs-meta"><span>Арт.: DEMO-CARD-02</span> · <span>SKU: DEMO-100133</span> · <span>Артикул WB: 900000003</span></p>
+  </td>
+  <td class="variant-size">Универсальный (российский 42–54)</td><td class="variant-color">Серо-зелёный меланж с контрастной отделкой цвета слоновой кости</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000003</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">12</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="33" data-sku="DEMO-100134">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Сумка тканевая с внутренним карманом</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BAG-03</span> · <span>SKU: DEMO-100134</span> · <span>Артикул WB: 900000004</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">Песочный</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000004</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">10</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="34" data-sku="DEMO-100135">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Носки хлопковые, комплект из трёх пар</p>
+    <p class="rs-meta"><span>Арт.: DEMO-SOCK-04</span> · <span>SKU: DEMO-100135</span> · <span>Артикул WB: 900000005</span></p>
+  </td>
+  <td class="variant-size">39–42</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000005</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">8</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="35" data-sku="DEMO-100136">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Органайзер для хранения вещей</p>
+    <p class="rs-meta"><span>Арт.: DEMO-BOX-05</span> · <span>SKU: DEMO-100136</span> · <span>Артикул WB: 900000006</span></p>
+  </td>
+  <td class="variant-size">—</td><td class="variant-color">—</td><td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">2000000000006</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">20</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr></tbody>
+    </table>
+
+</body></html>

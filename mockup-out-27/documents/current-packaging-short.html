@@ -1,0 +1,170 @@
+<!doctype html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Лист отгрузки — ДЕМО-ОТ-0027</title>
+    <style>
+      /* Ориентацию выбирает оператор в диалоге печати — не форсируем landscape в @page
+         (иначе при Portrait в диалоге карточки уезжают за область печати). */
+      @page { size: A4; margin: 7mm 8mm 8mm; }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        font-size: 10.5px;
+        color: #111;
+        margin: 0;
+        width: 100%;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      h1 { font-size: 15px; margin: 0 0 5px; }
+      .pk-head {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 3px 12px;
+        margin: 0 0 8px;
+        padding: 6px 8px;
+        border: 1px solid #cfcfcf;
+        background: #f6f6f6;
+      }
+      .pk-head dt { margin: 0; color: #555; font-size: 9px; text-transform: uppercase; }
+      .pk-head dd { margin: 0; font-weight: 700; word-break: break-word; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      th,
+      td {
+        border: 1px solid #cfcfcf;
+        padding: 4px 5px;
+        vertical-align: top;
+      }
+      th {
+        background: #ececec;
+        font-size: 9px;
+        text-align: left;
+        text-transform: uppercase;
+        color: #444;
+      }
+      tr {
+        page-break-inside: avoid;
+        break-inside: avoid-page;
+      }
+      .pk-photo-cell { width: 24mm; }
+      .pk-product-cell { width: 35%; }
+      .pk-barcode-cell { width: 24mm; word-break: break-word; font-weight: 700; }
+      .pk-qty-cell { width: 14mm; text-align: right; font-weight: 700; font-size: 13px; }
+      .pk-instructions-cell { width: auto; }
+      .pk-fact-cell { width: 18mm; min-height: 24mm; }
+      .pk-photo {
+        width: 21mm;
+        height: 21mm;
+        object-fit: contain;
+        border: 1px solid #eee;
+        display: block;
+        margin: 0;
+      }
+      .pk-photo-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        font-size: 11px;
+        background: #f5f5f5;
+      }
+      .pk-name { font-weight: 700; margin: 0 0 2px; word-break: break-word; }
+      .pk-meta { margin: 0; color: #555; word-break: break-word; }
+      .pk-instructions-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+        line-height: 1.35;
+      }
+      .pk-empty-text { color: #999; font-style: italic; }
+      .pk-empty { color: #555; }
+    </style>
+  <style>@media screen { * { box-sizing:border-box; } html { background:#e8ecf4; } body { width:210mm; min-height:297mm; margin:12px auto; padding:7mm 8mm 8mm; background:white; box-shadow:0 2px 8px #0f172a18; } }</style></head>
+  <body>
+    <h1>Лист отгрузки</h1>
+    <dl class="pk-head">
+      <div><dt>Селлер</dt><dd>Демо-селлер «Образец»</dd></div>
+      <div><dt>Дата</dt><dd>06.10.2026</dd></div>
+      <div><dt>Тип</dt><dd>Отгрузка FBO · Wildberries</dd></div>
+      <div><dt>Номер</dt><dd>ДЕМО-ОТ-0027</dd></div>
+      <div><dt>Склад ФФ</dt><dd>Учебный склад (DEMO)</dd></div>
+      <div><dt>Склад МП</dt><dd>Учебный склад WB</dd></div>
+    </dl>
+    <table data-testid="shipment-sheet-table" class="invoice-table">
+      <thead>
+        <tr>
+          <th>Фото</th>
+          <th>Товар</th>
+          <th>ШК</th>
+          <th>Кол-во</th>
+          <th>Инструкции</th>
+          <th>Факт</th>
+        </tr>
+      </thead>
+      <tbody><tr data-testid="tz-sheet-card" data-row-index="0" data-sku="DEMO-100101">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Футболка базовая из хлопка</p>
+    <p class="pk-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100101</span> · <span>Артикул WB: 900000001</span></p>
+  </td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">2000000000001</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">24</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Упаковать в прозрачный пакет.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="1" data-sku="DEMO-100102">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Футболка базовая из хлопка</p>
+    <p class="pk-meta"><span>Арт.: DEMO-TEE-01</span> · <span>SKU: DEMO-100102</span> · <span>Артикул WB: 900000002</span></p>
+  </td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">2000000000002</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">18</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Упаковать в прозрачный пакет.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="2" data-sku="DEMO-100103">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Кардиган свободного кроя с удлинёнными рукавами и контрастной отделкой</p>
+    <p class="pk-meta"><span>Арт.: DEMO-CARD-02</span> · <span>SKU: DEMO-100103</span> · <span>Артикул WB: 900000003</span></p>
+  </td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">2000000000003</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">12</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Сложить аккуратно. Упаковать в прозрачный пакет, не перекрывать этикетку.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="3" data-sku="DEMO-100104">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Сумка тканевая с внутренним карманом</p>
+    <p class="pk-meta"><span>Арт.: DEMO-BAG-03</span> · <span>SKU: DEMO-100104</span> · <span>Артикул WB: 900000004</span></p>
+  </td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">2000000000004</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">10</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Упаковать в прозрачный пакет.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="4" data-sku="DEMO-100105">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Носки хлопковые, комплект из трёх пар</p>
+    <p class="pk-meta"><span>Арт.: DEMO-SOCK-04</span> · <span>SKU: DEMO-100105</span> · <span>Артикул WB: 900000005</span></p>
+  </td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">2000000000005</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">8</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Упаковать в прозрачный пакет.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="5" data-sku="DEMO-100106">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Органайзер для хранения вещей</p>
+    <p class="pk-meta"><span>Арт.: DEMO-BOX-05</span> · <span>SKU: DEMO-100106</span> · <span>Артикул WB: 900000006</span></p>
+  </td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">2000000000006</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">20</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Упаковать в прозрачный пакет.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr></tbody>
+    </table>
+
+</body></html>

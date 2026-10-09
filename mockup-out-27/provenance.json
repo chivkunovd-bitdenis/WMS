@@ -1,0 +1,22 @@
+{
+  "task": "WMS-680",
+  "scope": "Статические кликабельные макеты. Код продукта не изменён; разработка и выпуск не выполнялись.",
+  "data": "Вымышленные товары, коды, количества и реквизиты; данные клиентов не использованы.",
+  "entry": "index.html",
+  "offline": "Страницы, тема, React и компоненты включены в папку. Можно открыть index.html через file:// либо статический сервер. Внешние ресурсы и API не используются.",
+  "components": [
+    "frontend/src/mui/theme.ts",
+    "frontend/src/ui-kit/Actions.tsx"
+  ],
+  "templates": [
+    "frontend/src/utils/printShipmentWaybill.ts",
+    "frontend/src/utils/printInboundReceivingSheet.ts",
+    "frontend/src/utils/printShipmentPackagingSheet.ts"
+  ],
+  "variants": ["Размер и цвет под товаром", "Размер и цвет в отдельных колонках"],
+  "missingValues": "Пустые характеристики отображаются как — отдельно по каждой позиции.",
+  "printing": "Кнопка вызывает браузерную печать выбранной формы. В листах приёмки и упаковки колонка Факт оставлена пустой. Исходные поля страницы сохранены.",
+  "verification": "verification.json содержит результаты проверки структуры и взаимодействий в JSDOM. Это проверка HTML и событий, а не визуальная проверка браузера или фактической печати.",
+  "limitations": "Chromium не запустился в sandbox. git fetch origin etalon не выполнен из-за запрета записи FETCH_HEAD; доступные локальные правила etalon прочитаны.",
+  "rebuild": "node mockup-out-27/source/build.js; node mockup-out-27/source/verify.js (используют существующие зависимости frontend основного checkout)."
+}
