@@ -1,0 +1,11 @@
+Контракт F4 сохранён и опубликован в `origin/codex/wms662-663-priority`. Точный SHA: **`e832a0f57f5b57d25607a3865b8b91d81d1b4543`**.
+
+На неизменённом продукте **`112d421893010f99abb444434644ce8bbdac6827`** доказаны три целевых RED (ожидаемых падения):
+
+- `gtd_invalid` отсутствует одновременно в `view.errors` и `exemplar.errors`.
+- `validation_in_process` показывает `accepted` вместо текущей проверки.
+- Неизвестный `gtd_check_status` ошибочно показывает новые сведения как принятые.
+
+В новом файле **3 RED и 12 PASS**: успешные контроли проверяют продолжение новым документом/КИЗ, сохранение свежих данных и отклонение устаревшей версии. Прежние неизменённые наборы дали **30 PASS и 1 skip** — PostgreSQL-проверка. Общий результат: **3 failed, 42 passed, 1 skipped**. Ruff нового файла прошёл.
+
+В commit вошли только [новый тест](/Users/deniscivkunov/Projects/WMS/.worktrees/wms662-663-priority/backend/tests/test_wms663_accepted_current_status.py) и [передача разработчику](/Users/deniscivkunov/Projects/WMS/.worktrees/wms662-663-priority/docs/reviews/wms663-f4-testwriter-handoff.md). Проверки выполнялись настоящими сервисами на отдельной SQLite с фиктивным провайдером. Продукт и frozen-тесты не менялись; DOM не проверялся. Завершаю — разработчик может брать опубликованный контракт.
