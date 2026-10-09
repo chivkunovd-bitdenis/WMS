@@ -1196,6 +1196,10 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 ),
                 "sku": str(position.ozon_sku) if position.ozon_sku is not None else None,
                 **_product_label_metadata(ctx["products"].get(position.product_id), ctx),
+                "requires_honest_sign": bool(
+                    ctx["products"].get(position.product_id)
+                    and ctx["products"][position.product_id].requires_honest_sign
+                ),
                 "quantity": position.quantity,
                 "reserved_quantity": position.reserved_quantity,
                 "picked_quantity": position.picked_quantity,
@@ -1287,8 +1291,12 @@ def _build_metadata(
 ) -> dict[str, Any]:
     if order.marketplace == "ozon":
         from app.services.fbs_marking_service import build_order_metadata
+        from app.services.ozon_fbs_marking_gate_service import ozon_requirements_known
 
-        return build_order_metadata(order, markings)
+        return {
+            **build_order_metadata(order, markings),
+            "requirements_known": ozon_requirements_known(order),
+        }
     required = list(order.required_meta_json or [])
     optional = list(order.optional_meta_json or [])
     states: list[dict[str, Any]] = []

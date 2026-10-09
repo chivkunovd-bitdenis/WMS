@@ -64,10 +64,10 @@ class FbsOrderPick(Base):
         nullable=False,
         index=True,
     )
-    fbs_supply_id: Mapped[uuid.UUID] = mapped_column(
+    fbs_supply_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
-        ForeignKey("fbs_supplies.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("fbs_supplies.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     # Из какой тары сняли: короб, палета, грузоместо. Пусто — сняли россыпью.
@@ -119,7 +119,7 @@ class FbsOrderPick(Base):
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     order: Mapped[FbsOrder] = relationship("FbsOrder", back_populates="picks")
-    supply: Mapped[FbsSupply] = relationship("FbsSupply")
+    supply: Mapped[FbsSupply | None] = relationship("FbsSupply")
     source_storage_location: Mapped[StorageLocation] = relationship(
         "StorageLocation",
         foreign_keys=[source_storage_location_id],

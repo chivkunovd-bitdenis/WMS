@@ -39,7 +39,7 @@ jobs:
           assert s.count(fixed) == 1
           p.write_text(s.replace(fixed, broken))
           PYCODE
-          if npx vitest run src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx -t 'clicking from composition' --maxWorkers=1 --minWorkers=1 > "$RUNNER_TEMP/sticker-red.log" 2>&1; then
+          if npx vitest run src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx -t 'clicking from boxes' --maxWorkers=1 --minWorkers=1 > "$RUNNER_TEMP/sticker-red.log" 2>&1; then
             cat "$RUNNER_TEMP/sticker-red.log"
             echo 'Guard failed to detect the original regression'
             exit 1

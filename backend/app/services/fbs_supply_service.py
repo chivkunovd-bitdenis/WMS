@@ -12,11 +12,12 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import delete, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.settings import settings
+from app.models.fbs_assembly_task import FbsAssemblyTaskSupply
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
@@ -26,8 +27,11 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     PICK_STATUS_PICKED,
     FbsOrder,
+    FbsOrderProductPick,
 )
-from app.models.fbs_packing_box import FbsPackingBox
+from app.models.fbs_order_pick import FbsOrderPick
+from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
+from app.models.fbs_print_asset import FbsPrintAsset
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
@@ -41,12 +45,14 @@ from app.models.fbs_supply import (
 )
 from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import (
+    WB_OPERATION_KIND_SUPPLY_TRANSFER_ORDERS,
     WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
     FbsWbOperation,
 )
+from app.models.marking_withdrawal import WithdrawalItem
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.tenant import Tenant
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
@@ -237,6 +243,76 @@ async def _require_marketplace_token(
     if not token:
         raise FbsSupplyError("missing_marketplace_token")
     return token
+
+
+async def _lock_supply(
+    session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID
+) -> None:
+    # A no-op write holds the supply row through commit, including on SQLite
+    # where SELECT FOR UPDATE is ignored. Add and delete acquire it before reads.
+    await session.execute(
+        update(FbsSupply)
+        .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
+        .values(id=FbsSupply.id)
+        .execution_options(synchronize_session=False)
+    )
+
+
+async def delete_empty_supply(
+    session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID
+) -> None:
+    await _lock_supply(session, tenant_id, supply_id)
+    supply = await session.get(FbsSupply, supply_id)
+    if supply is None:
+        return
+    if supply.tenant_id != tenant_id:
+        raise FbsSupplyError("supply_not_found")
+    if await session.scalar(select(exists().where(FbsOrder.supply_id == supply_id))):
+        raise FbsSupplyError(
+            "supply_not_empty", message="Можно удалить только пустую поставку.", http_status=409
+        )
+    pending_transfer = await session.scalar(select(exists().where(
+        FbsWbOperation.tenant_id == tenant_id,
+        FbsWbOperation.operation_kind == WB_OPERATION_KIND_SUPPLY_TRANSFER_ORDERS,
+        FbsWbOperation.state.in_([
+            WB_OPERATION_STATE_PENDING, WB_OPERATION_STATE_PENDING_CONFIRMATION,
+        ]),
+        or_(
+            (FbsWbOperation.local_entity_type == "fbs_supply")
+            & (FbsWbOperation.local_entity_id == supply_id),
+            FbsWbOperation.request_summary_json["target_supply_id"].as_string() == str(supply_id),
+            FbsWbOperation.response_summary_json["target_supply_id"].as_string() == str(supply_id),
+        ),
+    )))
+    if pending_transfer:
+        raise FbsSupplyError(
+            "supply_not_empty", http_status=409,
+            message="Перенос заказов с этой поставкой ещё не завершён. Проверьте его результат.",
+        )
+    # Bulk deletes preserve physical containers and shared assembly tasks. No
+    # marketplace operation is made; remove only this card's dependent records.
+    box_ids = select(FbsPackingBox.id).where(FbsPackingBox.supply_id == supply_id)
+    await session.execute(delete(FbsPackingBoxItem).where(FbsPackingBoxItem.box_id.in_(box_ids)))
+    await session.execute(delete(FbsPackingBox).where(FbsPackingBox.supply_id == supply_id))
+    await session.execute(delete(FbsPrintAsset).where(FbsPrintAsset.fbs_supply_id == supply_id))
+    await session.execute(delete(FbsTrbx).where(FbsTrbx.supply_id == supply_id))
+    # Historic picking/withdrawal rows belong to orders and movements, not to
+    # the disposable card. Detach only the card reference, preserving the audit.
+    await session.execute(
+        update(FbsOrderPick).where(FbsOrderPick.fbs_supply_id == supply_id)
+        .values(fbs_supply_id=None, updated_at=FbsOrderPick.updated_at)
+    )
+    await session.execute(
+        update(FbsOrderProductPick).where(FbsOrderProductPick.fbs_supply_id == supply_id)
+        .values(fbs_supply_id=None)
+    )
+    await session.execute(
+        update(WithdrawalItem).where(WithdrawalItem.supply_id == supply_id).values(supply_id=None)
+    )
+    await session.execute(
+        delete(FbsAssemblyTaskSupply).where(FbsAssemblyTaskSupply.supply_id == supply_id)
+    )
+    await session.execute(delete(FbsSupply).where(FbsSupply.id == supply_id))
 
 
 async def _get_supply(
@@ -1858,6 +1934,7 @@ async def add_order_to_supply(
     order_id: uuid.UUID,
     http_client: httpx.AsyncClient,
 ) -> FbsSupply:
+    await _lock_supply(session, tenant_id, supply_id)
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsSupplyError("supply_not_found")
@@ -1993,6 +2070,7 @@ async def add_orders_to_existing_supply(
         raise FbsSupplyError("missing_idempotency_key", http_status=400)
     if not order_ids:
         raise FbsSupplyError("empty_order_set", http_status=400)
+    await _lock_supply(session, tenant_id, supply_id)
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsSupplyError("supply_not_found")
