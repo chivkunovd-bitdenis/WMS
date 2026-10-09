@@ -132,8 +132,6 @@ async function checkComposition(
   for (const orderId of [662000, 662001]) {
     const fixtureOrder = partial.orders.find((order) => order.wb_order_id === orderId)!
     expect(fixtureOrder, `${checkpoint}: fixture order ${orderId}`).toBeDefined()
-    // Picking stays independent: the replayed document keeps the order unpicked.
-    expect(fixtureOrder.pick.status, `${checkpoint}: picking stays independent`).toBe('pending')
     const row = rows.find((element) => element.getAttribute('data-order-id') === fixtureOrder.id)!
     expect(row, `${checkpoint}: order ${orderId} row is bound to its own order id`).toBeDefined()
     expect(row.textContent, `${checkpoint}: order ${orderId} number`).toContain(`заказ ${orderId}`)
@@ -141,6 +139,20 @@ async function checkComposition(
     expect(row.textContent, `${checkpoint}: order ${orderId} row does not carry ${otherId}`).not.toContain(`заказ ${otherId}`)
     expect(row.querySelector(`input[aria-label="Выбрать заказ ${orderId}"]`), `${checkpoint}: order ${orderId} selection control`).not.toBeNull()
   }
+  // Picking stays independent of the parent supply status: what the operator sees
+  // on «Подбор» is the real picking screen, and both orders are still to be picked
+  // (2 of 2 left, nothing taken) in the partial and in the full phase, after open,
+  // reopen and page refresh.
+  await click(tab('Подбор'))
+  await vi.waitFor(() => {
+    expect(document.querySelector('[data-testid="fbs-pick-unified"]')?.textContent ?? '', `${checkpoint}: picking screen`)
+      .toMatch(/осталось снять из 2 по плану/)
+  }, { timeout: 3_000 })
+  const pickingText = document.querySelector('[data-testid="fbs-pick-unified"]')!.textContent ?? ''
+  expect(pickingText, `${checkpoint}: both orders still wait for picking`).toMatch(/2\s*штук осталось снять из 2 по плану/)
+  expect(pickingText, `${checkpoint}: picking is not shown as finished`).not.toMatch(/Все товары подобраны|0\s*штук осталось/)
+  await click(tab('Упаковка и маркировка'))
+  expect(tab('Упаковка и маркировка').getAttribute('aria-selected'), `${checkpoint}: back on packing`).toBe('true')
   // Reuse the real history with its saved creation event, without inventing events.
   await click(document.querySelector<HTMLElement>('[data-testid="fbs-supply-history-open"]')!)
   expect(document.querySelector('[data-testid="fbs-supply-history-timeline"]')?.textContent).toContain('Поставка создана')
@@ -165,7 +177,7 @@ async function checkComposition(
   expect(printTape).not.toHaveBeenCalled()
 }
 
-it('C19: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged', { timeout: 15_000 }, async () => {
+it('C19: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged', { timeout: 60_000 }, async () => {
   const immutableProof = JSON.stringify(proof)
   for (const phase of ['partial', 'full'] as const) {
     current = phase === 'partial' ? partial : full
