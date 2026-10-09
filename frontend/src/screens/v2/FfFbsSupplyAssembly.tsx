@@ -1,4 +1,3 @@
-import { ensureFbsStickers } from './fbsStickerPrefetch'
 import { FbsPackingScanBar } from './FbsPackingScanBar'
 import { FbsPackingActionsToolbar, type FbsPackingActions } from './FbsPackingActionsToolbar'
 import type { PackingScanController } from './fbsSequentialPacking'
@@ -270,22 +269,6 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   const registerEscape = useCallback((handler: (() => boolean) | null) => {
     escapeHandlerRef.current = handler
   }, [])
-
-  const stickerAttempts = useRef(new Set<string>())
-  useEffect(() => { stickerAttempts.current.clear() }, [open, stage])
-  useEffect(() => {
-    if (!open || stage !== 'picking') return
-    for (const snapshot of ordered) {
-      if (snapshot.supply.marketplace !== 'wb' || stickerAttempts.current.has(snapshot.supply.id)
-        || !snapshot.orders.some(order => !order.sticker.code && order.status !== 'cancelled')) continue
-      stickerAttempts.current.add(snapshot.supply.id)
-      void ensureFbsStickers(token, authHeaders, snapshot).then(result => {
-        onFrameWorkspace(result.workspace)
-        if (result.errorMessage) setError(result.errorMessage)
-      })
-        .catch(cause => setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.'))
-    }
-  }, [open, stage, ordered, token, authHeaders, onFrameWorkspace])
 
   // Д14: лист подбора по всей группе — тот же шаблон, что у карточки; строки —
   // суммарный план, в шапке — номера всех поставок группы.
