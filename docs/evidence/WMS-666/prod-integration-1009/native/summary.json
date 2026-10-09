@@ -1,0 +1,123 @@
+{
+  "candidate_sha": "322bb46d96178fc25f007aaf2807c9ce7dfe9bc0",
+  "status": "PASS",
+  "native_consecutive_cases": 2,
+  "native_sink_jobs": 12,
+  "manual_cases": [
+    {
+      "id": "WMS666.manual.selected.ordinary",
+      "status": "PASS",
+      "boundary": "browser HTML/window.print",
+      "scopedOrders": [
+        [
+          "wb-a-order"
+        ]
+      ],
+      "htmlPrints": 1
+    },
+    {
+      "id": "WMS666.manual.selected.group",
+      "status": "PASS",
+      "boundary": "browser HTML/window.print",
+      "scopedOrders": [
+        [
+          "wb-a-order"
+        ],
+        [
+          "wb-next-order"
+        ]
+      ],
+      "htmlPrints": 2
+    },
+    {
+      "id": "WMS666.manual.cancel-stops-group",
+      "status": "PASS",
+      "tapeRequestsAfterCancel": 0,
+      "newPrintsAfterCancel": 0
+    }
+  ],
+  "manual_tapes": 3,
+  "qr_cis_independently_pixel_decoded": true,
+  "native_label_mm": [
+    60,
+    80
+  ],
+  "cis_copies_per_order": 2,
+  "api_fixture": "SYNTHETIC; no database or production API used",
+  "native_boundary": "actual candidate Handler/Printer with emulated submit sink",
+  "manual_boundary": "actual MarkingPrintDialog→HTML iframe→emulated window.print",
+  "physical_paper": "NOT_TESTED",
+  "completed_utc": "2026-10-08T22:48:32.932628+00:00",
+  "source_tree_clean": false,
+  "owned_processes": {
+    "handler": 89478,
+    "vite_final": 91729,
+    "ports": [
+      17843,
+      16676,
+      16677
+    ]
+  },
+  "known_harness_corrections": [
+    "case-prefixed scan_id reprint fixture regex",
+    "missing fixture markingIds and click helper",
+    "shared Vite cache dynamic bwip-js import504 fixed by private cacheDir/optimizeDeps; cache removed after proof",
+    "independent QR decode composites transparent pixels over white and tries pure-barcode mode"
+  ],
+  "artifacts": {
+    "native-joins.json": {
+      "sha256": "4ae4146c593458fde0083c63e1a4a796ebcf761c60a41c28414d101ab07fb163",
+      "bytes": 7536
+    },
+    "manual-decoded.json": {
+      "sha256": "610d8c1fb8e87f0fbb8187925a858f43cbf518be4716c9297bb5ca086623004a",
+      "bytes": 1934
+    },
+    "handler-ledger.json": {
+      "sha256": "5de541d9df9921330e36198e718da8ac4c47954aa0e8c20dd01d7a25766d95be",
+      "bytes": 2149
+    },
+    "sink-receipts.jsonl": {
+      "sha256": "7d603984d01de3cd79d0e1b2e1b91fe8ba25d4cfe59965fbad4ed199e781fe7f",
+      "bytes": 1732
+    },
+    "supply_id-A.json": {
+      "sha256": "020c9838ce560585c4f58cbf8af6adbc52cd258e603feffb75e81dec96b04aee",
+      "bytes": 222414
+    },
+    "supply_ids-A-B.json": {
+      "sha256": "36a565b7aa92413d1445ce3a66b7044cbfb2f917714f381425e39ae6d5636f36",
+      "bytes": 223262
+    },
+    "ordinary-manual.json": {
+      "sha256": "482e0ced2a99dfd6d590532249ebbe3ea8a4fde9b28af87c1abfa61f0fdec2d3",
+      "bytes": 1888
+    },
+    "group-manual.json": {
+      "sha256": "00a70ec62780f56fe0c49d1c2bbafcbad1d6b0540237a8f6bbe04a119394da14",
+      "bytes": 3253
+    },
+    "group-cancel.json": {
+      "sha256": "74f2fb54d7fa4b3d30f28e114db209dad5cfd44e7cb3500f26b0a94cd534381a",
+      "bytes": 213
+    },
+    "result.json": {
+      "sha256": "8d96d7a7ea74ec7dae6f2f13bb6a7ef457974aa06cb9a5751283d8de643b115b",
+      "bytes": 863
+    }
+  },
+  "product_tree_dirty_paths_at_finish": [
+    "frontend/src/screens/v2/wms666ChangeScope.test.ts"
+  ],
+  "runtime_source_unchanged_at_finish": true,
+  "proof_file_written_utc": {
+    "supply_id-A.json": "2026-10-08T22:45:33.818037+00:00",
+    "supply_ids-A-B.json": "2026-10-08T22:45:37.333112+00:00",
+    "ordinary-manual.json": "2026-10-08T22:47:27.744919+00:00",
+    "group-manual.json": "2026-10-08T22:47:30.956889+00:00",
+    "group-cancel.json": "2026-10-08T22:47:31.844423+00:00",
+    "native-joins.json": "2026-10-08T22:47:49.797094+00:00",
+    "manual-decoded.json": "2026-10-08T22:47:49.889222+00:00"
+  },
+  "owned_ports_readback": "No LISTEN results from lsof -nP -iTCP:17843 -iTCP:16676 -iTCP:16677 -sTCP:LISTEN after termination"
+}

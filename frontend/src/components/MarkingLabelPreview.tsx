@@ -445,7 +445,8 @@ export function MarkingLabelPreview(props: Props) {
             <iframe
               title="Предпросмотр этикетки"
               srcDoc={html}
-              sandbox=""
+              // Скрипт подгонки текста этикетки (WMS-702) — тот же, что в печати; без same-origin.
+              sandbox="allow-scripts"
               style={{
                 display: 'block',
                 border: 0,

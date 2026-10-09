@@ -53,6 +53,9 @@ beforeEach(() => {
     if (method !== 'GET') throw new Error(`WMS-673 print must not mutate: ${method} ${path}`)
     const one = fixtures.find((f) => path.startsWith(`/operations/fbs-supplies/${f.supply.id}/`))
     if (one && path.endsWith('/workspace')) return json(one)
+    // Production WMS-689 reads full storage provenance after pick-options.
+    // These color fixtures have no extra provenance; keep the option rows.
+    if (one && path.endsWith('/picking-context')) return json([])
     if (one && path.endsWith('/pick-options')) {
       if (waitPick) await waitPick
       return pickFailure ? json({ detail: 'synthetic failure' }, 503) : json(options[one.supply.id] ?? [])
@@ -238,7 +241,10 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
     await act(async () => release()); expect(printed).toHaveLength(0)
     waitPick = null; closed = false; await print(); expect(printed).toHaveLength(1)
   })
-  it('C11 WMS610: common print stays available on composition/picking/packing/boxes, old screen quantity headers', async () => {
+  it('C11 WMS610: common print stays available on composition/picking/packing/boxes, WMS-709 plan/remaining screen quantity headers', async () => {
+    // An already prepared supply keeps this print-only scenario read-only when
+    // entering packing; production otherwise creates the missing task on entry.
+    fixtures[0].supply.packaging_task_id = 'task-wms673'
     await open('group')
     for (const stage of ['Состав', 'Подбор', 'Упаковка и маркировка', 'Короба']) {
       const tab = [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find((node) => node.textContent === stage)

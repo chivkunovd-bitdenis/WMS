@@ -1,0 +1,32 @@
+{
+  "ci_run": "37863891620",
+  "case": "WMS652.geometry[wb-single;1600x1000-long]",
+  "diagnosis": "Request-log readiness precedes no-asset response rendering; resulting Alert shifts scanner pointer coordinates",
+  "ci_before_scanner_bar_y": 326.078125,
+  "ci_after_alert_scanner_bar_y_approx": 392,
+  "ci_evidence": [
+    "print-focus-current/WMS652-geometry-wb-single-1600x1000-long-.json",
+    "print-focus-current/WMS652-geometry-wb-single-1600x1000-long-.png"
+  ],
+  "fix": "Await exact no-asset message and re-enabled original QR button before pointer measurement; real pointer click and exact focus predicate retained",
+  "runtime_changed": false,
+  "geometry_blob": "0bd3c6ae6e3b7835d0c2497b50a0c8f549cd6059",
+  "scoped_replay": {
+    "sha": "76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd",
+    "cases": [
+      {
+        "id": "WMS652.geometry[wb-single;1600x1000-long]",
+        "status": "PASS"
+      }
+    ],
+    "physicalPaper": "NOT_TESTED",
+    "externalApi": "SYNTHETIC",
+    "currentCase": "WMS652.geometry[wb-single;1600x1000-long]",
+    "status": "PASS"
+  },
+  "log": "geometry-single/run.log",
+  "review": "requested; parent controls final review and commit",
+  "own_vite_pid": 60854,
+  "own_vite_stopped_after_cwd_command_confirmation": true,
+  "own_chrome_stopped_by_runner_finally": true
+}

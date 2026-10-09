@@ -75,7 +75,7 @@ _LEGACY_SALES_ENABLED = ContextVar("legacy_sales_enabled", default=False)
 
 
 @pytest.fixture(autouse=True)
-def legacy_sales_http(monkeypatch):
+def legacy_sales_http(monkeypatch, redis_ownership_io):
     """Supply synthetic sale evidence at HTTP only for this legacy test module."""
     _SYNTHETIC_SALES.clear()
     original_send = httpx.AsyncClient.send
@@ -125,6 +125,7 @@ def legacy_sales_http(monkeypatch):
             return True
 
         async def aclose(self):
+            # The shared I/O fixture owns this connection and subprocess.
             pass
 
     # The legacy boundary needs no real broker. Injecting a fake broker URL here

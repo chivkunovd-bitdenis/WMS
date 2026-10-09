@@ -147,3 +147,20 @@ def test_requirement_sku_lists_accept_numbers_from_live_ozon() -> None:
     requirements = response.result.requirements
     assert requirements.products_requiring_gtd == ["1695134284"]
     assert requirements.products_requiring_mandatory_mark == ["1697770458", "1"]
+
+
+def test_possible_mandatory_mark_sku_list_accepts_numbers_from_live_ozon() -> None:
+    # WMS-714, 9 октября 2026: Ozon прислал optional.products_with_possible_mandatory_mark
+    # числами (Руспро, 56906774-0280-1) — сборка по QR падала на «неизвестном формате».
+    from app.schemas.ozon_fbs_api import OzonV3GetFbsPostingResponseV3
+
+    response = OzonV3GetFbsPostingResponseV3.model_validate({
+        "result": {
+            "posting_number": "56906774-0280-1",
+            "status": "awaiting_packaging",
+            "optional": {"products_with_possible_mandatory_mark": [2818982152, 5344571640]},
+        }
+    })
+    assert response.result.optional.products_with_possible_mandatory_mark == [
+        "2818982152", "5344571640",
+    ]

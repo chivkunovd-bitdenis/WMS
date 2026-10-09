@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { boxReceiptLabels, usesTabOrderPickList } from '../../v2/imperiyaPickListOrder'
+import type { FbsPickingContext } from '../../v2/fbsApi'
 import { Box } from '@mui/material'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiUrl } from '../../../api'
@@ -287,6 +289,19 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
     void refreshKiz()
   }, [refreshKiz])
 
+  // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: у коробов подбора дописана их приёмка/возврат
+  // (номера коробов у Империи повторяются в разных приёмках). См. imperiyaPickListOrder.ts.
+  const [boxLabels, setBoxLabels] = useState<Map<string, string>>(() => new Map())
+  useEffect(() => {
+    if (source !== 'fbs' || !requestId || !usesTabOrderPickList(token)) return
+    let cancelled = false
+    void fetch(apiUrl(`${FBS_BASE}/${requestId}/picking-context`), { headers: headers(token) })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => { if (!cancelled) setBoxLabels(boxReceiptLabels(data as FbsPickingContext[])) })
+      .catch(() => undefined)
+    return () => { cancelled = true }
+  }, [requestId, source, token, version])
+
   const screenData = useMemo(() => {
     if (!detail) return null
 
@@ -382,10 +397,12 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
           let holder = cellHolder
           for (const step of source.container_path) {
             if (!objectsById.has(step.id)) {
+              const receipt = boxLabels.get(step.id)
               objectsById.set(step.id, {
                 id: step.id,
                 kind: step.kind,
-                code: step.code,
+                // Скан и ручной ввод ищут по barcode (= код тары), подпись — только для глаз.
+                code: receipt ? `${step.code} · ${receipt}` : step.code,
                 // Отдельного ШК тары ручка не отдаёт; распознаёт его scan-роут.
                 barcode: step.code,
                 holder,
@@ -432,7 +449,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       picked,
       placeSource,
     }
-  }, [catalogById, detail, isOzonFbs, pickOptions, source])
+  }, [boxLabels, catalogById, detail, isOzonFbs, pickOptions, source])
 
   // Товары, у которых включён Честный знак: число КИЗ видно и при нуле (WMS-686, R3).
   const markingProducts = useMemo(

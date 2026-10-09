@@ -1,3 +1,4 @@
+import { ensureFbsStickers } from './fbsStickerPrefetch'
 import { OzonDocumentsAbsence } from './OzonDocumentsAbsence'
 import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
@@ -70,6 +71,7 @@ import { DeliveryCheckGroupList } from './FbsDeliveryCheckGroups'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FbsTransferSupplyDialog, makeFbsTransferSupplyDeps } from './FbsTransferSupplyDialog'
 import { FbsAssemblySupplyFrame, type FbsAssemblyFrameControl } from './FbsAssemblySupplyFrame'
+import { imperiyaWalkRows, usesTabOrderPickList } from './imperiyaPickListOrder'
 import { fbsAssemblySupplyTitle, fbsCodeBelongsToSupply } from './fbsSupplyAssembly'
 import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStage'
 import { fbsMenuReprintRequest, hasOperatorKiz } from './fbsMenuReprint'
@@ -126,6 +128,7 @@ import {
   fetchFbsWorklist,
   fetchFbsWorkspace,
   getFbsPickOptions,
+  type FbsPickOptionProduct,
   getFbsPickingContext,
   lookupFbsOrderBySticker,
   markFbsDirectKizPrintStarted,
@@ -837,6 +840,8 @@ export function FfFbsSupplyWorkspace({
   const registerSequentialScanner = assemblyFrame?.registerScanner
   const unifiedStickerAttempts = useRef(new Set<string>())
   const ordinaryPreparationAttempt = useRef(false)
+  // Preparation attempts belong to one opened supply. Changing tabs must not
+  // repeat a failed request; the existing Alert offers the explicit retry.
   useEffect(() => {
     unifiedStickerAttempts.current.clear()
     ordinaryPreparationAttempt.current = false
@@ -1250,6 +1255,8 @@ export function FfFbsSupplyWorkspace({
         : { workspace: current, errorMessage: null }
       retryErrorMessage = stickers.errorMessage ?? ''
       return prepare && !stickers.workspace.supply.packaging_task_id
+        && stickers.workspace.stage !== 'tracking'
+        && !['in_delivery', 'done', 'cancelled'].includes(stickers.workspace.supply.status)
         ? startFbsSupplyWork(token, authHeaders, supplyIdAtStart)
         : stickers.workspace
     }
@@ -1270,7 +1277,11 @@ export function FfFbsSupplyWorkspace({
     const requested = ensureFbsStickers(token, authHeaders, workspace, missing.map((order) => order.id))
     void requested.then(async (result) => {
       if (!write.isCurrent()) return
-      if (prepare) await run(() => startFbsSupplyWork(token, authHeaders, supplyIdAtStart), '')
+      if (prepare && !result.workspace.supply.packaging_task_id
+        && result.workspace.stage !== 'tracking'
+        && !['in_delivery', 'done', 'cancelled'].includes(result.workspace.supply.status)) {
+        await run(() => startFbsSupplyWork(token, authHeaders, supplyIdAtStart), '')
+      }
       else void load(true)
       if (write.isCurrent() && result.errorMessage) {
         retryAfterOrderErrors(result.errorMessage)
@@ -3217,10 +3228,11 @@ export function FfFbsSupplyWorkspace({
       printWorkspace.orders,
       printWorkspace.supply.marketplace === 'ozon',
     ).rows
+    let optionList: FbsPickOptionProduct[] = []
     try {
       // Подобранное берём из того же свежего ответа, что и места: экран мог не перечитаться после подбора.
-      const options = new Map((await getFbsPickOptions(token, authHeaders, printWorkspace.supply.id))
-        .map((option) => [option.product_id, option]))
+      optionList = await getFbsPickOptions(token, authHeaders, printWorkspace.supply.id)
+      const options = new Map(optionList.map((option) => [option.product_id, option]))
       if (!isCurrentPrint()) {
         printWindow.close()
         return
@@ -3240,8 +3252,8 @@ export function FfFbsSupplyWorkspace({
       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
     }
     try {
-      const context = new Map((await getFbsPickingContext(token, authHeaders, printWorkspace.supply.id))
-        .map((item) => [item.product_id, item]))
+      const contextList = await getFbsPickingContext(token, authHeaders, printWorkspace.supply.id)
+      const context = new Map(contextList.map((item) => [item.product_id, item]))
       if (!isCurrentPrint()) {
         printWindow.close()
         return
@@ -3250,6 +3262,11 @@ export function FfFbsSupplyWorkspace({
         const item = context.get(row.key)
         return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies, sourceGroups: item.source_groups } : row
       })
+      // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: лист идёт маршрутом вкладки «Подбор».
+      // Остальные клиенты печатают как раньше. См. imperiyaPickListOrder.ts.
+      if (usesTabOrderPickList(token) && optionList.length) {
+        rows = imperiyaWalkRows(rows, optionList, contextList)
+      }
     } catch {
       if (!isCurrentPrint()) {
         printWindow.close()
@@ -3268,6 +3285,7 @@ export function FfFbsSupplyWorkspace({
       supplyName: printWorkspace.supply.name,
       wbSupplyId: printWorkspace.supply.wb_supply_id,
       marketplace: printWorkspace.supply.marketplace,
+      imperiyaPickList: usesTabOrderPickList(token),
       sellerName: printWorkspace.supply.seller.name,
       wmsWarehouseName: printWorkspace.supply.wms_warehouse.name,
       routeLabel: printWorkspace.supply.marketplace === 'ozon'

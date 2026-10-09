@@ -8,6 +8,7 @@ import {
 import { maskCisTail, parseGs1Cis } from './parseGs1Cis'
 import {
   buildProductLabelContentCss,
+  PRODUCT_LABEL_FIT_SCRIPT,
   buildProductLabelSectionHtml,
   labelMm,
   labelPt,
@@ -307,6 +308,7 @@ export function buildMarkingTapeDocument(
     <meta charset="utf-8" />
     <title>Честный знак</title>
     <style>${buildTapePageCss(labelSize)}</style>
+    ${PRODUCT_LABEL_FIT_SCRIPT}
   </head>
   <body>${body}</body>
 </html>`

@@ -520,17 +520,30 @@ async def test_repeat_add_then_start_work_then_more_orders_only_request_missing(
         product,
         order_id=537503,
     )
-    created = await async_client.post(
-        "/operations/fbs-supplies/from-orders",
-        headers=headers,
-        json={
-            "name": "C7 repeat",
-            "order_ids": [str(order_a)],
-            "planned_delivery_type": "warehouse_sc",
-            "idempotency_key": str(uuid.uuid4()),
-        },
-    )
+    creation_requests: list[list[uuid.UUID]] = []
+
+    async def creation_sticker_outage(*args: Any, **kwargs: Any) -> Any:
+        creation_requests.append(kwargs["order_ids"])
+        raise print_assets.FbsPrintAssetError("wb_stickers_incomplete")
+
+    # Creation now requests A immediately. Model an actual sticker outage
+    # so the later start-work action still has one genuinely missing order.
+    with monkeypatch.context() as creation_patch:
+        creation_patch.setattr(
+            print_assets, "request_supply_print_batch", creation_sticker_outage
+        )
+        created = await async_client.post(
+            "/operations/fbs-supplies/from-orders",
+            headers=headers,
+            json={
+                "name": "C7 repeat",
+                "order_ids": [str(order_a)],
+                "planned_delivery_type": "warehouse_sc",
+                "idempotency_key": str(uuid.uuid4()),
+            },
+        )
     assert created.status_code == 201, created.text
+    assert creation_requests == [[order_a]]
     supply_id = created.json()["supply"]["id"]
 
     # C15 fetches A after successful creation without starting work or creating

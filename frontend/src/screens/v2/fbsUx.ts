@@ -302,6 +302,8 @@ export type FbsPickingListPrintRow = {
   locations: string[]
   inboundSupplies?: string[]
   sourceGroups?: Array<{ key: string; title: string; lines: string[] }>
+  /** WMS-710, только Империя ФФ: строка маршрута повторяет товар — номер берётся у товара, счётчик не двигается. */
+  positionLabel?: string
   required: number
   picked: number
   /** Historical field name; Ozon rows store the posting identifier here. */
@@ -315,6 +317,8 @@ export type FbsPickingListPrintInput = {
   wbSupplyId: string | null
   /** Older callers are WB; group Ozon sheets must not present their postings as WB orders. */
   marketplace?: 'wb' | 'ozon' | 'mixed'
+  /** WMS-710: reserve the wider uppercase size heading only for Imperiya sheets. */
+  imperiyaPickList?: boolean
   sellerName: string
   wmsWarehouseName: string
   routeLabel: string
@@ -503,7 +507,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
     { grow: 2 },
     { width: compactPrintWidth('Артикул', input.rows.map(articleFor), 25, 12) },
     { width: compactPrintWidth('Цвет', input.rows.map((row) => row.color), 22, 12) },
-    { width: compactPrintWidth('Размер', input.rows.map((row) => row.size), 20, 20) },
+    { width: compactPrintWidth('Размер', input.rows.map((row) => row.size), 20, 20, 3, 9) },
     { grow: 1.3 },
     { width: 25 },
     { width: compactPrintWidth(`Заказы ${marketplaceLabel}`, input.rows.flatMap((row) => row.wbOrders), 24, 12) },
@@ -520,10 +524,13 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
   }
   let position = 1
   const rows = input.rows.map((row) => {
-    const positionFrom = position
-    const positionTo = positionFrom + row.required - 1
-    position = positionTo + 1
-    const positionLabel = positionFrom === positionTo ? `${positionFrom}` : `${positionFrom}–${positionTo}`
+    let positionLabel = row.positionLabel
+    if (positionLabel === undefined) {
+      const positionFrom = position
+      const positionTo = positionFrom + row.required - 1
+      position = positionTo + 1
+      positionLabel = positionFrom === positionTo ? `${positionFrom}` : `${positionFrom}–${positionTo}`
+    }
     const article = articleFor(row)
     const identifiers = row.identifiers.filter((identifier) => identifier.trim() !== article)
     const imageUrl = printableImageUrl(row.imageUrl)

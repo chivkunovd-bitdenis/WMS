@@ -73,6 +73,7 @@ class SalesHTTP:
         self.rows: list[dict[str, Any]] = []
         self.pages: list[Any] | None = None
         self.status: int | None = None
+        self.finance_status = 204
         self.error: str | None = None
         self.requests: list[httpx.Request] = []
         self.finance_requests: list[httpx.Request] = []

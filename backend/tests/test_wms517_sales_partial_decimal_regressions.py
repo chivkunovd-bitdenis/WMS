@@ -216,7 +216,7 @@ async def test_old_missing_history_does_not_block_selected_current_sale(
     db_session, sales_http, redis_boundary, phase
 ):
     scope, current_mark, current_order, _ = await fixture_order(db_session, sales_http)
-    old_mark, _ = await add_same_scope_order(
+    old_mark, old_order = await add_same_scope_order(
         db_session,
         current_order,
         rid="outside-guaranteed-history",
