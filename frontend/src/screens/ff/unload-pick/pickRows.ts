@@ -89,8 +89,27 @@ const cellOrder = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' }
 // It must follow physical cells on a walking list, just like an absent cell.
 const UNASSIGNED_LOCATION = 'Без ячеек'
 
+/**
+ * Товар собран полностью: план больше нуля и осталось ноль. Это то же правило,
+ * что у подсветки вида по товарам (isComplete в UnloadPickScreen).
+ */
+export const isPlanDone = (row: PickRow) => row.plan > 0 && row.left === 0
+
+export type CellPickOptions = {
+  /**
+   * WMS-709 R4: у собранного товара не показывать места, с которых в этом подборе
+   * ничего не снято. Выключено по умолчанию: без флага список содержит все места.
+   */
+  hideUntouchedOfDone?: boolean
+}
+
 /** FBS walk list: one cell, then its loose goods and nested containers. */
-export function cellPickRowsOf(rows: PickRow[], objects: WarehouseObject[], cells: Cell[]): CellPickRow[] {
+export function cellPickRowsOf(
+  rows: PickRow[],
+  objects: WarehouseObject[],
+  cells: Cell[],
+  options: CellPickOptions = {},
+): CellPickRow[] {
   const roots = new Map<string, CellPickBranch>()
   // WMS-709: штуки, которые подбор уже принёс на сортировку, — отдельным разделом
   // «Уже подобрано» в конце списка, чтобы не путались с тем, что ещё надо снять.
@@ -102,6 +121,10 @@ export function cellPickRowsOf(rows: PickRow[], objects: WarehouseObject[], cell
         alreadyPicked.push({ row, place })
         continue
       }
+      // WMS-709 R4: собранный товар не показывает места без снятий. Ячейка или тара
+      // без показанных мест не создаётся вовсе, поэтому и её «N шт» не считает
+      // скрытые штуки.
+      if (place && options.hideUntouchedOfDone && isPlanDone(row) && place.picked === 0) continue
       const rootKey = cell ? cellRef(cell.id) : 'no-cell'
       const existingRoot = roots.get(rootKey)
       const root: CellPickBranch = existingRoot ?? {
