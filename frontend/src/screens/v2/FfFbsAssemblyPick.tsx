@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { boxReceiptLabels, usesTabOrderPickList } from './imperiyaPickListOrder'
+import type { FbsPickingContext } from './fbsApi'
 import { Box } from '@mui/material'
 import { apiUrl } from '../../api'
 import { fetchMarketplaceProductCatalogRows } from '../../hooks/useWbProductCatalog'
@@ -287,6 +289,21 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
     return refresh
   }, [fetchOptions, supplyIds])
 
+  // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: у коробов подбора дописана их приёмка/возврат.
+  // См. imperiyaPickListOrder.ts.
+  const [boxLabels, setBoxLabels] = useState<Map<string, string>>(() => new Map())
+  useEffect(() => {
+    if (!usesTabOrderPickList(token) || supplyIds.length === 0) return
+    let cancelled = false
+    void Promise.all(supplyIds.map((id) => fetch(apiUrl(`${FBS_BASE}/${id}/picking-context`), { headers: headers(token) })
+      .then((res) => (res.ok ? res.json() : []))
+      .catch(() => [])))
+      .then((lists) => { if (!cancelled) setBoxLabels(boxReceiptLabels((lists as FbsPickingContext[][]).flat())) })
+    return () => { cancelled = true }
+    // idsKey — стабильный ключ набора поставок
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey, token, version])
+
   const screenData = useMemo(() => {
     const loaded = options.filter((one): one is ApiPickProduct[] => Boolean(one))
     if (loaded.length !== supplyIds.length || loaded.length === 0) return null
@@ -317,7 +334,7 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
             let holder = cellRef(location.storage_location_id)
             for (const step of source.container_path) {
               if (!objectsById.has(step.id)) {
-                objectsById.set(step.id, { id: step.id, kind: step.kind, code: step.code, barcode: step.code, holder })
+                objectsById.set(step.id, { id: step.id, kind: step.kind, code: boxLabels.get(step.id) ? `${step.code} · ${boxLabels.get(step.id)}` : step.code, barcode: step.code, holder })
               }
               holder = objRef(step.id)
             }
@@ -379,7 +396,7 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
       picked,
       placeSource,
     }
-  }, [catalogById, isOzon, options, supplyIds.length])
+  }, [boxLabels, catalogById, isOzon, options, supplyIds.length])
 
   const statesFor = useCallback((productId: string, placeKey: string | null): GroupPickSupplyState[] => {
     const result: GroupPickSupplyState[] = []

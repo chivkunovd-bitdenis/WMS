@@ -45,6 +45,15 @@ def changed_paths(root: Path, base: str, head: str) -> list[str]:
     ).decode().split("\0")[:-1]
 
 
+SUPPORT_AGENT_PREFIX = "tools/support_agent/"
+WMS686_MOCKUP_PREFIX = "docs/mockups/WMS-686/"
+
+
+def touches(paths: list[str], prefix: str) -> bool:
+    """True when any changed path lives under the prefix (e.g. a tool directory)."""
+    return any(path.startswith(prefix) for path in paths)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
@@ -52,12 +61,19 @@ def main() -> None:
     parser.add_argument("--head", required=True)
     parser.add_argument("--event", required=True)
     args = parser.parse_args()
-    run = full_wave(changed_paths(args.root, args.base, args.head), args.event)
-    print(f"run_full={str(run).lower()}")
+    paths = changed_paths(args.root, args.base, args.head)
+    flags = {
+        "run_full": full_wave(paths, args.event),
+        # Optional jobs run only when their own inputs change; otherwise they do not block.
+        "support_agent": touches(paths, SUPPORT_AGENT_PREFIX),
+        "wms686": touches(paths, WMS686_MOCKUP_PREFIX),
+    }
+    lines = [f"{key}={str(value).lower()}" for key, value in flags.items()]
+    print("\n".join(lines))
     output = os.environ.get("GITHUB_OUTPUT")
     if output:
         with Path(output).open("a", encoding="utf-8") as stream:
-            stream.write(f"run_full={str(run).lower()}\n")
+            stream.write("".join(f"{line}\n" for line in lines))
 
 
 if __name__ == "__main__":

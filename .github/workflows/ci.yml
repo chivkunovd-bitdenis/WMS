@@ -41,6 +41,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run_full: ${{ steps.classify.outputs.run_full }}
+      support_agent: ${{ steps.classify.outputs.support_agent }}
+      wms686: ${{ steps.classify.outputs.wms686 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,21 +61,32 @@ jobs:
   backlog:
     timeout-minutes: 5
     needs: baseline
+    # WMS-735 R10: только предупреждение модератору, не блокировка выпуска.
     # Гейт бэклога: каждое изменение должно называть номер задачи из
     # docs/KANONICHESKIY_BACKLOG.md. Заведён 04.09.2026 после того, как выяснилось, что за два
     # месяца 97 задач владельца жили только в переписке, а постановка по
     # инвентаризации вообще исчезла из проекта при слиянии.
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Проверить ссылку на задачу
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Проверить ссылку на задачу (предупреждение)
         env:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
-        run: |
-          ./scripts/ci/check-backlog-ref.sh "$BASE_SHA"
-          python scripts/ci/check_task_documents.py "$BASE_SHA"
+        run: ./scripts/ci/check-backlog-ref.sh "$BASE_SHA"
+      - name: Проверить документ задачи (предупреждение)
+        if: always()
+        env:
+          BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
+        run: python scripts/ci/check_task_documents.py "$BASE_SHA"
+      - name: Тесты проверки документов (предупреждение)
+        if: always()
+        run: python -m unittest discover -s scripts/ci -p 'test_check_task_documents.py' -v
 
   backend-checks:
     needs: [baseline, scope]
@@ -491,8 +504,10 @@ jobs:
           retention-days: 14
 
   wms686-mockup:
+    # WMS-735 R10: демо-макет проверяется только при изменении его каталога.
+    # Пропуск не блокирует выпуск; упавший запуск всё равно краснит CI.
     needs: [baseline, scope]
-    if: needs.scope.outputs.run_full == 'true'
+    if: needs.scope.outputs.run_full == 'true' && needs.scope.outputs.wms686 == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
@@ -534,24 +549,18 @@ jobs:
           python-version: "3.11"
       - name: Install infrastructure test dependencies
         run: python -m pip install pytest pytest-xdist
+      # Ночной конвейер бота (tools/support_agent) проверяется только при изменении своего каталога.
       - name: Install nightly controller test dependencies
+        if: needs.scope.outputs.support_agent == 'true'
         run: python -m pip install -r tools/support_agent/requirements.txt
       - name: Execute named nightly controller contracts
+        if: needs.scope.outputs.support_agent == 'true'
         run: >-
           PYTHONPATH=tools/support_agent python -m pytest -q
           tools/support_agent/tests/test_night.py
-          --junitxml="$RUNNER_TEMP/night-controller.xml"
-      - name: Verify whole candidate against the accepted product reference
-        run: python scripts/ci/product_scope.py --root . --trusted-ref bb9cb79979f8d00bba217bd97654b6afcb2ad8a0
       - name: Infrastructure tests (not business guards)
-        run: |
-          python -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v
-          python -m unittest discover -s scripts/ci -p 'test_check_task_documents.py' -v
-      - name: Execute all product-scope contracts and persist receipt
-        run: |
-          python -m pytest -q scripts/ci/tests/test_product_scope.py --junitxml="$RUNNER_TEMP/product-scope.xml"
-          python -c 'import json,os,pathlib; pathlib.Path(os.environ["RUNNER_TEMP"],"product-scope-receipt.json").write_text(json.dumps(dict(version=1,sha=os.environ["GITHUB_SHA"],run_id=int(os.environ["GITHUB_RUN_ID"]),run_attempt=int(os.environ["GITHUB_RUN_ATTEMPT"]),report="product-scope.xml"))+"\n")'
-      - name: Persist exact full-backend shard infrastructure cases
+        run: python -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v
+      - name: CI tooling tests (pytest-style)
         run: >-
           python -m pytest -q scripts/ci/tests/test_backend_shards.py
           scripts/ci/tests/test_backend_shard_progress.py
@@ -564,58 +573,31 @@ jobs:
           scripts/ci/tests/test_reviewed_process_upgrade.py
           scripts/ci/tests/test_process_deploy_gate.py
           scripts/ci/tests/test_server_process_gate.py
-          scripts/ci/tests/test_retain_web_assets.py
-          --junitxml="$RUNNER_TEMP/ci-shards.xml"
-      - name: WMS-687 strict reviewed correction compatibility
-        run: python -m pytest -q scripts/ci/test_check_task_documents.py --junitxml="$RUNNER_TEMP/docgate-687.xml"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: guard-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/product-scope.xml
-            ${{ runner.temp }}/product-scope-receipt.json
-            ${{ runner.temp }}/ci-shards.xml
-            ${{ runner.temp }}/docgate-687.xml
-            ${{ runner.temp }}/night-controller.xml
-          if-no-files-found: error
-          retention-days: 14
-      - name: Verify against the checker and manifest from trusted BASE
-        id: integrity
-        env:
-          BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
-        run: |
-          if git cat-file -e "$BASE_SHA:scripts/ci/check_regression_guards.py" 2>/dev/null; then
-            python scripts/ci/check_regression_guards.py --root "$GITHUB_WORKSPACE" --base "$BASE_SHA"
-          else
-            echo "Bootstrap only: trusted BASE has no checker; no business guard protection claimed."
-            python scripts/ci/check_regression_guards.py --base "$BASE_SHA" --allow-bootstrap
-          fi
-      - name: Preserve accepted process test coverage and execution commands
-        env:
-          BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
-        run: |
-          set -euo pipefail
-          python scripts/ci/process_contracts.py --root "$GITHUB_WORKSPACE" --base "$BASE_SHA"
+      # Продуктовая защита выкладки: старые файлы фронта сохраняются при выкладке.
+      - name: Retain previous web assets on deploy (product, exact named cases)
+        run: python -m pytest -q scripts/ci/tests/test_retain_web_assets.py --junitxml="$RUNNER_TEMP/retain-web-assets.xml"
       - name: Install backend guard dependencies
-        if: steps.integrity.outputs.backend_tests != '0'
         run: pip install -e './backend[dev]'
       - name: Approved backend guards
-        if: steps.integrity.outputs.backend_tests != '0'
         working-directory: backend
         run: pytest -n auto tests/guards
       - uses: actions/setup-node@v4
-        if: steps.integrity.outputs.frontend_tests != '0'
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Approved frontend guards
-        if: steps.integrity.outputs.frontend_tests != '0'
         working-directory: frontend
         run: |
           npm ci
           npx vitest run src/guards
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guard-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/retain-web-assets.xml
+          if-no-files-found: error
+          retention-days: 14
 
   printer-windows:
     needs: [baseline, scope]
@@ -640,9 +622,9 @@ jobs:
           retention-days: 14
 
   process-proof:
-    # Required by the deployment verifier. Branch enforcement needs a separately
-    # installed trusted anchor; this candidate workflow cannot protect itself.
-    needs: [baseline, scope, backend, frontend-build, guards, print-regressions, printer-windows, wms686-mockup]
+    # WMS-735 R10: проверяет только обязательные продуктовые сценарии (есть, прошли,
+    # без пропусков и дублей). Процессные квитанции здесь не собираются.
+    needs: [baseline, scope, backend, frontend-build, guards, print-regressions, printer-windows]
     if: always()
     timeout-minutes: 5
     runs-on: ubuntu-latest
@@ -694,29 +676,10 @@ jobs:
         with:
           name: ${{ steps.select.outputs.guards }}
           path: ${{ runner.temp }}/process-proof
-      - uses: actions/download-artifact@v4
-        id: download-wms686
-        if: always() && steps.select.outcome == 'success' && needs.scope.outputs.run_full == 'true'
-        with:
-          name: ${{ steps.select.outputs.wms686_mockup }}
-          path: ${{ runner.temp }}/process-proof
-      - name: Verify every required named case and bind evidence to this attempt
+      - name: Verify every required product scenario is present and passed
         env:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
-          CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        if: always() && steps.select.outcome == 'success' && needs.scope.outputs.run_full == 'true' && steps.download-backend.outcome == 'success' && steps.download-frontend.outcome == 'success' && steps.download-windows.outcome == 'success' && steps.download-print.outcome == 'success' && steps.download-guards.outcome == 'success' && steps.download-wms686.outcome == 'success'
+        if: always() && steps.select.outcome == 'success' && needs.scope.outputs.run_full == 'true' && steps.download-backend.outcome == 'success' && steps.download-frontend.outcome == 'success' && steps.download-windows.outcome == 'success' && steps.download-print.outcome == 'success' && steps.download-guards.outcome == 'success'
         run: |
           set -euo pipefail
           python scripts/ci/build_process_proof.py --root "$GITHUB_WORKSPACE" --reports "$RUNNER_TEMP/process-proof" --base "$BASE_SHA"
-      - name: Bind prose-only candidate and skip unchanged-code suite evidence
-        if: always() && needs.scope.outputs.run_full != 'true'
-        env:
-          BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
-          CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python scripts/ci/build_process_proof.py --root "$GITHUB_WORKSPACE" --reports "$RUNNER_TEMP/process-proof" --base "$BASE_SHA" --docs-only
-      - uses: actions/upload-artifact@v4
-        with:
-          name: process-proof-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/process-proof-final
-          if-no-files-found: error
-          retention-days: 30

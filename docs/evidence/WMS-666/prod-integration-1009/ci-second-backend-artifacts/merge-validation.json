@@ -1,0 +1,68 @@
+{
+  "identity": {
+    "sha": "854fe86ebba07b6819bcc07839aeb8a66ec1eec7",
+    "run_id": 37862038933,
+    "run_attempt": 1
+  },
+  "mode": "read-only historical receipt replay; no new CI/test execution",
+  "old_policy_result": {
+    "success": false,
+    "exception": "Required backend case is missing, skipped or failed"
+  },
+  "new_policy_result": {
+    "success": true,
+    "tests": 4810,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 210
+  },
+  "case_update": {
+    "trusted9971_present": false,
+    "introduced_commit": "150756eb1ece8469a3d1bc7afcec241327773d5f",
+    "old_required_count": 825,
+    "new_required_count": 826
+  },
+  "policy_other_sections_unchanged": true,
+  "matching_scripts_changed": false,
+  "named_report_verifier": {
+    "verified_suites": {
+      "backend-fbs": 826
+    },
+    "all_other_suites": "not replayed: corresponding same-attempt reports not supplied"
+  },
+  "integrity_base": "9971abed35e003abd5be8d2bc3e0032f3ca9f5c7",
+  "integrity_files": 292,
+  "policy_blob": "284592b39e37265ba3ddbb6f6390f1f3bdf53e4d",
+  "artifact_checksums": [
+    {
+      "index": 0,
+      "artifact_id": 11587790142,
+      "zip_bytes": 440743,
+      "zip_sha256": "8d229236ae3637528afb2744da33aa4389e2750afae05ca9b19c6483db83b93d",
+      "members": [
+        "junit.xml",
+        "progress.jsonl",
+        "receipt.json"
+      ]
+    },
+    {
+      "index": 1,
+      "artifact_id": 11586972134,
+      "zip_bytes": 441163,
+      "zip_sha256": "b645f03842e4caa34f7947fc57ace74ccee8ca7f091032952467142689b12a4c",
+      "members": [
+        "junit.xml",
+        "progress.jsonl",
+        "receipt.json"
+      ]
+    }
+  ],
+  "file_hashes": {
+    "0/junit.xml": "bdc5f22ce7e929c9bbb4052cd50bbdd3134a3cab4b6fc7c6effbf90e95d5434e",
+    "0/receipt.json": "8ebe8b3a3c8f640e5a4f4259cfd191b43cf20e3227e72dcc83d80ef1c4867385",
+    "0/progress.jsonl": "ad9f914ff8e45b74e5083a7a153b12e41b773aaed8fe38f105444cc12fd86010",
+    "1/junit.xml": "f3d20e050f434c47263ca869f6acef81007049cf77bbf7791946d40fff9b9e63",
+    "1/receipt.json": "355e4baa071e6a3491082316f9c640a5fa9194448506d8cb406710e276684289",
+    "1/progress.jsonl": "f34a7d42f7300db2e82b9b20ff76f06ff54d91fefb977f160ab562860782916c"
+  }
+}
