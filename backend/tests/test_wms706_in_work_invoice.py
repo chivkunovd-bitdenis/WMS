@@ -531,3 +531,180 @@ async def test_c24_early_ozon_invoice_is_not_counted_in_two_adjacent_periods(asy
         f"август={august_amount}, сентябрь={september_amount}, "
         f"сумма месяцев={august_amount + september_amount}, общий период={combined_amount} коп."
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("early_service", "late_service"),
+    [("fbs_order", "packing"), ("packing", "fbs_order")],
+    ids=["assembly-august-packing-september", "packing-august-assembly-september"],
+)
+async def test_c25_ozon_split_services_are_reported_in_their_occurrence_month(
+    async_client, early_service, late_service,
+):
+    """C25, R5/R10: отдельные услуги Ozon остаются в месяцах собственных начислений."""
+    headers, tenant_id = await _tenant(async_client)
+    seller_id = await _seller(async_client, headers, "Селлер C25")
+    warehouse_id = await _warehouse(tenant_id)
+    handover = msk(2026, 9, 1, 12)
+    async with SessionLocal() as session:
+        for service in SERVICES:
+            session.add(_tariff(tenant_id, seller_id, service, 1000))
+        session.add(OperationFactCutover(id=1, occurred_at=msk(2026, 8, 26)))
+        await session.commit()
+    order_id = await _in_work_order(
+        tenant_id, seller_id, warehouse_id, number=707501, marketplace="ozon", packed=WORK_DAY,
+    )
+
+    created = await _create(
+        async_client, headers, _body(seller_id, _sources(order_id, (early_service,))), "c25",
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["total_amount_kopecks"] == 1000
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        order.status = "sorted"
+        await charge_handed_over_orders(session, [order], occurred_at=handover)
+        await session.commit()
+
+    charge_rows = [row for row in await _charges(order_id) if row["entry_type"] == "charge"]
+    charges_by_service = {row["service_code"]: row for row in charge_rows}
+    assert set(charges_by_service) == set(SERVICES), (
+        f"нужны отдельные начисления за сборку и упаковку: {sorted(charges_by_service)}"
+    )
+    expected_dates = {
+        early_service: WORK_DAY,
+        late_service: handover,
+    }
+    for service in SERVICES:
+        assert charges_by_service[service]["amount"] == 1000, f"{service} должна стоить 10 ₽"
+        assert charges_by_service[service]["occurred_at"] == expected_dates[service], (
+            f"{service} должна оставаться датированной собственным событием"
+        )
+
+    august = await _details(async_client, headers, seller_id, period=PERIOD)
+    september = await _details(
+        async_client, headers, seller_id,
+        period={"date_from": "2026-09-01", "date_to": "2026-09-30"},
+    )
+    combined = await _details(
+        async_client, headers, seller_id,
+        period={"date_from": "2026-08-01", "date_to": "2026-09-30"},
+    )
+    august_amount = august["totals"]["net_total_kopecks"]
+    september_amount = september["totals"]["net_total_kopecks"]
+    combined_amount = combined["totals"]["net_total_kopecks"]
+    assert (august_amount, september_amount, combined_amount) == (1000, 1000, 2000), (
+        "сборка и упаковка должны учитываться по 10 ₽ каждая в месяце своего начисления, "
+        f"а общий период должен сохранять 20 ₽: август={august_amount}, "
+        f"сентябрь={september_amount}, август–сентябрь={combined_amount} коп."
+    )
+
+
+@pytest.mark.asyncio
+async def test_c26_ozon_assembly_reversal_remains_in_report_after_handover(async_client):
+    """C26, R10/R14: сторно сборки после передачи вычитается из общего отчёта."""
+    headers, tenant_id = await _tenant(async_client)
+    seller_id = await _seller(async_client, headers, "Селлер C26")
+    warehouse_id = await _warehouse(tenant_id)
+    async with SessionLocal() as session:
+        for service in SERVICES:
+            session.add(_tariff(tenant_id, seller_id, service, 1000))
+        session.add(OperationFactCutover(id=1, occurred_at=msk(2026, 8, 26)))
+        await session.commit()
+    order_id = await _in_work_order(
+        tenant_id, seller_id, warehouse_id, number=707601, marketplace="ozon", packed=WORK_DAY,
+    )
+
+    created = await _create(async_client, headers, _body(seller_id, _sources(order_id)), "c26")
+    assert created.status_code == 201, created.text
+    assert created.json()["total_amount_kopecks"] == 2000
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        order.status = "sorted"
+        await charge_handed_over_orders(session, [order], occurred_at=msk(2026, 9, 1, 12))
+        await session.commit()
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        order.status = "cancelled"
+        await reverse_fbs_order_billing(session, order)
+        await session.commit()
+
+    async with SessionLocal() as session:
+        reversals = list(await session.scalars(
+            select(BillingLedgerEntry).where(
+                BillingLedgerEntry.tenant_id == tenant_id,
+                BillingLedgerEntry.source_type == "billing_reversal",
+                BillingLedgerEntry.entry_type == "reversal",
+                BillingLedgerEntry.service_code == "fbs_order",
+            )
+        ))
+    assert any(row.amount == -1000 for row in reversals), (
+        "в журнале должно сохраниться сторно сборки на −10 ₽"
+    )
+
+    report = await _details(
+        async_client, headers, seller_id,
+        period={"date_from": "2026-08-01", "date_to": "2026-10-09"},
+    )
+    net_total = report["totals"]["net_total_kopecks"]
+    assert net_total == 1000, (
+        "после сторно сборки итог должен быть 10 ₽: две исходные услуги на 20 ₽ "
+        f"минус сторно сборки на 10 ₽; получено {net_total} коп."
+    )
+
+
+@pytest.mark.asyncio
+async def test_c27_out_of_period_charges_keep_invoice_history(async_client):
+    """C27, R10: сентябрьские строки сохраняют ссылку и историю августовского счёта."""
+    headers, tenant_id = await _tenant(async_client)
+    seller_id = await _seller(async_client, headers, "Селлер C27")
+    warehouse_id = await _warehouse(tenant_id)
+    handover = msk(2026, 9, 1, 12)
+    async with SessionLocal() as session:
+        for service in SERVICES:
+            session.add(_tariff(tenant_id, seller_id, service, 1000))
+        session.add(OperationFactCutover(id=1, occurred_at=msk(2026, 8, 26)))
+        await session.commit()
+    order_id = await _in_work_order(
+        tenant_id, seller_id, warehouse_id, number=707701, marketplace="ozon", packed=WORK_DAY,
+    )
+    created = await _create(async_client, headers, _body(seller_id, _sources(order_id)), "c27")
+    assert created.status_code == 201, created.text
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        order.status = "sorted"
+        await charge_handed_over_orders(session, [order], occurred_at=handover)
+        await session.commit()
+    charge_ids = {
+        row["service_code"]: str(row["id"])
+        for row in await _charges(order_id)
+        if row["entry_type"] == "charge"
+    }
+    assert set(charge_ids) == set(SERVICES), f"в счёте должны быть обе услуги: {sorted(charge_ids)}"
+
+    september = await _details(
+        async_client, headers, seller_id,
+        period={"date_from": "2026-09-01", "date_to": "2026-09-30"},
+    )
+    rows = _rows_of(september["entries"], order_id)
+    violations: list[str] = []
+    for service in SERVICES:
+        service_rows = [row for row in rows if row["service_code"] == service]
+        if len(service_rows) != 1:
+            violations.append(f"{service}: ожидалась одна строка, найдено {len(service_rows)}")
+            continue
+        row = service_rows[0]
+        if row.get("result") == "unpriced":
+            violations.append(f"{service}: строка ошибочно получила результат unpriced")
+        if row.get("billing_ledger_entry_id") != charge_ids[service]:
+            violations.append(
+                f"{service}: потеряна ссылка billing_ledger_entry_id "
+                f"(фактически {row.get('billing_ledger_entry_id')!r})"
+            )
+        history = row.get("invoice_history")
+        if history != {"state": "known", "count": 1}:
+            violations.append(f"{service}: потеряна история счёта (фактически {history!r})")
+    assert not violations, "сентябрьские строки потеряли выставленный в августе счёт:\n" + "\n".join(violations)
