@@ -68,7 +68,7 @@ function fixture(savedStages = new Map<string, string>()) {
     'setDeliveryError', 'setDeliveryErrorsOpen', 'setExpandedDeliveryErrorGroups', 'fbsErrorText',
     'fbsStageAfterWorkspaceRefresh', 'visualStage', 'open', 'supplyId', 'token',
     'authHeaders', 'readFbsWorkspaceStage', 'freshWorkspaceGeneration', 'workspaceOpenGeneration',
-    'pendingInitialWorkspace', `${callbackJs}; return load`) as (...args: unknown[]) => (
+    'pendingInitialWorkspace', 'setStaleWorkspace', 'workspaceSnapshotRef', `${callbackJs}; return load`) as (...args: unknown[]) => (
       silent?: boolean, onApplied?: (applied: unknown) => void) => Promise<unknown>
   const load = (id: string) => callbackFactory(
     (_token: string, _headers: unknown, supplyId: string) => {
@@ -82,6 +82,9 @@ function fixture(savedStages = new Map<string, string>()) {
     (stage: string) => stage, true, id, 'synthetic', () => ({}),
     (supplyId: string) => savedStages.get(supplyId) ?? null,
     freshWorkspaceGeneration, generation, pendingInitialWorkspace,
+    // WMS-712: признак устаревшего снимка для предупреждения о недоборе — UI-состояние,
+    // в проверках этого файла не участвует (покрыто DOM-контрактом C9).
+    () => undefined, { current: null },
   )
   return { generation, writeSeq, pending, visible, load }
 }

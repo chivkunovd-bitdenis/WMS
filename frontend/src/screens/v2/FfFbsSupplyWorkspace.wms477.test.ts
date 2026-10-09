@@ -667,7 +667,7 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
       'setDeliveryErrorsOpen', 'setExpandedDeliveryErrorGroups', 'fbsErrorText',
       'fbsStageAfterWorkspaceRefresh', 'visualStage',
       'open', 'supplyId', 'token', 'authHeaders', 'freshWorkspaceGeneration',
-      'workspaceOpenGeneration', 'pendingInitialWorkspace',
+      'workspaceOpenGeneration', 'pendingInitialWorkspace', 'setStaleWorkspace', 'workspaceSnapshotRef',
       `${asJs('load', helpers.load)}; return load`) as (
       ...args: unknown[]) => (silent?: boolean, onApplied?: (fresh: unknown) => void) => Promise<unknown>)(
       () => {
@@ -678,6 +678,9 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
       () => undefined, () => undefined, () => undefined, same, keepStage, same,
       true, 'supply-1', 'synthetic', () => ({}),
       freshWorkspaceGeneration, generation, pendingInitialWorkspace,
+      // WMS-712: признак устаревшего снимка для предупреждения о недоборе — UI-состояние,
+      // здесь не проверяется (покрыто DOM-контрактом C9).
+      () => undefined, { current: null },
     )
     const refreshAfterLostRace = (new Function('load',
       `${asJs('refreshAfterLostRace', helpers.refreshAfterLostRace)}; return refreshAfterLostRace`) as (

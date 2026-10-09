@@ -7,6 +7,7 @@ import { FbsPackingActionsToolbar, type FbsPackingActions } from './FbsPackingAc
 import { FbsRejectedKizHeader, FbsRejectedKizTriangle, type FbsRejectedKizFilter } from './FbsRejectedKizFilter'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
+import { plural } from '../../utils/plural'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import {
   Alert,
@@ -363,6 +364,29 @@ export function fbsPackingShowsSize(orders: PackingSizeOrder[], isOzon: boolean)
   return orders.some((order) => fbsPackingSizes(order, isOzon).some((size) => size !== null))
 }
 
+/**
+ * WMS-712: недобор по товару — сумма «план минус подобрано» по позициям всех заказов поставки.
+ * Считается из тех же позиций, из которых сервер считает прогресс; заказ без позиций
+ * сервер считает за одну штуку (fbs_workspace_service._compute_progress).
+ */
+function fbsUnpickedShortages(orders: FbsWorkspace['orders']): Array<{ key: string; name: string; article: string | null; count: number }> {
+  const byProduct = new Map<string, { key: string; name: string; article: string | null; count: number }>()
+  for (const order of orders) {
+    const rows = order.positions.length
+      ? order.positions
+      : [{ product_id: order.product.id, name: order.product.name, seller_article: order.product.seller_article, quantity: 1, picked_quantity: order.pick.status === 'picked' ? 1 : 0 }]
+    for (const row of rows) {
+      const missing = row.quantity - row.picked_quantity
+      if (missing <= 0) continue
+      const key = row.product_id ?? `${row.seller_article ?? ''}|${row.name}`
+      const known = byProduct.get(key)
+      if (known) known.count += missing
+      else byProduct.set(key, { key, name: row.name, article: row.seller_article, count: missing })
+    }
+  }
+  return [...byProduct.values()]
+}
+
 function normalizeDeliveryError(value: unknown): FbsDeliveryError | null {
   if (!value || typeof value !== 'object') return null
   const source = value as Record<string, unknown>
@@ -574,6 +598,11 @@ export function FfFbsSupplyWorkspace({
   assemblyFrame,
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
+  // WMS-712 R6: снимок, на котором обновление сорвалось. По нему предупреждение о недоборе
+  // не показываем; как только придёт новый снимок (любой), он снова строится по нему.
+  const [staleWorkspace, setStaleWorkspace] = useState<FbsWorkspace | null>(null)
+  const workspaceSnapshotRef = useRef<FbsWorkspace | null>(null)
+  workspaceSnapshotRef.current = workspace
   const [selectedStage, setStage] = useState<StageKey>('composition')
   // WMS-574: рамка окна сборки всегда на упаковке и не трогает запомненную
   // вкладку карточки этой поставки.
@@ -923,6 +952,8 @@ export function FfFbsSupplyWorkspace({
         }
         return next
       } catch (cause) {
+        // WMS-712 R6: тихое обновление ошибку не показывает, но снимок на экране уже устарел.
+        if (write.isCurrent()) setStaleWorkspace(workspaceSnapshotRef.current)
         if (write.isCurrent() && !silent) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить поставку.')
       } finally {
         if (write.isCurrent() && !silent) setBusy(false)
@@ -946,6 +977,7 @@ export function FfFbsSupplyWorkspace({
     // отправила бы её из открытой поставки, либо висела бы мёртвой.
     setRetryAction(null)
     setWorkspace(initialWorkspace ?? null)
+    setStaleWorkspace(null)
     pendingInitialWorkspace.current = initialWorkspace?.supply.id === supplyId
       ? { generation: workspaceOpenGeneration.current, snapshot: initialWorkspace }
       : null
@@ -3874,11 +3906,28 @@ export function FfFbsSupplyWorkspace({
     return greenFirst ? [rows[0], header, ...rows.slice(1)] : [header, ...rows]
   }
 
+  // WMS-712: предупреждение о недоборе — существующий жёлтый Alert над строками упаковки этой поставки.
+  // Только показ: вкладки, «Далее», печать и действия от него не зависят (R4). Внутри того же Stack,
+  // что и строки, чтобы порядок поставок в окне групповой сборки (order) не сломался.
+  const unpickedShortages = workspace && workspace !== staleWorkspace && stage === 'packing'
+    ? fbsUnpickedShortages(workspace.orders)
+    : []
+  const unpickedWarning = unpickedShortages.length ? (
+    <Alert severity="warning" sx={{ borderRadius: 0 }} data-testid="fbs-unpicked-warning">
+      {unpickedShortages.map((item) => (
+        <Typography key={item.key} variant="body2">
+          {`Не подобрана ${item.count} ${plural(item.count, ['штука', 'штуки', 'штук'])}: ${[item.name, item.article].filter(Boolean).join(', ')}`}
+        </Typography>
+      ))}
+    </Alert>
+  ) : null
+
   const packingRows = workspace ? (
                   <Stack
                     divider={rejectedFilterOn ? undefined : <Divider flexItem />}
                     sx={{ order: assemblyFrame?.promotedSupplyId === supplyId ? -1 : 0 }}
                   >
+                    {unpickedWarning}
                     {withRejectedKizHeader(packingOrders.map((order) => {
                       const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
                       const printed = orderPrintDone(order)
