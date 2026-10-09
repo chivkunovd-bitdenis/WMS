@@ -28,6 +28,7 @@ import {
   reprintKey,
 } from './fboPackingPrint'
 import { buildProductRows, classifyScan, printTargetOf, type FboProductCodes } from './fboPackingScan'
+import { keepPendingScan, pendingScanKey, takePendingScan, type PendingScan } from './fboPendingScans'
 import type { FboMarkingCode, FboMarkingIssueResult, FboPackingDetail, FboProductRow } from './fboPackingTypes'
 
 export type UseFboPackingInput = {
@@ -43,18 +44,6 @@ type CatalogMarkingFlag = { requires_honest_sign?: boolean }
 
 export const NO_CURRENT_BOX_MESSAGE = 'Сначала отсканируйте или создайте короб'
 export const KIZ_ALREADY_LINKED_MESSAGE = 'Этот КИЗ уже привязан к товару'
-
-/**
- * Скан товара с неизвестным исходом: ответ на добавление штуки или на выдачу ЧЗ потерялся даже после
- * автоматического повтора. Операция живёт до первого определённого ответа сервера (2xx или 4xx): ручной
- * повтор того же кода в тот же короб идёт с прежними ключами, поэтому штука и код ЧЗ не задваиваются.
- */
-type PendingScan = {
-  productId: string | null
-  mutationId: string
-  issueMutationId: string | null
-  unresolved: boolean
-}
 
 function isOutcomeUnknown(cause: unknown): boolean {
   return cause instanceof FboPackingApiError && cause.outcomeUnknown
@@ -156,8 +145,6 @@ export function useFboPacking(input: UseFboPackingInput) {
   const issueMutationRef = useRef(new Map<string, string>())
   const loadSequenceRef = useRef(0)
   const lineBarcodeKeyRef = useRef(new Map<string, string>())
-  // Сканы с неизвестным исходом: ключ — короб и исходный код.
-  const pendingScansRef = useRef(new Map<string, PendingScan>())
 
   const apiContext = useCallback(
     (): FboPackingApiContext => ({ requestId: latest.current.detail.id, headers: latest.current.authHeaders }),
@@ -310,11 +297,12 @@ export function useFboPacking(input: UseFboPackingInput) {
       const { currentBoxId, detail: current, prefs: printPrefs } = latest.current
       const boxId = currentBoxId && current.boxes.some((box) => box.id === currentBoxId) ? currentBoxId : null
       if (!boxId) throw new Error(NO_CURRENT_BOX_MESSAGE)
-      // Тот же код в тот же короб после скана с неизвестным исходом продолжает его с прежними ключами.
-      // Незавершённая операция забирается из карты и возвращается в неё, только если исход снова неизвестен.
-      const scanKey = `${boxId}\u0000${raw}`
-      const pending = pendingScansRef.current.get(scanKey)
-      pendingScansRef.current.delete(scanKey)
+      // Тот же код в тот же короб после скана с неизвестным исходом продолжает его с прежними ключами,
+      // в том числе после ухода на другую вкладку документа: хранилище живёт вне компонента.
+      // Незавершённая операция забирается из хранилища и возвращается в него, только если исход снова неизвестен.
+      const shipmentId = current.id
+      const scanKey = pendingScanKey(boxId, raw)
+      const pending = takePendingScan(shipmentId, scanKey)
       const scan: PendingScan = pending ?? {
         productId: matchedProductId,
         mutationId: randomId(),
@@ -372,7 +360,7 @@ export function useFboPacking(input: UseFboPackingInput) {
         }
         if (failures.length > 0) throw new Error(`Штука уложена в короб. ${failures.join(' ')}`)
       } finally {
-        if (scan.unresolved) pendingScansRef.current.set(scanKey, scan)
+        if (scan.unresolved) keepPendingScan(shipmentId, scanKey, scan)
       }
     },
     [apiContext, issueOneAndPrint, metaOf],
