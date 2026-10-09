@@ -23,6 +23,11 @@ const ICONS = {
   cargo_place: <WidgetsOutlined fontSize="small" color="action" />,
 }
 
+// Оставляем место для названия, включая отступы вложенной тары и действия FBO.
+// Остальные колонки сохраняют свои прежние фиксированные ширины.
+const MIN_NAME_COLUMN_WIDTH = 360
+const WRAPPING_TEXT = { minWidth: 0, whiteSpace: 'normal', overflowWrap: 'anywhere' } as const
+
 /**
  * WMS-686: то, что отгрузка FBO добавляет к таблице подбора по ячейкам. Без этого
  * параметра таблица такая же, как в подборе поставки FBS (WMS-637, WMS-709).
@@ -132,7 +137,9 @@ export function FbsCellPickTable({
           sx={{
             alignItems: 'center',
             minHeight: 36,
+            minWidth: 0,
             pl: `${item.depth * 22}px`,
+            '& > .MuiSvgIcon-root, & > .MuiCheckbox-root, & > span, & > .MuiBox-root': { flexShrink: 0 },
             borderLeft: item.depth ? '1px solid' : 'none',
             borderColor: 'divider',
             ...(item.kind === 'goods' && fbo && isMutedItem(item) ? { opacity: 0.55 } : null),
@@ -142,9 +149,9 @@ export function FbsCellPickTable({
           {item.kind === 'goods' ? (
             <>
               <ProductPhotoThumb src={item.row.product.photo} alt={item.row.product.name} size={32} />
-              <Stack sx={{ minWidth: 0 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>{item.row.product.name}</Typography>
-                <Typography variant="caption" color="text.secondary">
+              <Stack sx={{ minWidth: 0, flex: '1 1 auto' }}>
+                <Typography variant="body2" sx={{ ...WRAPPING_TEXT, fontWeight: 600 }}>{item.row.product.name}</Typography>
+                <Typography variant="caption" color="text.secondary" sx={WRAPPING_TEXT}>
                   {item.row.product.sellerArticle ? `${item.row.product.sellerArticle} · ` : ''}
                   {item.row.product.sku}
                   {!item.place ? ' · Нет на складе' : ''}
@@ -156,11 +163,11 @@ export function FbsCellPickTable({
               dense
               onClick={() => setPickedOpen((open) => !open)}
               aria-expanded={pickedOpen}
-              sx={{ px: 0, py: 0.5, gap: 1, flexGrow: 0 }}
+              sx={{ px: 0, py: 0.5, gap: 1, minWidth: 0, flexGrow: 0 }}
               data-testid="fbs-pick-already-picked-toggle"
             >
               <ExpandMoreIcon fontSize="small" color="action" sx={{ transform: pickedOpen ? 'rotate(180deg)' : 'none' }} />
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+              <Typography variant="body2" sx={{ ...WRAPPING_TEXT, fontWeight: 700 }}>
                 {item.title}
                 <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                   {item.qty} шт
@@ -192,7 +199,7 @@ export function FbsCellPickTable({
               {item.kind === 'cell'
                 ? ICONS.cell
                 : item.objectKind ? ICONS[item.objectKind] : null}
-              <Typography variant="body2" sx={{ fontWeight: item.kind === 'cell' ? 700 : 600 }}>
+              <Typography variant="body2" sx={{ ...WRAPPING_TEXT, flex: '1 1 auto', fontWeight: item.kind === 'cell' ? 700 : 600 }}>
                 {item.title}
                 <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                   {item.qty} шт
@@ -208,12 +215,12 @@ export function FbsCellPickTable({
       render: (item) => {
         if (item.kind === 'kiz') return null
         const barcode = item.kind === 'goods' ? item.row.product.barcode : item.barcode
-        return barcode ? dim(item, <Typography variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>{barcode}</Typography>) : null
+        return barcode ? dim(item, <Typography variant="body2" sx={{ ...WRAPPING_TEXT, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{barcode}</Typography>) : null
       },
     },
     {
       key: 'size', header: 'Размер', width: 84,
-      render: (item) => item.kind === 'goods' ? dim(item, item.row.product.size) : null,
+      render: (item) => item.kind === 'goods' ? dim(item, <Box sx={WRAPPING_TEXT}>{item.row.product.size}</Box>) : null,
     },
     {
       // WMS-709: «План» — сколько товара нужно в поставку всего; одинаков во
@@ -297,14 +304,30 @@ export function FbsCellPickTable({
       },
     },
   ]
-  return <DataTable
-    columns={columns}
-    rows={displayRows}
-    getRowKey={(item) => item.key}
-    fixedLayout
-    pageStickyHeader
-    selectedKey={source}
-    testId="fbs-cell-pick-table"
-    empty={{ title: 'В отгрузке нет товаров', hint: 'Добавьте товары в план отгрузки — снимать пока нечего.' }}
-  />
+  const minimumTableWidth = MIN_NAME_COLUMN_WIDTH + columns.reduce((sum, column) => sum + (column.width ?? 0), 0)
+  return <Box
+    data-testid="fbs-cell-pick-layout"
+    sx={{
+      minWidth: 0,
+      width: '100%',
+      containerType: 'inline-size',
+      '& > .MuiTableContainer-root > .MuiTable-root': { minWidth: minimumTableWidth },
+      // Только узкая таблица становится собственным скролл-контейнером.
+      // На широкой форме шапка по-прежнему прилипает к скроллу документа.
+      [`@container (max-width: ${minimumTableWidth - 1}px)`]: {
+        '& > .MuiTableContainer-root': { overflowX: 'auto' },
+      },
+    }}
+  >
+    <DataTable
+      columns={columns}
+      rows={displayRows}
+      getRowKey={(item) => item.key}
+      fixedLayout
+      pageStickyHeader
+      selectedKey={source}
+      testId="fbs-cell-pick-table"
+      empty={{ title: 'В отгрузке нет товаров', hint: 'Добавьте товары в план отгрузки — снимать пока нечего.' }}
+    />
+  </Box>
 }
