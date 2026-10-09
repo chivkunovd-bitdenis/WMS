@@ -209,6 +209,8 @@ export type FbsWorklistOrder = {
   status: string
   wb_status: string | null
   supplier_status: string | null
+  delivered_at?: string | null
+  ozon_confirmed_stage?: string | null
   seller: { id: string; name: string }
   wb_warehouse: { id: number; name: string | null }
   wms_warehouse: { id: string; name: string }

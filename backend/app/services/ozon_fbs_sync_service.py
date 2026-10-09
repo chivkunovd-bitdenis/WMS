@@ -753,6 +753,22 @@ async def _apply_status(
     local = _local_status(normalized, substatus)
     previous = order.status
     previous_wb_status = order.wb_status
+    from app.services.ozon_fbs_status_service import (
+        CONFIRMED_STAGE_KEY,
+        order_stage,
+        posting_stage,
+    )
+
+    # Retain the last proven display stage while raw observations remain visible.
+    # This is a snapshot in existing metadata, not a second accounting status.
+    supply = await session.get(FbsSupply, order.supply_id) if order.supply_id else None
+    handed = supply is not None and supply.delivered_at is not None
+    previous_stage = order_stage(order, handed=handed)
+    details = dict(order.meta_details_json or {})
+    details[CONFIRMED_STAGE_KEY] = posting_stage(
+        normalized, substatus, handed=handed, previous=previous_stage,
+    )
+    order.meta_details_json = details
     order.wb_status = normalized
     order.supplier_status = "new" if local == FBS_ORDER_STATUS_NEW else (substatus or normalized)
     # Опрос Ozon двигает заказ вперёд и в конечные состояния, но никогда не
@@ -1082,7 +1098,13 @@ async def sync_ozon_order_statuses(
                     FbsOrder.marketplace == "ozon",
                     FbsOrder.external_order_id.isnot(None),
                     or_(FbsOrder.status.notin_(OZON_STATUS_SYNC_TERMINAL_STATUSES),
-                        observed.terminal_repair_condition(session)),
+                        and_(
+                            observed.terminal_repair_condition(session),
+                            FbsOrder.supply_id.in_(select(FbsSupply.id).where(
+                                FbsSupply.tenant_id == tenant_id,
+                                FbsSupply.delivered_at.is_(None),
+                            )),
+                        )),
                 )
                 .order_by(
                     FbsOrder.last_wb_sync_at.asc().nulls_first(),
@@ -1177,7 +1199,9 @@ async def sync_ozon_order_statuses(
     for supply_id in sorted({o.supply_id for o in orders if o.supply_id}, key=str):
         supply = await session.scalar(select(FbsSupply).where(FbsSupply.id == supply_id)
                                       .execution_options(populate_existing=True))
-        if supply is not None:
+        if supply is not None and supply.delivered_at is None:
+            # The existing WMS handover date already confirms this document.
+            # Status reconciliation must not reconstruct its stock or billing.
             await observed.conduct_supply(session, supply)
     await session.commit()
     return updated

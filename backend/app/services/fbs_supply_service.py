@@ -15,6 +15,7 @@ import httpx
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.settings import settings
 from app.models.fbs_order import (
@@ -99,6 +100,7 @@ from app.services.marketplace_scope import (
     wrong_marketplace_message,
 )
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+from app.services.ozon_fbs_status_service import supply_display_statuses
 from app.services.wildberries_client import (
     WildberriesClientError,
     add_order_to_marketplace_supply,
@@ -253,6 +255,7 @@ async def _get_supply(
     if with_orders:
         stmt = stmt.options(
             selectinload(FbsSupply.orders).selectinload(FbsOrder.product),
+            selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
             selectinload(FbsSupply.seller),
         )
     result = await session.execute(stmt)
@@ -1414,9 +1417,19 @@ async def get_supply(
     *,
     with_orders: bool = True,
 ) -> FbsSupply:
-    supply = await _get_supply(session, tenant_id, supply_id, with_orders=with_orders)
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsSupplyError("supply_not_found")
+    if supply.marketplace == "ozon":
+        # Public read projection; never put a derived display status into the
+        # session identity map used by handover/composition business operations.
+        statuses = await supply_display_statuses(session, [supply])
+        projection = FbsSupply(**{column.key: getattr(supply, column.key)
+                                  for column in FbsSupply.__table__.columns})
+        projection.status = statuses[supply.id]
+        if with_orders:
+            set_committed_value(projection, "orders", supply.orders)
+        return projection
     return supply
 
 
@@ -1432,6 +1445,7 @@ async def list_supply_worklist(
 ) -> dict[str, Any]:
     status_map = {
         "active": FBS_SUPPLY_ACTIVE_STATUSES,
+        "shipped": {"shipped", "acceptance_in_progress"},
         "delivery": {FBS_SUPPLY_STATUS_IN_DELIVERY},
         "done": {FBS_SUPPLY_STATUS_DONE},
     }
@@ -1445,15 +1459,20 @@ async def list_supply_worklist(
             selectinload(FbsSupply.warehouse),
             selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
         )
-        .where(FbsSupply.tenant_id == tenant_id, FbsSupply.status.in_(statuses))
+        .where(
+            FbsSupply.tenant_id == tenant_id,
+            or_(FbsSupply.marketplace == "ozon", FbsSupply.status.in_(statuses)),
+        )
         .order_by(FbsSupply.updated_at.desc(), FbsSupply.id.desc())
-        .limit(limit)
     )
     if seller_id is not None:
         stmt = stmt.where(FbsSupply.seller_id == seller_id)
     if marketplace is not None:
         stmt = stmt.where(FbsSupply.marketplace == marketplace)
+    if status_group == "shipped":
+        stmt = stmt.where(FbsSupply.marketplace == "ozon")
     total = None
+    has_search = bool(search and search.strip())
     if search and search.strip():
         term = search.strip()
         stmt = stmt.where(
@@ -1468,13 +1487,24 @@ async def list_supply_worklist(
                 ),
             )
         )
-        total = int(
-            await session.scalar(
-                select(func.count()).select_from(stmt.limit(None).order_by(None).subquery())
-            )
-            or 0
-        )
-    supplies = list((await session.execute(stmt)).scalars().all())
+    # Filter the derived stage before applying the public limit. Read candidates
+    # in bounded batches so a mixed tab does not load the whole WB/Ozon history.
+    supplies: list[FbsSupply] = []
+    display_statuses: dict[uuid.UUID, str] = {}
+    offset = 0
+    batch_size = max(limit, 100)
+    while True:
+        batch = list((await session.execute(stmt.offset(offset).limit(batch_size))).scalars())
+        batch_statuses = await supply_display_statuses(session, batch)
+        display_statuses.update(batch_statuses)
+        supplies.extend(supply for supply in batch if batch_statuses[supply.id] in statuses
+                        and (status_group != "shipped" or supply.marketplace == "ozon"))
+        if len(batch) < batch_size or (not has_search and len(supplies) >= limit):
+            break
+        offset += batch_size
+    if has_search:
+        total = len(supplies)
+    supplies = supplies[:limit]
     if not supplies:
         return {"items": [], "total": total, "server_now": datetime.now(tz=UTC).isoformat()}
 
@@ -1539,7 +1569,7 @@ async def list_supply_worklist(
                 "name": supply.display_number or supply.name,
                 "delivery_type": supply.delivery_type,
                 "delivery_route": order_delivery_route(first_order) if first_order else None,
-                "status": supply.status,
+                "status": display_statuses[supply.id],
                 "seller": {
                     "id": str(supply.seller_id),
                     "name": supply.seller.name if supply.seller else "Селлер не найден",

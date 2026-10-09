@@ -313,6 +313,8 @@ async def ozon_targets(
                 "positive": positive,
                 "cancelled": cancelled,
                 "prior_positive": positive,
+                "status": by_number[child].get("status"),
+                "substatus": by_number[child].get("substatus"),
             }
             if positive:
                 proved.update(quantities)
@@ -534,6 +536,16 @@ async def save_observations(
                         observation["targets"] = {}
                         observation["reason"] = "split_composition_changed"
                         break
+                    from app.services.ozon_fbs_status_service import (
+                        CONFIRMED_STAGE_KEY,
+                        posting_stage,
+                    )
+
+                    child[CONFIRMED_STAGE_KEY] = posting_stage(
+                        child.get("status"), child.get("substatus"),
+                        handed=bool(child.get("positive") or old.get("prior_positive")),
+                        previous=old.get(CONFIRMED_STAGE_KEY),
+                    )
                     child["previous_positive"] = bool(old.get("prior_positive"))
                     child["prior_positive"] = bool(
                         old.get("prior_positive")
