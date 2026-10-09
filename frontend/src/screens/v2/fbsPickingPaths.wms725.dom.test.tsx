@@ -37,7 +37,7 @@ beforeEach(() => {
   vi.spyOn(window, 'open').mockImplementation(() => {
     const doc = document.implementation.createHTMLDocument('')
     const popup: Popup = { document: doc, html: '', closed: false, close() { this.closed = true }, opener: null }
-    doc.open = () => { popup.html = ''; return doc }
+    doc.open = (() => { popup.html = ''; return doc }) as Document['open']
     doc.write = (...texts) => { popup.html += texts.join('') }
     doc.close = () => {}
     windows.push(popup); return popup as unknown as Window

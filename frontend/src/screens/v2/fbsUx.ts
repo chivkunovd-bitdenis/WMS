@@ -498,8 +498,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
     : ''
   const articleFor = (row: FbsPickingListPrintRow) => row.article?.trim() || row.identifiers[0]?.trim() || '—'
   let columns = printColgroup(277, [
-    { width: 28 * 25.4 / 96 },
-    { width: 54 * 25.4 / 96 },
+    { width: 98 * 25.4 / 96 },
     { grow: 2 },
     { width: compactPrintWidth('Артикул', input.rows.map(articleFor), 25, 12) },
     { width: compactPrintWidth('Цвет', input.rows.map((row) => row.color), 22, 12) },
@@ -509,21 +508,17 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
     { width: compactPrintWidth(`Заказы ${marketplaceLabel}`, input.rows.flatMap((row) => row.wbOrders), 24, 12) },
     { width: 116 * 25.4 / 96 },
     { width: compactPrintWidth('Взять', input.rows.map((row) => row.required), 20, 12) },
-    { width: compactPrintWidth('Подобрано', input.rows.map((row) => `${row.picked} / ${row.required}`), 27, 12) },
+    { width: compactPrintWidth('Подобрано', [], 27, 12) },
     { width: compactPrintWidth('Маркировка', input.rows.map((row) => row.marking), 24, 12) },
   ])
   const columnTags = columns.match(/<col style="width:([0-9.]+)%" \/>/g) ?? []
-  if (columnTags.length === 13) {
-    const combined = columnTags.slice(6, 8).reduce((sum, tag) => sum + Number(tag.match(/width:([0-9.]+)/)?.[1] ?? 0), 0)
-    columnTags.splice(6, 2, `<col style="width:${combined.toFixed(4)}%" />`)
+  if (columnTags.length === 12) {
+    const combined = columnTags.slice(5, 7).reduce((sum, tag) => sum + Number(tag.match(/width:([0-9.]+)/)?.[1] ?? 0), 0)
+    columnTags.splice(5, 2, `<col style="width:${combined.toFixed(4)}%" />`)
     columns = `<colgroup>${columnTags.join('')}</colgroup>`
   }
-  let position = 1
+  const totalQuantity = input.rows.reduce((sum, row) => sum + row.required, 0)
   const rows = input.rows.map((row) => {
-    const positionFrom = position
-    const positionTo = positionFrom + row.required - 1
-    position = positionTo + 1
-    const positionLabel = positionFrom === positionTo ? `${positionFrom}` : `${positionFrom}–${positionTo}`
     const article = articleFor(row)
     const identifiers = row.identifiers.filter((identifier) => identifier.trim() !== article)
     const imageUrl = printableImageUrl(row.imageUrl)
@@ -533,7 +528,6 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       : '—'
     return `
       <tr>
-        <td class="number">${positionLabel}</td>
         <td class="image">${imageUrl ? `<img src="${imageUrl}" alt="" />` : '<span>—</span>'}</td>
         <td>
           <strong>${escapePrintHtml(row.name)}</strong>
@@ -548,7 +542,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
         <td class="orders">${row.wbOrders.map((id) => `№${escapePrintHtml(id)}`).join('<br />')}</td>
         <td class="sticker">${stickerCodes}</td>
         <td class="quantity">${escapePrintHtml(row.required)}</td>
-        <td class="quantity">${escapePrintHtml(row.picked)} / ${escapePrintHtml(row.required)}</td>
+        <td class="quantity"></td>
         <td>${escapePrintHtml(row.marking)}</td>
       </tr>`
   }).join('')
@@ -564,18 +558,18 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       body { margin: 0; color: #172033; font: 12px/1.35 Arial, sans-serif; }
       @media screen { body { max-width: 277mm; margin: 12px auto; } }
       h1 { margin: 0 0 4px; font-size: 22px; }
-      .subtitle { margin-bottom: 14px; color: #5c6475; }
-      .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
-      .meta div { border: 1px solid #d9dce5; border-radius: 6px; padding: 7px 9px; }
+      .meta { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+      .meta > div { min-width: 0; overflow-wrap: anywhere; }
+      .meta .subtitle { color: #5c6475; }
+      .meta .meta-box { border: 1px solid #d9dce5; border-radius: 6px; padding: 7px 9px; }
       .meta span { display: block; color: #687083; font-size: 10px; }
       .meta strong { display: block; margin-top: 2px; }
       table { width: 100%; border-collapse: collapse; table-layout: fixed; }
       th, td { border: 1px solid #cfd3df; padding: 6px; text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
       th { background: #f1eefb; font-size: 10px; text-transform: uppercase; }
       tr { break-inside: avoid; }
-      .number { width: 28px; text-align: center; }
-      .image { width: 54px; text-align: center; }
-      .image img { display: block; width: 42px; height: 42px; margin: auto; object-fit: contain; }
+      .image { width: 98px; text-align: center; }
+      .image img { display: block; width: 84px; height: 84px; margin: auto; object-fit: contain; }
       .size { text-align: center; }
       td.size { font-size: 20px; font-weight: 700; }
       .quantity { text-align: center; font-weight: 700; }
@@ -586,23 +580,25 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       .sources { font-size: 10px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
       .source-group + .source-group { margin-top: 1.4em; }
       .source-group > strong { display: block; }
+      .total { margin-top: 8px; font-weight: 700; }
       .footer { margin-top: 8px; color: #687083; font-size: 10px; }
     </style>
   </head>
   <body>
     <h1>Лист подбора FBS</h1>
-    <div class="subtitle">${escapePrintHtml(input.supplyName)}${supplyReference}</div>
     <div class="meta">
-      <div><span>Селлер</span><strong>${escapePrintHtml(input.sellerName)}</strong></div>
-      <div><span>Склад WMS</span><strong>${escapePrintHtml(input.wmsWarehouseName)}</strong></div>
-      <div><span>Маршрут</span><strong>${escapePrintHtml(input.routeLabel)}</strong></div>
-      <div><span>Сдать до</span><strong>${escapePrintHtml(input.deadlineLabel)}</strong></div>
+      <div class="subtitle">${escapePrintHtml(input.supplyName)}${supplyReference}</div>
+      <div class="meta-box"><span>Селлер</span><strong>${escapePrintHtml(input.sellerName)}</strong></div>
+      <div class="meta-box"><span>Склад WMS</span><strong>${escapePrintHtml(input.wmsWarehouseName)}</strong></div>
+      <div class="meta-box"><span>Маршрут</span><strong>${escapePrintHtml(input.routeLabel)}</strong></div>
+      <div class="meta-box"><span>Сдать до</span><strong>${escapePrintHtml(input.deadlineLabel)}</strong></div>
     </div>
     <table>
       ${columns}
-      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар</th><th>Артикул</th><th>Цвет</th><th class="size">Размер</th><th>Поставка / ячейка / короб</th><th>Заказы ${marketplaceLabel}</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="12">В поставке нет товаров для подбора.</td></tr>`}</tbody>
+      <thead><tr><th class="image">Фото</th><th>Товар</th><th>Артикул</th><th>Цвет</th><th class="size">Размер</th><th>Поставка / ячейка / короб</th><th>Заказы ${marketplaceLabel}</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="11">В поставке нет товаров для подбора.</td></tr>`}</tbody>
     </table>
+    <div class="total">Общее количество: ${escapePrintHtml(totalQuantity)} шт.</div>
     <div class="footer">Сформировано WMS: ${escapePrintHtml(input.printedAtLabel)} · Актуальное серверное состояние на момент печати.</div>
     <script>
       const images = Array.from(document.images);
