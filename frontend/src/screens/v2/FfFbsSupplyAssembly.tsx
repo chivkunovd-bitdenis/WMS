@@ -343,6 +343,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
       supplyName: `Сборка · ${ordered.length} ${plural(ordered.length, ['поставка', 'поставки', 'поставок'])}`,
       wbSupplyId: ordered.map((one) => one.supply.wb_supply_id).filter(Boolean).join(', ') || null,
       marketplace,
+      imperiyaPickList: usesTabOrderPickList(token),
       sellerName: distinct(ordered.map((one) => one.supply.seller.name)),
       wmsWarehouseName: distinct(ordered.map((one) => one.supply.wms_warehouse.name)),
       routeLabel: distinct(ordered.map(fbsSupplyRouteLabel)),

@@ -3244,6 +3244,7 @@ export function FfFbsSupplyWorkspace({
       supplyName: workspace.supply.name,
       wbSupplyId: workspace.supply.wb_supply_id,
       marketplace: workspace.supply.marketplace,
+      imperiyaPickList: usesTabOrderPickList(token),
       sellerName: workspace.supply.seller.name,
       wmsWarehouseName: workspace.supply.wms_warehouse.name,
       routeLabel: workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',

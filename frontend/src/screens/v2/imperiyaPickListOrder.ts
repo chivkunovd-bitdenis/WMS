@@ -92,6 +92,7 @@ export function imperiyaWalkRows<T extends PrintRow>(
   const placeKey = new Map<string, string>()
   const pickedByProduct = new Map<string, number>()
   const skuByProduct = new Map<string, string>()
+  const receiptLabels = boxReceiptLabels(contexts)
   for (const option of options) {
     pickedByProduct.set(option.product_id, (pickedByProduct.get(option.product_id) ?? 0) + option.picked_qty)
     const sku = (option as FbsPickOptionProduct & { sku_code?: string | null }).sku_code
@@ -110,7 +111,15 @@ export function imperiyaWalkRows<T extends PrintRow>(
         let holder = cellRef(location.storage_location_id)
         for (const step of source.container_path) {
           if (!objectsById.has(step.id)) {
-            objectsById.set(step.id, { id: step.id, kind: step.kind as ObjKind, code: step.code, barcode: step.code, holder })
+            // The tab sorts same-numbered boxes by the receipt appended to their label.
+            const receipt = receiptLabels.get(step.id)
+            objectsById.set(step.id, {
+              id: step.id,
+              kind: step.kind as ObjKind,
+              code: receipt ? `${step.code} · ${receipt}` : step.code,
+              barcode: step.code,
+              holder,
+            })
           }
           holder = objRef(step.id)
         }
@@ -143,13 +152,17 @@ export function imperiyaWalkRows<T extends PrintRow>(
   const screenRows = rowsOf(plan, [...stock.values()], objects, cells, picked, products)
 
   // Строка места из контекста печати (прежний текст, без INB) и её приёмка.
-  const byKey = new Map<string, { title: string; line: string }>()
+  const byKey = new Map<string, { key: string; title: string; line: string }>()
   for (const context of contexts) {
     for (const group of context.source_groups as ContextGroup[]) {
       group.lines.forEach((line, index) => {
         const key = group.line_keys?.[index]
         if (key && !byKey.has(`${context.product_id}#${key}`)) {
-          byKey.set(`${context.product_id}#${key}`, { title: groupTitle(group), line: withoutInbCode(line) })
+          byKey.set(`${context.product_id}#${key}`, {
+            key: group.key,
+            title: groupTitle(group),
+            line: withoutInbCode(line),
+          })
         }
       })
     }
@@ -165,19 +178,13 @@ export function imperiyaWalkRows<T extends PrintRow>(
     positionByKey.set(row.key, from === to ? `${from}` : `${from}–${to}`)
   }
   const rowByKey = new Map(rows.map((row) => [row.key, row]))
-  const emitted = new Set<string>()
-  const out: T[] = []
-  const emit = (row: T, sourceGroups: PrintRow['sourceGroups']) => {
-    const first = !emitted.has(row.key)
-    emitted.add(row.key)
-    out.push({
-      ...row,
-      positionLabel: positionByKey.get(row.key),
-      locations: [],
-      inboundSupplies: [],
-      sourceGroups,
-      ...(first ? {} : { wbOrders: [], stickerCodes: [], marking: '' }),
-    })
+  const sourceGroupsByProduct = new Map<string, NonNullable<PrintRow['sourceGroups']>>()
+  const addSourceGroup = (row: T, group: NonNullable<PrintRow['sourceGroups']>[number]) => {
+    const groups = sourceGroupsByProduct.get(row.key) ?? []
+    const previous = groups.at(-1)
+    if (previous?.key === group.key && previous.title === group.title) previous.lines.push(...group.lines)
+    else groups.push(group)
+    sourceGroupsByProduct.set(row.key, groups)
   }
   // Маршрут вкладки; свёрнутое «Уже подобрано» сотрудник не видит — не печатаем.
   for (const item of cellPickRowsOf(screenRows, objects, cells)) {
@@ -185,22 +192,32 @@ export function imperiyaWalkRows<T extends PrintRow>(
     const row = rowByKey.get(item.row.key)
     if (!row) continue
     if (!item.place) {
-      emit(row, [{ key: 'none', title: 'Нет текущего остатка', lines: [] }])
+      const done = row.required > 0 && (pickedByProduct.get(row.key) ?? 0) >= row.required
+      addSourceGroup(row, { key: 'none', title: done ? 'Подобрано' : 'Нет текущего остатка', lines: [] })
       continue
     }
     const found = byKey.get(`${row.key}#${placeKey.get(item.place.key) ?? ''}`)
-    emit(row, [{
-      key: item.place.key,
+    addSourceGroup(row, {
+      key: found?.key ?? item.place.key,
       // Место без приёмки (россыпь и т.п.) подписываем так же, как на вкладке: «Без ячеек», «Ж-1-7».
       title: found && !found.title.startsWith('Без привязки') ? found.title : item.place.standing,
       lines: [found?.line ?? `${item.place.standing} · ${item.place.sourceTitle}: ${item.place.qty} шт.`],
-    }])
+    })
   }
-  // Товары, которых на маршруте нет (всё уже подобрано) — в конце, как в обычном листе.
-  for (const row of rows) {
-    if (emitted.has(row.key)) continue
-    const done = row.required > 0 && (pickedByProduct.get(row.key) ?? 0) >= row.required
-    emit(row, [{ key: 'none', title: done ? 'Подобрано' : 'Нет текущего остатка', lines: [] }])
-  }
-  return out
+  // Сохраняем исходный порядок товарной ленты и одну печатную строку на товар.
+  return rows.map((row) => {
+    let sourceGroups = sourceGroupsByProduct.get(row.key)
+    if (!sourceGroups?.length) {
+      // «Уже подобрано» не печатается, но полностью подобранный товар остаётся в листе.
+      const done = row.required > 0 && (pickedByProduct.get(row.key) ?? 0) >= row.required
+      sourceGroups = [{ key: 'none', title: done ? 'Подобрано' : 'Нет текущего остатка', lines: [] }]
+    }
+    return {
+      ...row,
+      positionLabel: positionByKey.get(row.key),
+      locations: [],
+      inboundSupplies: [],
+      sourceGroups,
+    }
+  })
 }
