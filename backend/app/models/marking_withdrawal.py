@@ -205,7 +205,9 @@ class WithdrawalItem(Base):
     marking_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("fbs_order_markings.id"))
     marking_code_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("marking_codes.id"))
     order_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("fbs_orders.id"))
-    supply_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("fbs_supplies.id"))
+    supply_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("fbs_supplies.id", ondelete="SET NULL"), nullable=True
+    )
     cis: Mapped[str] = mapped_column(String(512))
     provider_cis: Mapped[str | None] = mapped_column(String(74))
     source: Mapped[str] = mapped_column(String(16))
