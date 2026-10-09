@@ -28,6 +28,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     PICK_STATUS_PICKED,
     FbsOrder,
+    FbsOrderProduct,
     FbsOrderProductPick,
 )
 from app.models.fbs_order_pick import FbsOrderPick
@@ -1638,11 +1639,21 @@ async def select_ozon_worklist_supply_ids_by_group(
             FbsOrder.id,
             FbsOrder.tenant_id,
             FbsOrder.seller_id,
+            FbsOrder.supply_id,
+            FbsOrder.warehouse_id,
             FbsOrder.marketplace,
             FbsOrder.status,
+            FbsOrder.wb_order_id,
+            FbsOrder.wb_supply_id,
             FbsOrder.wb_status,
             FbsOrder.supplier_status,
+            FbsOrder.external_order_id,
             FbsOrder.meta_details_json,
+        ).selectinload(FbsOrder.product_positions).load_only(
+            FbsOrderProduct.id,
+            FbsOrderProduct.product_id,
+            FbsOrderProduct.ozon_sku,
+            FbsOrderProduct.quantity,
         ),
     )
     candidates = list((await session.execute(stmt)).scalars())
