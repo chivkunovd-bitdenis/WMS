@@ -150,6 +150,7 @@ export class FbsApiError extends Error {
 }
 
 export type FbsOrderMetadata = {
+  requirements_known?: boolean
   required: string[]
   optional: string[]
   states: Array<{
@@ -209,6 +210,8 @@ export type FbsWorklistOrder = {
   status: string
   wb_status: string | null
   supplier_status: string | null
+  delivered_at?: string | null
+  ozon_confirmed_stage?: string | null
   seller: { id: string; name: string }
   wb_warehouse: { id: number; name: string | null }
   wms_warehouse: { id: string; name: string }
@@ -235,6 +238,7 @@ export type FbsWorklistOrder = {
     requires_honest_sign?: boolean
   }
   positions: Array<{
+    requires_honest_sign?: boolean
     id?: string | null
     image_url?: string | null
     barcode?: string | null
@@ -681,6 +685,47 @@ export function resolveFbsAssetUrl(path: string): string {
   return /^(https?:|data:)/i.test(path) ? path : apiUrl(path)
 }
 
+export type FbsOrderCounts = {
+  tabs: { new: number; active: number; delivery: number }
+  sellers: Record<string, number>
+}
+
+// Экран читает tabs и sellers без проверок. Ответ без этих полей принимаем как
+// ошибку чтения, иначе он ломает весь экран, а не только числа.
+function isFbsOrderCounts(value: unknown): value is FbsOrderCounts {
+  if (!value || typeof value !== 'object') return false
+  const { tabs, sellers } = value as { tabs?: unknown; sellers?: unknown }
+  if (!tabs || typeof tabs !== 'object') return false
+  if (!sellers || typeof sellers !== 'object' || Array.isArray(sellers)) return false
+  const isCount = (count: unknown) => typeof count === 'number' && Number.isInteger(count) && count >= 0
+  const tabCounts = tabs as Record<string, unknown>
+  return ['new', 'active', 'delivery'].every((key) => isCount(tabCounts[key]))
+    && Object.values(sellers).every(isCount)
+}
+
+export async function fetchFbsOrderCounts(
+  token: string,
+  ah: AuthHeaders,
+  params: {
+    seller_id?: string | null
+    marketplace?: 'wb' | 'ozon' | null
+    status_group: string
+    wb_warehouse_id?: string | null
+    search?: string | null
+  },
+): Promise<FbsOrderCounts> {
+  const qs = new URLSearchParams({ status_group: params.status_group })
+  if (params.seller_id) qs.set('seller_id', params.seller_id)
+  if (params.marketplace) qs.set('marketplace', params.marketplace)
+  if (params.wb_warehouse_id) qs.set('wb_warehouse_id', params.wb_warehouse_id)
+  if (params.search) qs.set('search', params.search)
+  const counts = await jsonOrThrow<unknown>(await fetch(apiUrl(`/operations/fbs-orders/counts?${qs}`), {
+    headers: { ...ah(token) },
+  }))
+  if (!isFbsOrderCounts(counts)) throw new Error('Не удалось загрузить числа заказов FBS.')
+  return counts
+}
+
 export async function fetchFbsWorklist(
   token: string,
   ah: AuthHeaders,
@@ -813,6 +858,20 @@ export async function fetchFbsWorkspace(
       headers: { ...ah(token) },
     }),
   )
+}
+
+export async function deleteFbsSupply(token: string, ah: AuthHeaders, id: string): Promise<void> {
+  const response = await fetch(apiUrl(`/operations/fbs-supplies/${id}`), {
+    method: 'DELETE', headers: { ...ah(token) },
+  })
+  if (!response.ok) await jsonOrThrow(response)
+}
+
+export async function isFbsSupplyAbsent(token: string, ah: AuthHeaders, id: string): Promise<boolean> {
+  const response = await fetch(apiUrl(`/operations/fbs-supplies/${id}/workspace`), { headers: { ...ah(token) } })
+  if (response.status === 404) return true
+  await jsonOrThrow<FbsWorkspace>(response)
+  return false
 }
 
 export async function updateFbsSupplyPlannedShipmentDate(

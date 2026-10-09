@@ -2486,7 +2486,7 @@ async def test_marketplace_unload_create_boxes_batch_one_by_one(
 async def test_marketplace_unload_attach_allow_over_plan(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """MP-019: attach готового короба сверх плана при allow_over_plan=true."""
+    """MP-019 (WMS-686 D1.7): attach короба сверх плана отказан и при allow_over_plan=true."""
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
         "/auth/register",
@@ -2585,28 +2585,24 @@ async def test_marketplace_unload_attach_allow_over_plan(
         json={"barcode": whb, "box_preset": "60_40_40", "allow_over_plan": False},
     )
     assert blocked.status_code == 422, blocked.text
-    assert blocked.json()["detail"] == "plan_limit_exceeded"
+    # WMS-686: отказ переноса короба целиком — объект с кодом, сообщением и перечнем.
+    assert blocked.json()["detail"]["code"] == "plan_limit_exceeded"
     assert await _balances_by_container(loc_id, pid) == before
 
-    ok = await async_client.post(
+    # Флаг allow_over_plan в теле остался для совместимости, но сервер его игнорирует:
+    # короб сверх плана не переносится ни при каком значении, ничего не меняется.
+    forced = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/boxes/attach",
         headers=ah,
         json={"barcode": whb, "box_preset": "60_40_40", "allow_over_plan": True},
     )
-    assert ok.status_code == 201, ok.text
+    assert forced.status_code == 422, forced.text
+    assert forced.json()["detail"]["code"] == "plan_limit_exceeded"
+    assert await _balances_by_container(loc_id, pid) == before
     detail = await async_client.get(
         f"/operations/marketplace-unload-requests/{mid}", headers=ah
     )
-    picked = sum(
-        int(ln["quantity"])
-        for b in detail.json()["boxes"]
-        for ln in b["lines"]
-        if ln["product_id"] == pid
-    )
-    assert picked == 15
-    after = await _balances_by_container(loc_id, pid)
-    assert after[None] == 30
-    assert after[inb_id] == 0
+    assert detail.json()["boxes"] == []
 
 
 @pytest.mark.asyncio

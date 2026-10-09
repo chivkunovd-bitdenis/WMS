@@ -43,7 +43,7 @@ export function visibleSellerNavItems(base: string, permissions: SellerPermissio
   }
   if (permissions.products) {
     items.push({ key: 'products', label: 'Товары', to: `${base}/products`, testId: 'nav-seller-products' })
-    items.push({ key: 'reports', label: 'Отчёты', to: `${base}/reports`, testId: 'nav-seller-reports' })
+    items.push({ key: 'reports', label: 'История по товарам', to: `${base}/reports`, testId: 'nav-seller-reports' })
   }
   // WMS-549 R1: тот же гейт, что и у «Документы» — расчёты показывают стоимость
   // тех же документов, а новое право владелец не просил.

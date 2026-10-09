@@ -2,13 +2,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { boxReceiptLabels, usesTabOrderPickList } from '../../v2/imperiyaPickListOrder'
 import type { FbsPickingContext } from '../../v2/fbsApi'
 import { Box } from '@mui/material'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useInRouterContext, useNavigate, useParams } from 'react-router-dom'
 import { apiUrl } from '../../../api'
 import { useMarketplaceProductCatalog } from '../../../hooks/useWbProductCatalog'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
+import { randomId } from '../../../utils/randomId'
 import { EmptyState, ErrorNotice } from '../../../ui-kit'
+import { isInboundMarkingScan } from '../inboundMarkingCodes'
 import { resolveProductScanSource, scanSourceKey } from './pickScanSource'
-import { UnloadPickScreen, type UnloadPickScanResult } from './UnloadPickScreen'
+import { UnloadPickScreen, type PickSaveResult, type UnloadPickScanResult } from './UnloadPickScreen'
+import {
+  isUnknownBarcodeResponse,
+  printFboKizLabel,
+  readFboBoxRefusal,
+  readFboKizError,
+  type FboKizCode,
+  type FboKizScanResponse,
+} from './fboKizData'
+import { loadFboContainers, saveFboContainers } from './fboPickState'
 import {
   cellRef,
   objRef,
@@ -43,6 +54,8 @@ type ApiLine = {
   product_name: string
   quantity: number
   picked_qty: number
+  /** WMS-686: у товара включён Честный знак — число КИЗ видно и при нуле. */
+  requires_honest_sign?: boolean
 }
 
 type ApiDetail = {
@@ -155,19 +168,72 @@ type Props = {
   onFinished?: () => void
   /** Действие «Отложить» во встроенном документе не должно уводить в чужой список. */
   onPaused?: () => void
+  /**
+   * Отгрузка FBO (WMS-686): подбор или КИЗ изменились на сервере — документу вокруг
+   * экрана пора обновить свои данные (сводку, вкладку «Упаковка»). Для FBS не вызывается.
+   */
+  onChanged?: () => void
 }
 
-export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hideHeader = false, onFinished, onPaused }: Props) {
+type NavigateTo = (to: string) => void
+
+/**
+ * Экран подбора встроен в карточку поставки FBS, которая открывается и там,
+ * где маршрутизатора нет. Переход нужен только когда родитель не передал
+ * onPaused/onFinished, поэтому без маршрутизатора рендер не должен падать.
+ * Хук навигации вызывается только внутри маршрутизатора — без условных хуков.
+ */
+export function FfUnloadPickPage(props: Props) {
+  return useInRouterContext() ? <FfUnloadPickPageRouted {...props} /> : <FfUnloadPickPageBody {...props} navigate={noNavigation} />
+}
+
+const noNavigation: NavigateTo = () => undefined
+
+function FfUnloadPickPageRouted(props: Props) {
+  const navigate = useNavigate()
+  return <FfUnloadPickPageBody {...props} navigate={navigate} />
+}
+
+function FfUnloadPickPageBody({ token, requestId: requestIdProp, source, hideHeader = false, onFinished, onPaused, onChanged, navigate }: Props & { navigate: NavigateTo }) {
   const BASE = source === 'fbs' ? FBS_BASE : UNLOAD_BASE
+  // Подбор отгрузки FBO — всё, что не поставка FBS (WMS-686): вид «По ячейкам / По товарам»,
+  // КИЗ, двойной скан короба. Поставка FBS остаётся такой, как была.
+  const isFbo = source !== 'fbs'
   const params = useParams<{ requestId: string }>()
   const requestId = requestIdProp ?? params.requestId
-  const navigate = useNavigate()
   const [detail, setDetail] = useState<ApiDetail | null>(null)
   const [pickOptions, setPickOptions] = useState<ApiPickProduct[]>([])
+  const [pickOptionsReady, setPickOptionsReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
+  const [kizCodes, setKizCodes] = useState<FboKizCode[]>([])
+  // Открыт ли экран сейчас: отказ сохранения на закрытом экране переносится на следующее открытие.
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+  const onChangedRef = useRef(onChanged)
+  useEffect(() => {
+    onChangedRef.current = onChanged
+  })
+  const notifyChanged = useCallback(() => {
+    if (isFbo) onChangedRef.current?.()
+  }, [isFbo])
+  // ШК товара, отсканированный последним: следующий КИЗ относится к этой штуке (WMS-686, D1.4).
+  const lastProductScan = useRef<string | null>(null)
+  // Ключи печати: пока перепечатка кода не завершилась, повтор идёт с тем же ключом — WMS Print
+  // не напечатает вторую копию, если первая уже принята, а ответ потерялся.
+  const reprintKeys = useRef<Map<string, string>>(new Map())
+  // Async reads belong to the document and authorization context that started them.
+  const requestContext = useMemo(() => ({ BASE, requestId, token }), [BASE, requestId, token])
+  const activeContext = useRef(requestContext)
+  activeContext.current = requestContext
+  const loadSeq = useRef(0)
   const isOzonFbs = source === 'fbs' && detail?.marketplace === 'ozon'
   // Тара, отсканированная как место снятия (§Ж-03), но пока не встретившаяся
   // среди источников pick-options — например, короб только что подъехал и в
@@ -178,6 +244,13 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
   const scannedContainers = useRef<
     Map<string, { locationId: string; containerKind: ObjKind; containerId: string }>
   >(new Map())
+  // FBO: тара, выбранная сканом, переживает перемонтирование экрана (смену вкладок документа).
+  useEffect(() => {
+    if (!isFbo || !requestId) return
+    for (const [key, value] of loadFboContainers(requestId)) {
+      if (!scannedContainers.current.has(key)) scannedContainers.current.set(key, value)
+    }
+  }, [isFbo, requestId])
   const {
     catalogById,
     error: catalogError,
@@ -188,33 +261,44 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
   )
 
   const load = useCallback(async (waitForSave = true) => {
+    if (activeContext.current !== requestContext || !mounted.current) return
+    const seq = ++loadSeq.current
+    const isCurrent = () => activeContext.current === requestContext && loadSeq.current === seq && mounted.current
     if (!requestId) {
       setError('Не указан номер отгрузки')
       setLoading(false)
       return
     }
     setLoading(true)
+    setPickOptionsReady(false)
     setError(null)
     try {
       if (waitForSave) await waitForPickSaves([`${BASE}/${requestId}`])
+      if (!isCurrent()) return
       const [detailRes, optionsRes] = await Promise.all([
         fetch(apiUrl(`${BASE}/${requestId}`), { headers: headers(token) }),
         fetch(apiUrl(`${BASE}/${requestId}/pick-options`), { headers: headers(token) }),
       ])
       if (!detailRes.ok) throw new Error(await readApiErrorMessage(detailRes))
       if (!optionsRes.ok) throw new Error(await readApiErrorMessage(optionsRes))
-      setDetail((await detailRes.json()) as ApiDetail)
-      setPickOptions((await optionsRes.json()) as ApiPickProduct[])
+      const [nextDetail, nextOptions] = await Promise.all([
+        detailRes.json() as Promise<ApiDetail>, optionsRes.json() as Promise<ApiPickProduct[]>,
+      ])
+      if (!isCurrent()) return
+      setDetail(nextDetail)
+      setPickOptions(nextOptions)
+      setPickOptionsReady(true)
       setVersion((current) => current + 1)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось открыть подбор')
+      if (isCurrent()) setError(err instanceof Error ? err.message : 'Не удалось открыть подбор')
     } finally {
-      setLoading(false)
+      if (isCurrent()) setLoading(false)
     }
-  }, [requestId, token])
+  }, [BASE, requestContext, requestId, token])
 
   useEffect(() => {
     void load()
+    return () => { loadSeq.current += 1 }
   }, [load])
 
   // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: у коробов подбора дописана их приёмка/возврат
@@ -230,8 +314,31 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
     return () => { cancelled = true }
   }, [requestId, source, token, version])
 
+  // WMS-686: КИЗ отгрузки. Последний начатый запрос побеждает — иначе опоздавший
+  // ответ вернул бы на экран код, который уже отвязали.
+  const kizSeq = useRef(0)
+  const refreshKiz = useCallback(async () => {
+    if (!isFbo || !requestId || activeContext.current !== requestContext) return
+    kizSeq.current += 1
+    const seq = kizSeq.current
+    try {
+      const res = await fetch(apiUrl(`${BASE}/${requestId}/marking-codes`), { headers: headers(token) })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      const body = (await res.json()) as { items?: FboKizCode[] }
+      if (seq === kizSeq.current && activeContext.current === requestContext && mounted.current) setKizCodes(body.items ?? [])
+    } catch (err) {
+      if (seq === kizSeq.current && activeContext.current === requestContext && mounted.current) {
+        setError(err instanceof Error ? err.message : 'Не удалось получить КИЗ отгрузки')
+      }
+    }
+  }, [BASE, isFbo, requestContext, requestId, token])
+
+  useEffect(() => {
+    void refreshKiz()
+  }, [refreshKiz])
+
   const screenData = useMemo(() => {
-    if (!detail) return null
+    if (!detail || detail.id !== requestId) return null
 
     // Состав берём из того источника, который его отдаёт. У отгрузки это строки
     // документа. У поставки ФБС строк в документе нет вовсе — там товары
@@ -377,7 +484,18 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       picked,
       placeSource,
     }
-  }, [boxLabels, catalogById, detail, isOzonFbs, pickOptions, source])
+  }, [boxLabels, catalogById, detail, isOzonFbs, pickOptions, source, requestId])
+
+  // Товары, у которых включён Честный знак: число КИЗ видно и при нуле (WMS-686, R3).
+  const markingProducts = useMemo(
+    () => new Set((detail?.lines ?? []).filter((line) => line.requires_honest_sign).map((line) => line.product_id)),
+    [detail],
+  )
+  // Detail line picked_qty describes shipment boxes; pick-options contains actual picking.
+  const printPickedByProduct = useMemo(
+    () => new Map(pickOptions.map((product) => [product.product_id, product.picked_qty])),
+    [pickOptions],
+  )
 
   // WMS-575: места подбора перечитываются после снятия, но скан их не ждёт —
   // счётчик меняется по ответу pick/scan. Здесь живёт последнее начатое
@@ -387,9 +505,11 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
   const optionsRefreshSeq = useRef(0)
 
   const updateOption = useCallback((): Promise<ApiPickProduct[] | null> => {
-    if (!requestId) return Promise.resolve(null)
+    if (!requestId || activeContext.current !== requestContext || !mounted.current) return Promise.resolve(null)
     optionsRefreshSeq.current += 1
     const seq = optionsRefreshSeq.current
+    const isCurrent = () => seq === optionsRefreshSeq.current && activeContext.current === requestContext && mounted.current
+    setPickOptionsReady(false)
     const refresh = (async () => {
       try {
         const res = await fetch(apiUrl(`${BASE}/${requestId}/pick-options`), {
@@ -399,10 +519,16 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         const next = (await res.json()) as ApiPickProduct[]
         // Перечитывания могут вернуться не по порядку: на экран ложится только
         // последнее начатое, иначе старый ответ вернул бы уже снятое.
-        if (seq === optionsRefreshSeq.current) setPickOptions(next)
+        if (isCurrent()) {
+          setPickOptions(next)
+          setPickOptionsReady(true)
+        }
         return next
       } catch {
-        setError('Снятие сохранено, список не обновлён. Обновите страницу.')
+        if (isCurrent()) {
+          setPickOptionsReady(false)
+          setError('Снятие сохранено, список не обновлён. Обновите страницу.')
+        }
         return null
       }
     })()
@@ -411,7 +537,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       if (optionsRefresh.current === refresh) optionsRefresh.current = null
     })
     return refresh
-  }, [BASE, requestId, token])
+  }, [BASE, requestContext, requestId, token])
 
   const confirmedPicked = useRef<PickedMap>({})
   useEffect(() => {
@@ -448,7 +574,18 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
           })
           if (!res.ok) throw new Error(await readApiErrorMessage(res))
           confirmedPicked.current[pickKey(payload.productId, payload.place.key)] = payload.quantity
+          // FBO (R19): если подобрано стало меньше, чем КИЗ, сервер отвязал последние коды.
+          let unlinkedKiz: string[] = []
+          if (isFbo) {
+            const body = (await res.json().catch(() => null)) as { unlinked_marking_codes?: unknown } | null
+            if (Array.isArray(body?.unlinked_marking_codes)) {
+              unlinkedKiz = body.unlinked_marking_codes.filter((one): one is string => typeof one === 'string')
+            }
+          }
           await updateOption()
+          void refreshKiz()
+          notifyChanged()
+          return { unlinkedKiz } satisfies PickSaveResult
         } catch (err) {
           const message =
             err instanceof Error ? err.message : 'Не удалось сохранить снятое количество'
@@ -462,15 +599,129 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
       }
       const run = saveChain.current.then(save, save)
       saveChain.current = run.catch(() => undefined)
-      trackPickSave([`${BASE}/${requestId}`], run)
+      // FBO: отказ, который оператор уже увидел на открытом экране, не возвращается ошибкой
+      // загрузки при следующем открытии вкладки — иначе вместо подбора стоит красная плашка.
+      trackPickSave([`${BASE}/${requestId}`], run, () => !isFbo || !mounted.current)
       return run
     },
-    [load, requestId, screenData, source, token, updateOption],
+    [isFbo, load, notifyChanged, refreshKiz, requestId, screenData, source, token, updateOption],
+  )
+
+  /** WMS-686 · FBO: скан КИЗ — привязка к товару, штука не прибавляется. */
+  const scanKiz = useCallback(
+    async (code: string, productId: string | null): Promise<UnloadPickScanResult> => {
+      setBusy(true)
+      setError(null)
+      try {
+        const res = await fetch(apiUrl(`${BASE}/${requestId}/marking-codes/scan`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers(token) },
+          body: JSON.stringify({
+            code,
+            ...(productId ? { product_id: productId } : {}),
+            mutation_id: randomId(),
+          }),
+        })
+        if (!res.ok) throw new Error(await readFboKizError(res))
+        const body = (await res.json()) as FboKizScanResponse
+        if (!body.already_linked) {
+          // Число КИЗ меняется сразу; сверка со списком сервера идёт следом.
+          setKizCodes((current) =>
+            current.some((one) => one.marking_code_id === body.marking_code_id)
+              ? current
+              : [
+                  ...current,
+                  {
+                    marking_code_id: body.marking_code_id,
+                    cis_code: body.cis_code,
+                    product_id: body.product_id,
+                    line_id: body.line_id,
+                    status: 'applied',
+                    intake_document_number: null,
+                    linked_at: null,
+                    has_label_artifact: false,
+                  },
+                ],
+          )
+          notifyChanged()
+        }
+        void refreshKiz()
+        return {
+          kind: 'kiz',
+          productId: body.product_id,
+          cisCode: body.cis_code,
+          alreadyLinked: body.already_linked,
+          kizCount: body.kiz_count,
+          pickedQty: body.picked_qty,
+        }
+      } finally {
+        setBusy(false)
+      }
+    },
+    [BASE, notifyChanged, refreshKiz, requestId, token],
+  )
+
+  const removeKiz = useCallback(
+    async (code: FboKizCode) => {
+      const res = await fetch(apiUrl(`${BASE}/${requestId}/marking-codes/${code.marking_code_id}`), {
+        method: 'DELETE',
+        headers: headers(token),
+      })
+      if (!res.ok) throw new Error(await readFboKizError(res))
+      setKizCodes((current) => current.filter((one) => one.marking_code_id !== code.marking_code_id))
+      void refreshKiz()
+      notifyChanged()
+    },
+    [BASE, notifyChanged, refreshKiz, requestId, token],
+  )
+
+  const reprintKiz = useCallback(
+    async (code: FboKizCode) => {
+      const keys = reprintKeys.current
+      const key = keys.get(code.marking_code_id) ?? `fbo-kiz-reprint:${code.marking_code_id}:${randomId()}`
+      keys.set(code.marking_code_id, key)
+      await printFboKizLabel(code, token, key)
+      // Принято — следующая перепечатка этого кода будет новой операцией.
+      keys.delete(code.marking_code_id)
+    },
+    [token],
+  )
+
+  /**
+   * WMS-686 · FBO: короб целиком в подбор (двойной скан и кнопка). Отказ — исключение с текстом
+   * сервера; повтор уже перенесённого короба возвращает спокойное сообщение (R8).
+   */
+  const takeWholeBox = useCallback(
+    async (barcode: string): Promise<string | void> => {
+      if (!requestId) throw new Error('Не указан номер отгрузки')
+      const res = await fetch(apiUrl(`${BASE}/${requestId}/boxes/attach`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers(token) },
+        body: JSON.stringify({ barcode, allow_over_plan: false }),
+      })
+      if (!res.ok) {
+        const refusal = await readFboBoxRefusal(res)
+        if (refusal.neutral) return refusal.message
+        throw new Error(refusal.message)
+      }
+      await updateOption()
+      void refreshKiz()
+      notifyChanged()
+    },
+    [BASE, notifyChanged, refreshKiz, requestId, token, updateOption],
   )
 
   const scan = useCallback(
     async ({ barcode, sourceKey }: { barcode: string; sourceKey: string | null }) => {
       if (!requestId) throw new Error('Не указан номер отгрузки')
+
+      // FBO: код Честного знака уходит в привязку КИЗ тем же признаком, что в приёмке;
+      // к товару его относит последний отсканированный ШК товара, если он был сразу перед ним.
+      if (isFbo && isInboundMarkingScan(barcode)) {
+        const productId = lastProductScan.current
+        lastProductScan.current = null
+        return scanKiz(barcode, productId)
+      }
 
       const normalized = barcode.trim().toLowerCase()
       const matchedProduct = screenData?.products.find((product) => {
@@ -481,6 +732,15 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
           catalog?.wb_barcodes.some((one) => one === barcode)
         )
       })
+      // Контекст штуки для следующего КИЗ — даже если снятие отказано (сверх плана):
+      // недостающий КИЗ для уже подобранной штуки привязать всё равно можно.
+      const previousProductScan = lastProductScan.current
+      if (isFbo) {
+        lastProductScan.current =
+          matchedProduct?.id ??
+          pickOptions.find((one) => one.barcode === barcode || one.sku_code?.toLowerCase() === normalized)?.product_id ??
+          null
+      }
       // Тара — источник, из которого спишется товар (§Ж-03): сначала ищем её
       // среди уже известных pick-options источников, затем среди того, что
       // оператор только что отсканировал сам (см. scannedContainers выше).
@@ -523,8 +783,16 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
             container_id: containerSource?.containerId ?? null,
           }),
         })
-        if (!res.ok) throw new Error(await readApiErrorMessage(res))
+        if (!res.ok) {
+          // FBO (R7): не товар, не ячейка и не тара — значит, это КИЗ; отказ сервера не показываем.
+          if (isFbo && !matchedProduct && (await isUnknownBarcodeResponse(res))) {
+            lastProductScan.current = null
+            return scanKiz(barcode, previousProductScan)
+          }
+          throw new Error(await readApiErrorMessage(res))
+        }
         const result = (await res.json()) as ApiScanResult
+        if (isFbo) lastProductScan.current = result.kind === 'product' ? result.product_id : null
         if (result.kind === 'location') {
           if (!result.storage_location_id || !result.location_code) {
             throw new Error('Сервер распознал ячейку, но не вернул её адрес')
@@ -547,6 +815,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
             containerKind: result.container_kind,
             containerId: result.container_id,
           })
+          if (isFbo) saveFboContainers(requestId, scannedContainers.current)
           return {
             kind: 'container',
             storageLocationId: result.storage_location_id,
@@ -569,6 +838,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
           // Счётчик и звук — по ответу pick/scan; места догоняют в фоне (WMS-575, Д5).
           void updateOption()
         }
+        notifyChanged()
         return {
           kind: 'product',
           sourceKey: containerSource ? scanSourceKey(containerSource) : null,
@@ -585,8 +855,11 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
     },
     [
       catalogById,
+      isFbo,
+      notifyChanged,
       pickOptions,
       requestId,
+      scanKiz,
       screenData?.placeSource,
       screenData?.products,
       token,
@@ -613,13 +886,31 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         <ErrorNotice testId="unload-pick-error">{error ?? catalogError}</ErrorNotice>
       ) : null}
       <UnloadPickScreen
-        key={`${requestId}-${version}`}
+        // FBO не перемонтируется при перечитывании: вид, раскрытия, источник и история
+        // отмены переживают ошибку (WMS-686, D1.2). Поставка FBS — как прежде.
+        key={isFbo ? requestId : `${requestId}-${version}`}
         onNote={() => undefined}
         hideHeader={hideHeader}
         hideFooterActions={source === 'fbs'}
         // WMS-637: подбор поставки FBS — по ячейкам, как в окне «Сборка».
-        // Подбор отгрузки FBO остаётся «от товара».
+        // У отгрузки FBO вид выбирает оператор (WMS-686), по умолчанию — по ячейкам.
         groupByCell={source === 'fbs'}
+        fboMode={isFbo}
+        fbo={
+          isFbo && requestId
+            ? {
+                stateKey: requestId,
+                marketplace: detail?.marketplace,
+                printReady: pickOptionsReady && !loading,
+                printPickedByProduct,
+                kizCodes,
+                markingProducts,
+                onKizRemove: removeKiz,
+                onKizReprint: reprintKiz,
+                onTakeWholeBox: takeWholeBox,
+              }
+            : undefined
+        }
         document={screenData.document}
         seller={screenData.seller}
         products={screenData.products}

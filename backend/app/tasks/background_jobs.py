@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from typing import Any
 
 from app.celery_app import celery_app
+from app.core.settings import settings
 from app.services.background_job_service import (
     run_fbs_stock_sync_job,
     run_movements_digest_job,
@@ -107,6 +109,29 @@ def run_fbs_stock_reconcile_task() -> None:
     from app.services.fbs_autopoll_service import reconcile_fbs_stocks_all_sellers
 
     asyncio.run(reconcile_fbs_stocks_all_sellers())
+
+
+@celery_app.task(name="wms.staging_fbs_seed", bind=True, max_retries=3)
+def run_staging_fbs_seed_task(
+    task: Any,
+    slot_hour: int = 9,
+    slot_key: str | None = None,
+) -> None:
+    if settings.app_env != "staging":
+        return
+    from app.services.staging_fbs_seed_service import (
+        seed_staging_fbs_orders,
+        staging_fbs_slot_key,
+    )
+
+    # Keep the original slot on retry, even if midnight or the next run passes.
+    key = slot_key or staging_fbs_slot_key(slot_hour)
+    try:
+        asyncio.run(seed_staging_fbs_orders(key))
+    except Exception as exc:
+        raise task.retry(
+            exc=exc, countdown=60, kwargs={"slot_hour": slot_hour, "slot_key": key}
+        ) from exc
 
 
 @celery_app.task(name="wms.fbs_stock_publish_seller")

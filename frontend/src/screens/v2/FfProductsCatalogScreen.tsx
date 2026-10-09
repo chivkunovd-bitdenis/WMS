@@ -283,7 +283,7 @@ export function FfProductsCatalogScreen({
   const [filterMarketplace, setFilterMarketplace] = useState<'wildberries' | 'ozon' | ''>('')
   const [filterStockPublication, setFilterStockPublication] = useState('')
   const [filterHasStock, setFilterHasStock] = useState(false)
-  const [filterCategory, setFilterCategory] = useState('')
+  const [filterCategories, setFilterCategories] = useState<string[]>([])
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(100)
   const [catalogView, setCatalogView] = useState<'products' | 'packages'>('products')
@@ -305,7 +305,7 @@ export function FfProductsCatalogScreen({
 
   useEffect(() => {
     setPage(0)
-  }, [debouncedSearch, filterCategory, filterMarketplace, filterStockPublication, filterHasStock, filterSellerId, rowsPerPage])
+  }, [debouncedSearch, filterCategories, filterMarketplace, filterStockPublication, filterHasStock, filterSellerId, rowsPerPage])
 
   // Выбор строк относится к тому, что видно на текущей странице сейчас —
   // при смене страницы или фильтра он теряет смысл и снимается.
@@ -315,7 +315,7 @@ export function FfProductsCatalogScreen({
     // экране и врёт: фильтр уже сузили до одного продавца, а сообщение всё ещё
     // перечисляет пятерых.
     setFbsDialogError(null)
-  }, [page, rowsPerPage, debouncedSearch, filterCategory, filterMarketplace, filterStockPublication, filterHasStock, filterSellerId])
+  }, [page, rowsPerPage, debouncedSearch, filterCategories, filterMarketplace, filterStockPublication, filterHasStock, filterSellerId])
 
   const load = useCallback(async () => {
     catalogAbortRef.current?.abort()
@@ -330,7 +330,8 @@ export function FfProductsCatalogScreen({
       })
       if (filterSellerId) params.set('seller_id', filterSellerId)
       if (debouncedSearch) params.set('search', debouncedSearch)
-      if (filterCategory) params.set('category', filterCategory)
+      if (filterCategories.length === 1) params.set('category', filterCategories[0])
+      else for (const category of filterCategories) params.append('categories', category)
       if (filterMarketplace) params.set('marketplace', filterMarketplace)
       if (filterStockPublication) params.set('stock_publication', filterStockPublication)
       if (filterHasStock) params.set('has_stock', 'true')
@@ -364,7 +365,7 @@ export function FfProductsCatalogScreen({
       setCategoryOptions(loadedPage.categories)
       setStock(loadedStock)
     } catch (e) {
-      if ((e as { name?: string }).name === 'AbortError') return
+      if (controller.signal.aborted || (e as { name?: string }).name === 'AbortError') return
       setError(e instanceof Error ? e.message : 'Не удалось загрузить товары.')
     } finally {
       if (catalogAbortRef.current === controller) setBusy(false)
@@ -372,7 +373,7 @@ export function FfProductsCatalogScreen({
   }, [
     authHeaders,
     debouncedSearch,
-    filterCategory,
+    filterCategories,
     filterMarketplace,
     filterStockPublication,
     filterHasStock,
@@ -672,6 +673,7 @@ export function FfProductsCatalogScreen({
     const resolved = resolveInitialSellerFilter(sellerIdParam, sellers)
     if (resolved) {
       setFilterSellerId(resolved)
+      setFilterCategories([])
       sellerFilterFromUrlRef.current = true
     }
     ownAddressCleanupRef.current = true
@@ -702,6 +704,7 @@ export function FfProductsCatalogScreen({
     if (sellerFilterFromUrlRef.current) {
       sellerFilterFromUrlRef.current = false
       setFilterSellerId('')
+      setFilterCategories([])
     }
     // Реагируем только на новую навигацию (location.key), не на любую смену
     // searchParams/sellers — иначе ручной выбор фильтра можно случайно сбить.
@@ -1014,7 +1017,7 @@ export function FfProductsCatalogScreen({
                   // эффект сброса при повторном входе из меню его не трогает.
                   sellerFilterFromUrlRef.current = false
                   setFilterSellerId(e.target.value)
-                  setFilterCategory('')
+                  setFilterCategories([])
                 }}
                 data-testid="ff-catalog-seller-filter"
               >
@@ -1057,13 +1060,21 @@ export function FfProductsCatalogScreen({
                 <MenuItem value="none">Выключена на обеих</MenuItem>
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel id="ff-catalog-category-filter-label">Категория</InputLabel>
+            <FormControl size="small" sx={{ minWidth: 200, maxWidth: '100%' }}>
+              <InputLabel id="ff-catalog-category-filter-label" shrink>Категория</InputLabel>
               <Select
                 labelId="ff-catalog-category-filter-label"
                 label="Категория"
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
+                multiple
+                displayEmpty
+                notched
+                value={filterCategories}
+                renderValue={(selected) => selected.length ? selected.join(', ') : 'Все категории'}
+                onChange={(e) => {
+                  const values = typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value
+                  setFilterCategories(values.includes('') ? [] : values)
+                }}
+                sx={{ '& .MuiSelect-select': { whiteSpace: 'normal', overflowWrap: 'anywhere' } }}
                 data-testid="ff-catalog-category-filter"
               >
                 <MenuItem value="">Все категории</MenuItem>

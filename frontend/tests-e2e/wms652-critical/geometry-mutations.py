@@ -15,8 +15,8 @@ mutations = [
   ['WMS652.geometry[' + entry + ';1600x1000-long]' for entry in [
     'wb-single', 'wb-group-one', 'wb-group-many', 'ozon-single', 'ozon-group-one', 'ozon-group-many', 'mixed-group-many']]),
  ('overlap-order-seller-header', orders,
-  '<TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>',
-  '<TableCell sx={{ minWidth: 125, position: "relative", left: -80 }}>Селлер</TableCell>',
+  '<TableCell sx={[stickyHeaderSx, { minWidth: 125 }]}>Селлер</TableCell>',
+  '<TableCell sx={[stickyHeaderSx, { minWidth: 125, position: "relative", left: -80 }]}>Селлер</TableCell>',
   ['WMS652.geometry[orders-expired;1600x1000-long]', 'WMS652.geometry[orders-cancelled;1600x1000-long]']),
  ('hide-selected-action-only-for-long-data', orders,
   'data-testid="fbs-selected-open"',

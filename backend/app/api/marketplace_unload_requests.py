@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import urllib.parse
 import uuid
 from datetime import date
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import (
     APIRouter,
@@ -45,6 +46,8 @@ from app.models.user import User
 from app.services import box_import_service as box_import_svc
 from app.services import marketplace_unload_box_service as box_svc
 from app.services import marketplace_unload_collect_service as collect_svc
+from app.services import marketplace_unload_kiz_service as kiz_svc
+from app.services import marketplace_unload_pass_service as pass_svc
 from app.services import marketplace_unload_pick_service as pick_svc
 from app.services import marketplace_unload_service as svc
 from app.services import marketplace_unload_wb_fbw_export_service as wb_fbw_export_svc
@@ -52,6 +55,10 @@ from app.services import packaging_task_service as pkg_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_warehouse
 from app.services.marketplace_unload_box_service import MarketplaceUnloadBoxError
+from app.services.marketplace_unload_pass_service import (
+    MarketplaceUnloadPassBody,
+    MarketplaceUnloadPassError,
+)
 from app.services.marketplace_unload_pick_service import MarketplaceUnloadPickError
 from app.services.marketplace_unload_service import MarketplaceUnloadError
 from app.services.marketplace_unload_wb_fbw_export_service import WbFbwPackagingExportError
@@ -100,6 +107,8 @@ class MarketplaceUnloadConfirmBody(BaseModel):
 
 class MarketplaceUnloadShipBody(BaseModel):
     acknowledge_discrepancy: bool = False
+    # WMS-686: подтверждение «отгрузить без КИЗ на часть товара».
+    acknowledge_marking: bool = False
 
 
 class MarketplaceUnloadLineBulkItem(BaseModel):
@@ -158,6 +167,8 @@ class MarketplaceUnloadBoxOut(BaseModel):
     id: str
     box_preset: str
     internal_barcode: str | None = None
+    # WMS-686: короб приёмки (INB), перенесённый в отгрузку целиком.
+    inbound_intake_box_id: str | None = None
     closed_at: str | None
     lines: list[MarketplaceUnloadBoxLineOut]
 
@@ -173,7 +184,8 @@ class MarketplaceUnloadBoxBatchCreate(BaseModel):
 
 class MarketplaceUnloadScanBody(BaseModel):
     mutation_id: uuid.UUID | None = None
-    barcode: str = Field(min_length=1, max_length=128)
+    # До 512 знаков, как колонка кода КИЗ: длинный код ЧЗ приходит целиком.
+    barcode: str = Field(min_length=1, max_length=512)
     product_id: uuid.UUID | None = None
     storage_location_id: uuid.UUID | None = None
     quantity: int = Field(default=1, ge=1, le=1_000_000_000)
@@ -202,6 +214,11 @@ class MarketplaceUnloadLineOut(BaseModel):
     quantity: int
     picked_qty: int = 0
     has_discrepancy: bool = False
+    # WMS-686: сколько КИЗ привязано к строке товара этой отгрузки (K) и нужен ли
+    # товару «Честный знак». Только вычисляется, отдельно не хранится.
+    kiz_count: int = 0
+    requires_honest_sign: bool = False
+    packaging_instructions: str | None = None
 
 
 class MarketplaceUnloadAvailableProductOut(BaseModel):
@@ -237,6 +254,9 @@ class MarketplaceUnloadPickAllocationOut(BaseModel):
     storage_location_id: str | None
     location_code: str | None
     quantity: int
+    # WMS-686: коды, отвязанные от товара, когда «подобрано» стало меньше числа КИЗ.
+    # Заполняется только ответом на ручную правку подбора (pick/set).
+    unlinked_marking_codes: list[str] = Field(default_factory=list)
 
 
 class MarketplaceUnloadPickContainerPathItemOut(BaseModel):
@@ -276,7 +296,7 @@ class MarketplaceUnloadPickOptionProductOut(BaseModel):
 
 
 class MarketplaceUnloadPickScanBody(BaseModel):
-    barcode: str = Field(min_length=1, max_length=128)
+    barcode: str = Field(min_length=1, max_length=512)
     product_id: uuid.UUID | None = None
     storage_location_id: uuid.UUID | None = None
     container_kind: Literal["pallet", "box", "cargo_place"] | None = None
@@ -327,7 +347,7 @@ class MarketplaceUnloadPickSetBody(BaseModel):
 
 
 class MarketplaceUnloadAttachBoxBody(BaseModel):
-    barcode: str = Field(min_length=1, max_length=128)
+    barcode: str = Field(min_length=1, max_length=512)
     box_preset: str = Field(default="60_40_40", min_length=1, max_length=32)
     allow_over_plan: bool = False
 
@@ -368,6 +388,13 @@ class MarketplaceUnloadRequestDetailOut(BaseModel):
     boxes: list[MarketplaceUnloadBoxOut] = Field(default_factory=list)
     pick_allocations: list[MarketplaceUnloadPickAllocationOut] = Field(default_factory=list)
     linked_packaging_task: LinkedPackagingTaskOut | None = None
+    # WMS-686: сведения пропуска (водитель, машина); пусто, пока ФФ их не внёс.
+    pass_details: dict[str, Any] | None = None
+
+
+class MarketplaceUnloadPassOut(BaseModel):
+    pass_details: dict[str, Any] | None = None
+    editable: bool
 
 
 def _box_scan_out(
@@ -439,14 +466,23 @@ def _box_line_out(ln: MarketplaceUnloadBoxLine) -> MarketplaceUnloadBoxLineOut:
     )
 
 
-def _box_out(b: MarketplaceUnloadBox) -> MarketplaceUnloadBoxOut:
-    barcode: str | None = None
+def _box_barcode(b: MarketplaceUnloadBox) -> str | None:
+    """ШК короба отгрузки: складского короба (WHB) или перенесённого короба приёмки (INB)."""
     if b.warehouse_box is not None:
-        barcode = b.warehouse_box.internal_barcode
+        return b.warehouse_box.internal_barcode
+    if b.inbound_intake_box is not None:
+        return b.inbound_intake_box.internal_barcode
+    return None
+
+
+def _box_out(b: MarketplaceUnloadBox) -> MarketplaceUnloadBoxOut:
     return MarketplaceUnloadBoxOut(
         id=str(b.id),
         box_preset=b.box_preset,
-        internal_barcode=barcode,
+        internal_barcode=_box_barcode(b),
+        inbound_intake_box_id=(
+            str(b.inbound_intake_box_id) if b.inbound_intake_box_id is not None else None
+        ),
         closed_at=b.closed_at.isoformat() if b.closed_at is not None else None,
         lines=[_box_line_out(x) for x in b.lines],
     )
@@ -457,6 +493,7 @@ def _line_out(
     *,
     picked_qty: int = 0,
     show_pick_discrepancy: bool = False,
+    kiz_count: int = 0,
 ) -> MarketplaceUnloadLineOut:
     p = ln.product
     plan = int(ln.quantity)
@@ -468,6 +505,9 @@ def _line_out(
         quantity=plan,
         picked_qty=picked_qty,
         has_discrepancy=show_pick_discrepancy and picked_qty != plan,
+        kiz_count=kiz_count,
+        requires_honest_sign=bool(p.requires_honest_sign),
+        packaging_instructions=p.packaging_instructions,
     )
 
 
@@ -537,6 +577,13 @@ def _linked_packaging_out(
     )
 
 
+async def _kiz_counts(
+    session: AsyncSession, r: MarketplaceUnloadRequest
+) -> dict[uuid.UUID, int]:
+    """K по товарам отгрузки одним запросом (считает сервис КИЗ отгрузки)."""
+    return await kiz_svc.count_linked_by_line(session, r.id)
+
+
 def _detail_out(
     r: MarketplaceUnloadRequest,
     *,
@@ -545,18 +592,17 @@ def _detail_out(
     linked_packaging_task: LinkedPackagingTaskOut | None = None,
     seller_plan_only: bool = False,
     reveal_storage: bool = True,
+    kiz_counts: dict[uuid.UUID, int] | None = None,
 ) -> MarketplaceUnloadRequestDetailOut:
-    boxes = [] if seller_plan_only else [_box_out(b) for b in getattr(r, "boxes", []) or []]
-    picks = (
-        []
-        if seller_plan_only
-        else [
-            _pick_alloc_out(a, reveal_storage=reveal_storage)
-            for a in getattr(r, "pick_allocations", []) or []
-        ]
-    )
-    picked_map = {} if seller_plan_only else _picked_by_product(r)
-    show_pick_discrepancy = (not seller_plan_only) and r.status in (
+    # WMS-686: селлер видит всё по своей отгрузке — план, подбор, короба с составом,
+    # пропуск, — но только на чтение (запись закрыта в ручках, а не скрытием данных).
+    boxes = [_box_out(b) for b in getattr(r, "boxes", []) or []]
+    picks = [
+        _pick_alloc_out(a, reveal_storage=reveal_storage)
+        for a in getattr(r, "pick_allocations", []) or []
+    ]
+    picked_map = _picked_by_product(r)
+    show_pick_discrepancy = r.status in (
         "confirmed",
         "collecting",
         "shipped",
@@ -582,12 +628,14 @@ def _detail_out(
                 ln,
                 picked_qty=picked_map.get(ln.product_id, 0),
                 show_pick_discrepancy=show_pick_discrepancy,
+                kiz_count=(kiz_counts or {}).get(ln.product_id, 0),
             )
             for ln in r.lines
         ],
         boxes=boxes,
         pick_allocations=picks,
         linked_packaging_task=None if seller_plan_only else linked_packaging_task,
+        pass_details=r.pass_details,
     )
 
 
@@ -608,17 +656,12 @@ async def _detail_with_packaging(
     *,
     warehouse_name: str,
     seller_name: str | None,
-    sync_packaging: bool = False,
     seller_plan_only: bool = False,
 ) -> MarketplaceUnloadRequestDetailOut:
     linked: LinkedPackagingTaskOut | None = None
     if not seller_plan_only:
-        progress = await pkg_svc.progress_for_unload(
-            session,
-            tenant_id,
-            r.id,
-            sync_from_pick=sync_packaging and r.status in ("confirmed", "collecting", "shipped"),
-        )
+        # WMS-686 D0.3: задание упаковки FBO — рудимент, при чтении карточки не пересчитывается.
+        progress = await pkg_svc.progress_for_unload(session, tenant_id, r.id)
         if progress is not None:
             linked = _linked_packaging_out(progress)
     return _detail_out(
@@ -630,6 +673,7 @@ async def _detail_with_packaging(
         reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
             session, tenant_id
         ),
+        kiz_counts=await _kiz_counts(session, r),
     )
 
 
@@ -740,7 +784,41 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
 
 
+def _map_ship_err(exc: MarketplaceUnloadError) -> HTTPException:
+    """«Завершить»: доменный отказ никогда не превращается в 500."""
+    if exc.code == "marking_incomplete":
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=exc.detail or {"code": "marking_incomplete", "items": []},
+        )
+    mapped = _map_pick_err(MarketplaceUnloadPickError(exc.code))
+    if mapped.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR:
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code
+        )
+    return mapped
+
+
+def _map_pass_err(exc: MarketplaceUnloadPassError) -> HTTPException:
+    if exc.code in ("not_found", "pass_not_filled"):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
+    if exc.code == "pass_not_editable":
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
+    if exc.code == "pass_field_required":
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": exc.code, "field": exc.field},
+        )
+    return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.code)
+
+
 def _map_box_err(exc: MarketplaceUnloadBoxError) -> HTTPException:
+    if exc.detail is not None:
+        # Структурированный отказ: код, сообщение для оператора и перечень товаров.
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=exc.detail,
+        )
     if exc.code == "not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
     if exc.code == "not_draft":
@@ -895,7 +973,6 @@ async def get_marketplace_unload(
         r,
         warehouse_name=r.warehouse.name,
         seller_name=r.seller.name if r.seller is not None else None,
-        sync_packaging=True,
         seller_plan_only=_seller_plan_only(user),
     )
 
@@ -933,6 +1010,85 @@ async def export_wb_fbw_packaging_xlsx(
         content=export.content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers=headers,
+    )
+
+
+def _pass_out(user: User, r: MarketplaceUnloadRequest) -> MarketplaceUnloadPassOut:
+    return MarketplaceUnloadPassOut(
+        pass_details=r.pass_details,
+        # Править может только ФФ и только до проведения; селлер — только читает.
+        editable=user.role != FULFILLMENT_SELLER and pass_svc.is_editable(r),
+    )
+
+
+@router.get("/{request_id}/pass", response_model=MarketplaceUnloadPassOut)
+async def get_marketplace_unload_pass(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_mp_shipments_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> MarketplaceUnloadPassOut:
+    r = await _get_visible_request(
+        session,
+        user,
+        request_id,
+        credentials,
+        effective_seller_id=effective_seller_id,
+    )
+    return _pass_out(user, r)
+
+
+@router.put("/{request_id}/pass", response_model=MarketplaceUnloadPassOut)
+async def put_marketplace_unload_pass(
+    request_id: uuid.UUID,
+    body: MarketplaceUnloadPassBody,
+    user: Annotated[User, Depends(require_mp_shipments_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadPassOut:
+    _require_ff_execution(user)
+    try:
+        r = await pass_svc.save_pass(session, user.tenant_id, request_id, body.pass_details)
+    except MarketplaceUnloadPassError as exc:
+        raise _map_pass_err(exc) from None
+    return _pass_out(user, r)
+
+
+@router.get("/{request_id}/pass.xlsx")
+async def export_marketplace_unload_pass_xlsx(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_mp_shipments_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> Response:
+    r = await _get_visible_request(
+        session,
+        user,
+        request_id,
+        credentials,
+        effective_seller_id=effective_seller_id,
+    )
+    try:
+        content = pass_svc.build_pass_xlsx(r)
+    except MarketplaceUnloadPassError as exc:
+        raise _map_pass_err(exc) from None
+    number = pass_svc.pass_number(r)
+    # Кириллица в заголовке допустима только в filename*; в filename — латиница.
+    encoded_name = urllib.parse.quote(f"Пропуск_{number}.xlsx")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=\"pass.xlsx\"; filename*=UTF-8''{encoded_name}"
+            ),
+            "Cache-Control": "no-store",
+        },
     )
 
 
@@ -1121,6 +1277,7 @@ async def update_marketplace_unload(
         reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
             session, user.tenant_id
         ),
+        kiz_counts=await _kiz_counts(session, r),
     )
 
 
@@ -1183,6 +1340,7 @@ async def replace_marketplace_unload_lines(
         reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
             session, user.tenant_id
         ),
+        kiz_counts=await _kiz_counts(session, r),
     )
 
 
@@ -1211,6 +1369,7 @@ async def plan_marketplace_unload(
         reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
             session, user.tenant_id
         ),
+        kiz_counts=await _kiz_counts(session, r),
     )
 
 
@@ -1239,6 +1398,7 @@ async def unplan_marketplace_unload(
         reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
             session, user.tenant_id
         ),
+        kiz_counts=await _kiz_counts(session, r),
     )
 
 
@@ -1272,6 +1432,7 @@ async def cancel_marketplace_unload(
         reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
             session, user.tenant_id
         ),
+        kiz_counts=await _kiz_counts(session, r),
     )
 
 
@@ -1302,6 +1463,7 @@ async def confirm_marketplace_unload(
         reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
             session, user.tenant_id
         ),
+        kiz_counts=await _kiz_counts(session, r),
     )
 
 
@@ -1484,6 +1646,7 @@ async def set_marketplace_unload_pick_qty(
         storage_location_id=(str(result.storage_location_id) if reveal_storage else None),
         location_code=result.location_code if reveal_storage else None,
         quantity=result.quantity,
+        unlinked_marking_codes=list(result.unlinked_marking_codes),
     )
 
 
@@ -1555,6 +1718,7 @@ async def submit_marketplace_unload(
         reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
             session, user.tenant_id
         ),
+        kiz_counts=await _kiz_counts(session, r),
     )
 
 
@@ -1595,15 +1759,16 @@ async def ship_marketplace_unload(
 ) -> MarketplaceUnloadRequestDetailOut:
     _require_ff_execution(user)
     try:
-        await pick_svc.ship_request(
+        await svc.complete_unload(
             session,
             user.tenant_id,
             request_id,
             acknowledge_discrepancy=bool(body.acknowledge_discrepancy) if body else False,
+            acknowledge_marking=bool(body.acknowledge_marking) if body else False,
             performer_id=user.id,
         )
-    except MarketplaceUnloadPickError as exc:
-        raise _map_pick_err(exc) from None
+    except MarketplaceUnloadError as exc:
+        raise _map_ship_err(exc) from None
     r = await svc.get_request(session, user.tenant_id, request_id)
     if r is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
@@ -1614,6 +1779,7 @@ async def ship_marketplace_unload(
         reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
             session, user.tenant_id
         ),
+        kiz_counts=await _kiz_counts(session, r),
     )
 
 
@@ -1726,7 +1892,7 @@ async def create_marketplace_unload_box(
     return MarketplaceUnloadBoxOut(
         id=str(b.id),
         box_preset=b.box_preset,
-        internal_barcode=b.warehouse_box.internal_barcode if b.warehouse_box else None,
+        internal_barcode=_box_barcode(b),
         closed_at=None,
         lines=[],
     )
@@ -1758,7 +1924,7 @@ async def create_marketplace_unload_boxes_batch(
         MarketplaceUnloadBoxOut(
             id=str(b.id),
             box_preset=b.box_preset,
-            internal_barcode=b.warehouse_box.internal_barcode if b.warehouse_box else None,
+            internal_barcode=_box_barcode(b),
             closed_at=b.closed_at.isoformat() if b.closed_at else None,
             lines=[],
         )
@@ -1895,9 +2061,28 @@ async def close_marketplace_unload_box(
     return MarketplaceUnloadBoxOut(
         id=str(b.id),
         box_preset=b.box_preset,
+        internal_barcode=_box_barcode(b),
         closed_at=b.closed_at.isoformat() if b.closed_at else None,
         lines=[],
     )
+
+
+@router.post(
+    "/{request_id}/boxes/{box_id}/extract-all",
+    response_model=MarketplaceUnloadBoxOut,
+)
+async def extract_all_marketplace_unload_box(
+    request_id: uuid.UUID,
+    box_id: uuid.UUID,
+    user: Annotated[User, Depends(require_mp_shipments_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadBoxOut:
+    _require_ff_execution(user)
+    try:
+        b = await box_svc.extract_all_from_box(session, user.tenant_id, request_id, box_id)
+    except MarketplaceUnloadBoxError as exc:
+        raise _map_box_err(exc) from None
+    return _box_out(b)
 
 
 @router.post(

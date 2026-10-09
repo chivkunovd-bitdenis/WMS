@@ -418,8 +418,8 @@ class FbsOrderProductPick(Base):
     order_product_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("fbs_order_products.id", ondelete="CASCADE"), nullable=False
     )
-    fbs_supply_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("fbs_supplies.id", ondelete="CASCADE"), nullable=False
+    fbs_supply_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("fbs_supplies.id", ondelete="SET NULL"), nullable=True
     )
     source_storage_location_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("storage_locations.id", ondelete="RESTRICT"), nullable=False

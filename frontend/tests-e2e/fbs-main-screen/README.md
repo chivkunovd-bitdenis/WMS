@@ -38,7 +38,7 @@ only after its browser/API run succeeds on the recorded SHA.
 | S1 / S12 | `S1-S12-arriving-order-refresh-and-no-sync-duplicate` | Open browser, create a new external WB order, run actual WMS/Celery synchronization, refresh the existing screen, repeat sync, assert one record/one row. The test API sync represents a background event, not an admin button scope decision. |
 | S2 | `S2-marketplace-seller-search-empty` | Real worklist requests and exact visible IDs after marketplace/seller/search changes; an independently absent identifier produces an empty result. |
 | S2 | `S2-two-wb-warehouses-exact-membership` | Real WB seller B order on warehouse 501002 and WB orders on 501001; exact distinct sets; changing to Ozon resets warehouse. Ozon has its own external warehouse identifier. |
-| S3 | `S3-ozon-position-fields` | Real serializer and browser show every Ozon position's own name/article/SKU and existing table columns. |
+| S3 | `S3-ozon-position-fields` | Real serializer and browser show every Ozon position's own name/article and one size per position in the size column that replaces SKU (WMS-719); SKU is not rendered and existing table columns stay. |
 | S4 | `S4-hidden-selection-and-loaded-select-all` | Selection survives search; select-all adds only the loaded result; mixed marketplaces cannot form a supply; selected dialog includes hidden order; marketplace change clears selection. |
 | S4 | `S4-not-published-selectable` | `not_published` is not a UI selection/create blocker. |
 | S4 | `S4-selected-dialog-remove-and-clear` | Remove one order from the selected dialog, retain the other, clear all and verify checkboxes and panel. |

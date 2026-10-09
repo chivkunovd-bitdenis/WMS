@@ -8,8 +8,10 @@ import { cellRef, objRef } from './pickStub'
 
 // WMS-637 · C3: настоящий FfUnloadPickPage с настоящим экраном подбора.
 // Поставка FBS (source="fbs") показывает список по ячейкам, как окно «Сборка»;
-// отгрузка FBO (source не задан) — прежнюю таблицу от товара с кнопками
-// «Отложить» и «Завершить подбор». Сервер подменён через fetch.
+// отгрузка FBO (source не задан) — по решению владельца 09.10.2026 (WMS-686, D1.1)
+// тоже по ячейкам, с переключателем «По ячейкам / По товарам», прежней таблицей
+// от товара во втором виде и кнопками «Отложить» и «Завершить подбор».
+// Сервер подменён через fetch.
 
 beforeAll(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -76,6 +78,7 @@ async function server(input: RequestInfo | URL): Promise<Response> {
     return json({ ...DETAIL, lines: [{ id: 'line-1', product_id: 'p-1', sku_code: 'SKU-1', product_name: 'Куртка демо', quantity: 3, picked_qty: 0 }] })
   }
   if (/^\/operations\/(fbs-supplies|marketplace-unload-requests)\/doc-1\/pick-options$/.test(path)) return json(PICK_OPTIONS)
+  if (path === '/operations/marketplace-unload-requests/doc-1/marking-codes') return json({ items: [] })
   return json({ detail: `unexpected ${path}` }, 404)
 }
 
@@ -117,7 +120,7 @@ async function renderPage(source?: 'fbs') {
 
 const byTestId = (testId: string) => host.querySelector(`[data-testid="${testId}"]`)
 
-describe('WMS-637 · FfUnloadPickPage: подбор поставки FBS — по ячейкам, отгрузка FBO — от товара', () => {
+describe('WMS-637 · FfUnloadPickPage: подбор поставки FBS — по ячейкам, отгрузка FBO — по ячейкам с переключателем (WMS-686)', () => {
   it('source="fbs": таблица по ячейкам, как в «Сборке»; кнопок «Отложить»/«Завершить подбор» нет', async () => {
     await renderPage('fbs')
 
@@ -143,14 +146,22 @@ describe('WMS-637 · FfUnloadPickPage: подбор поставки FBS — п�
     expect(byTestId(`pick-place-qty-p-1-${box}`)).not.toBeNull()
   })
 
-  it('без source (отгрузка FBO): прежняя таблица от товара и кнопки «Отложить»/«Завершить подбор»', async () => {
+  it('без source (отгрузка FBO): по умолчанию «По ячейкам», переключатель даёт прежнюю таблицу от товара; «Отложить»/«Завершить подбор» на месте', async () => {
     await renderPage()
 
     expect(requested).toContain('/operations/marketplace-unload-requests/doc-1/pick-options')
+    expect(byTestId('fbs-cell-pick-table')).not.toBeNull()
+    expect(byTestId('pick-table')).toBeNull()
+    expect(byTestId('pick-view-switch')).not.toBeNull()
+    expect(byTestId('pick-pause')?.textContent).toContain('Отложить')
+    expect(byTestId('pick-complete')?.textContent).toContain('Завершить подбор')
+
+    act(() => {
+      ;(byTestId('pick-view-products') as HTMLElement).click()
+    })
+    await settle()
     expect(byTestId('pick-table')).not.toBeNull()
     expect(byTestId('fbs-cell-pick-table')).toBeNull()
     expect(host.querySelector('[data-testid^="fbs-pick-item-"]')).toBeNull()
-    expect(byTestId('pick-pause')?.textContent).toContain('Отложить')
-    expect(byTestId('pick-complete')?.textContent).toContain('Завершить подбор')
   })
 })

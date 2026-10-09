@@ -9,6 +9,7 @@ import './ui/ui.css'
 import App from './App.tsx'
 import { muiTheme } from './mui/theme'
 import { WmsDatePickersProvider } from './mui/WmsDatePickersProvider'
+import { StagingBanner } from './components/StagingBanner'
 
 // Keep the existing route tree and shell; data router supports unsaved-input blocking.
 installClientErrorHandlers('fulfillment')
@@ -21,6 +22,7 @@ const router = createBrowserRouter([{
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider theme={muiTheme}>
+      <StagingBanner />
       <ErrorBoundary component="portal" root portal="fulfillment">
         <WmsDatePickersProvider>
           <RouterProvider router={router} />

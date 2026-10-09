@@ -38,6 +38,7 @@ from app.api.inventory_balances import router as inventory_balances_router
 from app.api.inventory_counts import router as inventory_counts_router
 from app.api.inventory_movements import router as inventory_movements_router
 from app.api.kiz_reprints import router as kiz_reprints_router
+from app.api.marketplace_unload_kiz import router as marketplace_unload_kiz_router
 from app.api.marketplace_unload_requests import router as marketplace_unload_requests_router
 from app.api.marking_codes import router as marking_codes_router
 from app.api.marking_credentials import router as marking_credentials_router
@@ -181,6 +182,7 @@ def create_app() -> FastAPI:
     app.include_router(reports_router)
     app.include_router(scan_resolver_router)
     app.include_router(marketplace_unload_requests_router)
+    app.include_router(marketplace_unload_kiz_router)
     app.include_router(packaging_tasks_router)
     app.include_router(marking_codes_router)
     app.include_router(marking_withdrawals_router)

@@ -78,3 +78,12 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=0, minute=0, nowfun=moscow_now),
     },
 }
+
+# WMS-705: the copied tenants receive synthetic orders only on the test contour.
+if settings.app_env == "staging":
+    for hour in (9, 18):
+        celery_app.conf.beat_schedule[f"staging-fbs-seed-{hour}"] = {
+            "task": "wms.staging_fbs_seed",
+            "schedule": crontab(hour=hour, minute=0, nowfun=moscow_now),
+            "kwargs": {"slot_hour": hour},
+        }

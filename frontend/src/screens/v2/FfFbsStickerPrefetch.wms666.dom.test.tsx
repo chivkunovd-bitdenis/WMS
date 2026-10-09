@@ -227,9 +227,16 @@ it('does not request WB labels for Ozon', async () => {
   await render('supply')
   expect(fetchBatch).not.toHaveBeenCalled()
 })
-it('does not request labels from the composition tab', async () => {
-  await render('supply', ['a'], 'composition')
+// WMS-723: вкладки «Состав» больше нет, тихой вкладкой без подготовки стикеров
+// остались «Короба»; сохранённое старое значение composition открывает «Подбор».
+it('does not request labels from the boxes tab', async () => {
+  await render('supply', ['a'], 'boxes')
   expect(fetchBatch).not.toHaveBeenCalled()
+})
+it('a legacy saved composition stage opens picking, which prepares the missing WB sticker once', async () => {
+  await render('supply', ['a'], 'composition')
+  expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain('Подбор')
+  expect(fetchBatch).toHaveBeenCalledTimes(1)
 })
 it('surfaces provider failure and does not loop or pretend the sticker exists', async () => {
   fetchBatch.mockResolvedValue({ requested: 1, ready: 0, missing: 0, failed: 1, assets: [], order_errors: [{ message: 'WB не вернул стикер' }] })
@@ -238,8 +245,8 @@ it('surfaces provider failure and does not loop or pretend the sticker exists', 
   expect(document.querySelector('[data-testid="fbs-sticker-code"]')).toBeNull()
   expect(fetchBatch).toHaveBeenCalledTimes(1)
 })
-it('clicking from composition into packing requests WB stickers and replaces empty rows with numbers', async () => {
-  await render('supply', ['a'], 'composition')
+it('clicking from boxes into packing requests WB stickers and replaces empty rows with numbers', async () => {
+  await render('supply', ['a'], 'boxes')
   expect(fetchBatch).not.toHaveBeenCalled()
   const packingTab = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
     .find((tab) => tab.textContent?.includes('Упаковка'))
