@@ -77,7 +77,7 @@ if [[ "${WMS_DEPLOY_GUARD_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 
-# Server independently verifies exact etalon CI and current process-proof metadata.
+# Server independently verifies that this exact etalon commit has a successful full CI run.
 # Failure (including unavailable public API) stops before any Docker action.
 echo "==> verify exact server process CI"
 python3 scripts/ci/verify_server_process_ci.py --sha "$DEPLOY_SHA"
