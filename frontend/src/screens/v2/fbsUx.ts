@@ -343,6 +343,8 @@ export type FbsPickingListPrintInput = {
   routeLabel: string
   deadlineLabel: string
   printedAtLabel: string
+  /** Полный план до WMS-710, где товар разворачивается в отдельные строки по местам. */
+  totalQuantity?: number
   rows: FbsPickingListPrintRow[]
 }
 
@@ -541,7 +543,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
     columnTags.splice(5, 2, `<col style="width:${combined.toFixed(4)}%" />`)
     columns = `<colgroup>${columnTags.join('')}</colgroup>`
   }
-  const totalQuantity = input.rows.reduce((sum, row) => sum + row.required, 0)
+  const totalQuantity = input.totalQuantity ?? input.rows.reduce((sum, row) => sum + row.required, 0)
   const rows = input.rows.map((row) => {
     const article = articleFor(row)
     const identifiers = row.identifiers.filter((identifier) => identifier.trim() !== article)

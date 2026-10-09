@@ -3230,6 +3230,8 @@ export function FfFbsSupplyWorkspace({
       printWorkspace.orders,
       printWorkspace.supply.marketplace === 'ozon',
     ).rows
+    const isImperiyaPickList = usesTabOrderPickList(token)
+    const totalQuantity = rows.reduce((sum, row) => sum + row.required, 0)
     let optionList: FbsPickOptionProduct[] = []
     try {
       // Подобранное берём из того же свежего ответа, что и места: экран мог не перечитаться после подбора.
@@ -3266,7 +3268,7 @@ export function FfFbsSupplyWorkspace({
       })
       // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: лист идёт маршрутом вкладки «Подбор».
       // Остальные клиенты печатают как раньше. См. imperiyaPickListOrder.ts.
-      if (usesTabOrderPickList(token) && optionList.length) {
+      if (isImperiyaPickList && optionList.length) {
         rows = imperiyaWalkRows(rows, optionList, contextList)
       }
     } catch {
@@ -3295,6 +3297,7 @@ export function FfFbsSupplyWorkspace({
       deadlineLabel: new Date(printWorkspace.supply.nearest_deadline_at).toLocaleString('ru-RU'),
       printedAtLabel: new Date().toLocaleString('ru-RU'),
       rows,
+      ...(isImperiyaPickList ? { totalQuantity } : {}),
     }))
     printWindow.document.close()
   }
