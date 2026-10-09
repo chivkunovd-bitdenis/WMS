@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from sqlalchemy import Select, delete, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import load_only, selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.settings import settings
@@ -1606,6 +1606,54 @@ async def select_worklist_supplies(
             break
         offset += batch_size
     return supplies, display_statuses
+
+
+async def select_ozon_worklist_supply_ids_by_group(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None = None,
+    marketplace: str | None = None,
+    search: str | None = None,
+) -> dict[str, list[uuid.UUID]]:
+    """Classify Ozon supply candidates once for all count groups.
+
+    The posting-derived stage is shared by active, shipped, delivery, and done.
+    Counts need only the stage inputs, so don't materialize full supply, order,
+    or operation rows for each tab independently.
+    """
+    stmt = supply_worklist_statement(
+        tenant_id, seller_id=seller_id, marketplace=marketplace,
+        status_group="active", search=search, ozon_candidates=True,
+    ).where(FbsSupply.marketplace == "ozon").options(
+        load_only(
+            FbsSupply.id,
+            FbsSupply.tenant_id,
+            FbsSupply.seller_id,
+            FbsSupply.marketplace,
+            FbsSupply.status,
+            FbsSupply.delivered_at,
+        ),
+        selectinload(FbsSupply.orders).load_only(
+            FbsOrder.id,
+            FbsOrder.tenant_id,
+            FbsOrder.seller_id,
+            FbsOrder.marketplace,
+            FbsOrder.status,
+            FbsOrder.wb_status,
+            FbsOrder.supplier_status,
+            FbsOrder.meta_details_json,
+        ),
+    )
+    candidates = list((await session.execute(stmt)).scalars())
+    display_statuses = await supply_display_statuses(session, candidates)
+    return {
+        group: [
+            supply.id for supply in candidates
+            if display_statuses[supply.id] in _worklist_statuses(group)
+        ]
+        for group in ("active", "shipped", "delivery", "done")
+    }
 
 
 async def list_supply_worklist(

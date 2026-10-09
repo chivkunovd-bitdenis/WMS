@@ -8,6 +8,7 @@ current status_group count. These are derived counts, never a stored ledger.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
@@ -353,3 +354,40 @@ async def test_c7_recounts_changed_data_without_writes_to_orders_stock_or_reserv
     body = await _read(async_client, headers, status_group="new")
     assert body["tabs"]["new"] == 2
     assert await _stock_snapshot(product) == changed
+
+
+@pytest.mark.asyncio
+async def test_c8_shipped_count_uses_derived_ozon_supply_membership(async_client: AsyncClient):
+    headers, seller, _, _, _, ids = await _setup_ff_admin_with_stock(async_client, order_count=2)
+    async with SessionLocal() as session:
+        orders = [await session.get(FbsOrder, identifier) for identifier in ids]
+        supply = await _supply(session, orders, status="done", marketplace="ozon")
+        # WMS-721 derives the displayed stage from posting facts even when the
+        # stored supply status is already done.
+        supply.delivered_at = datetime.now(UTC)
+        for order in orders:
+            order.status = "done"
+            order.wb_status = "awaiting_packaging"
+            order.supplier_status = "new"
+            order.meta_details_json = {}
+        await session.commit()
+
+    listed = await async_client.get(
+        "/operations/fbs-supplies/worklist",
+        headers=headers,
+        params={"status_group": "shipped", "marketplace": "ozon"},
+    )
+    assert listed.status_code == 200, listed.text
+    rows = listed.json()["items"]
+    assert len(rows) == 1
+    assert rows[0]["status"] == "shipped"
+
+    response = await async_client.get(
+        COUNTS,
+        headers=headers,
+        params={"status_group": "shipped", "marketplace": "ozon"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["tabs"] == {"new": 0, "active": 0, "delivery": 0}
+    assert body["sellers"][str(seller)] == rows[0]["orders_count"] == len(orders)
