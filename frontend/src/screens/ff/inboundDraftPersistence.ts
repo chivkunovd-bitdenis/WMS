@@ -35,7 +35,10 @@ export function readIntake(token: string, document: string): SavedIntake {
     return {}
   }
   const raw = localStorage.getItem(storageKey)
-  return raw ? JSON.parse(raw) as SavedIntake : {}
+  const saved = raw ? JSON.parse(raw) as SavedIntake : {}
+  // A reserve exists only while localStorage refused the newer record of the label attempt.
+  const remembered = readReserve(storageKey)
+  return remembered ? { ...saved, labelAttempt: remembered } : saved
 }
 function writeIntake(token: string, document: string, value: SavedIntake) {
   localStorage.setItem(intakeStorageKey(token, document), JSON.stringify(value))
@@ -66,23 +69,76 @@ function dropStaleLabelHtml() {
   }
 }
 /**
+ * Reserve of the label print attempt while localStorage refuses its record (full quota): the page memory,
+ * for a repeat in the open screen, and sessionStorage under the same tenant/user/document key, for a
+ * repeat after a reload of the tab. Without it the repeat would not find the attempt and would send a
+ * second tape instead of asking the operator or repairing the marks. A reserve is newer than whatever
+ * localStorage still holds, so it is read first and is removed as soon as localStorage takes a record.
+ */
+const reserve = new Map<string, InboundLabelAttempt>()
+function readReserve(key: string): InboundLabelAttempt | undefined {
+  const inPage = reserve.get(key)
+  if (inPage) return inPage
+  try {
+    const raw = sessionStorage.getItem(key)
+    const saved = raw ? JSON.parse(raw) as InboundLabelAttempt : undefined
+    return typeof saved?.id === 'string' ? saved : undefined
+  } catch {
+    return undefined
+  }
+}
+function writeReserve(key: string, attempt: InboundLabelAttempt) {
+  reserve.set(key, attempt)
+  try {
+    sessionStorage.setItem(key, JSON.stringify(attempt))
+  } catch {
+    // The page memory still holds it. An older copy must not outlive a reload as if it were current.
+    try { sessionStorage.removeItem(key) } catch { /* nothing more to do */ }
+  }
+}
+function clearReserve(key: string) {
+  reserve.delete(key)
+  try { sessionStorage.removeItem(key) } catch { /* nothing to clear */ }
+}
+function localRecordHasAttempt(key: string): boolean {
+  try {
+    const raw = localStorage.getItem(key)
+    return Boolean(raw && (JSON.parse(raw) as SavedIntake).labelAttempt)
+  } catch {
+    return true
+  }
+}
+/**
  * Keep the recovery data of a label print attempt in the existing tenant/user/document record.
  * The record only protects against a second silent print, so a failing storage (full quota, blocked
- * storage) must never stop the print itself: nothing is thrown, the print continues without the record.
+ * storage) must never stop the print itself: nothing is thrown, the print continues and the attempt is
+ * kept in the reserve instead.
  */
 export function saveInboundLabelAttempt(token: string, document: string, labelAttempt: InboundLabelAttempt) {
   const stored = storedLabelAttempt(labelAttempt)
   const write = () => writeIntake(token, document, { ...readIntake(token, document), labelAttempt: stored })
+  let recorded = false
   try {
     write()
+    recorded = true
   } catch {
     try {
       dropStaleLabelHtml()
       write()
+      recorded = true
     } catch {
-      // Continue without the record.
+      // Falls back to the reserve below.
     }
   }
+  let key: string
+  try {
+    key = intakeStorageKey(token, document)
+  } catch {
+    return
+  }
+  // A finished attempt needs no reserve unless an older unfinished record in localStorage would come back.
+  if (recorded || (stored.state === 'complete' && !localRecordHasAttempt(key))) clearReserve(key)
+  else writeReserve(key, stored)
 }
 export function saveIntakeTotals(token: string, document: string, totals: Record<string, string>) {
   writeIntake(token, document, { ...readIntake(token, document), totals })
