@@ -101,13 +101,11 @@ type Props = {
   isAdmin?: boolean; addressStorageEnabled?: boolean
 }
 
-// Порядок вкладок — единственный источник истины для UI; заказчик 16.08 попросил
-// подвинуть «Просрочены» после «В доставке» (раньше стояла сразу за «Новыми»).
+// Порядок вкладок — единственный источник истины для UI.
 const TABS = [
   { key: 'new', label: 'Новые' },
   { key: 'active', label: 'В работе' },
   { key: 'delivery', label: 'В доставке' },
-  { key: 'expired', label: 'Просрочены' },
   { key: 'done', label: 'Завершённые' },
   { key: 'cancelled', label: 'Отменённые' },
 ] as const
@@ -438,26 +436,6 @@ const NewOrderRow = memo(function NewOrderRow({
     </TableRow>
   )
 })
-
-// GLOBAL-02: единственное состояние строки, которое реально мешает оператору
-// отгрузить заказ, — незакрытая маркировка Честным знаком. «Не хватает: N» с прошлого
-// стейджа заказчик прочитал как нехватку товара на складе — на деле это нехватка кодов
-// маркировки (order.metadata), поэтому подпись теперь называет вещь напрямую и красный
-// цвет держится только за тем, что действительно блокирует работу.
-type MetadataProblem = { label: string; color: 'error' }
-
-function metadataProblem(order: FbsWorklistOrder): MetadataProblem | null {
-  if (order.metadata.required.length === 0) {
-    return null
-  }
-  const rejected = order.metadata.states.some((state) =>
-    ['rejected', 'replacement_required'].includes(state.status),
-  )
-  if (rejected) return { label: 'Отклонено WB', color: 'error' }
-  const missing = order.metadata.states.filter((state) => state.status === 'missing').length
-  if (missing > 0) return { label: `Не хватает честных знаков: ${missing}`, color: 'error' }
-  return null
-}
 
 function warehouseOptionLabel(
   option: FbsWorklistWarehouseOption,
@@ -1363,9 +1341,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
               key={tab.key}
               value={tab.key}
               label={tab.label}
-              data-task-id={
-                tab.key === 'cancelled' ? 'FBS-06' : tab.key === 'expired' ? 'FBS-03' : undefined
-              }
+              data-task-id={tab.key === 'cancelled' ? 'FBS-06' : undefined}
             />
           ))}
         </Tabs>
@@ -1657,7 +1633,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
               }
 
               const localSupplyMissing = !order.supply_id
-              const metaFlag = metadataProblem(order)
               const ozonPositions = order.marketplace === 'ozon' && order.positions.length > 0
                 ? order.positions
                 : null
@@ -1765,25 +1740,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                         />
                       </TableCell>
                       <TableCell>
-                        {/* GLOBAL-02: одно главное состояние на строку. На «Просрочены»
-                            статус всегда «Новый» (см. STATUS_GROUP_MAP на бэкенде) — сам
-                            факт просрочки уже виден по вкладке, повторять его чипом не
-                            нужно, поэтому базовый статус-чип там не рисуем вовсе. Если
-                            маркировка отклонена/не хватает — это и есть главное состояние,
-                            оно важнее декоративного статуса. Всё остальное — обычным
-                            текстом ниже, без цвета. */}
-                        {statusGroup === 'expired' && metaFlag ? (
-                          <Chip
-                            size="small"
-                            color={metaFlag.color}
-                            label={metaFlag.label}
-                            data-testid={`fbs-order-${order.id}-marking-issue`}
-                          />
-                        ) : statusGroup !== 'expired' ? (
-                          // «Отменённые»: заказ уже закрыт, состояние маркировки для решения
-                          // не нужно — главное здесь то, чем закончился заказ (Отменён/Дефект).
-                          <FbsStatusChip status={orderStatusForChip(order)} />
-                        ) : null}
+                        {/* «Отменённые»: главное состояние — итог заказа (Отменён/Дефект). */}
+                        <FbsStatusChip status={orderStatusForChip(order)} />
                         {localSupplyMissing ? (
                           <Tooltip title={externalSupplyHint(order)}>
                             <Typography

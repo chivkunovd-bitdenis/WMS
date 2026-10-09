@@ -69,13 +69,6 @@ from app.services.wb_card_enrichment import (
 
 STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
     "new": frozenset({FBS_ORDER_STATUS_NEW}),
-    # BL-3 (16.08, FBS-03): заказы со статусом NEW, у которых истёк срок сборки
-    # (deadline_at < server_now) — WB их уже не примет, но статус в БД остаётся "new",
-    # WB его не меняет. Тот же набор статусов, что у "new" — реальное разделение идёт
-    # по deadline_at в _fetch_orders_page/_fetch_warehouse_options, а не по статусу.
-    # Тот же приём, что для "cancelled": отдельная вкладка через status_group,
-    # без изменения данных в БД.
-    "expired": frozenset({FBS_ORDER_STATUS_NEW}),
     "active": frozenset(
         {
             FBS_ORDER_STATUS_IN_SUPPLY,
@@ -92,8 +85,8 @@ STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
     # Теперь у них своя группа, как отдельная вкладка «Отменённые» в кабинете WB.
     "cancelled": frozenset({FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}),
     # WMS-445: the first TSD screen is a warehouse work queue, rather than a
-    # history view.  It deliberately differs from the web's `new` (which
-    # splits WB by deadline) and `active` (which includes external processing).
+    # history view. It includes NEW alongside work in progress, while the web
+    # shows them in separate groups and includes external processing in `active`.
     "tsd_working": frozenset(
         {
             FBS_ORDER_STATUS_NEW,
@@ -111,16 +104,6 @@ MISSING_PRODUCT = "Товар не сопоставлен"
 
 def _is_supplier_status_new(supplier_status: str | None) -> bool:
     return supplier_status is None or supplier_status.strip().lower() == FBS_ORDER_STATUS_NEW
-
-
-def _deadline_in_work_clause(server_now: datetime) -> ColumnElement[bool]:
-    """Заказ ещё в работе: срок не вышел — а у Ozon срок из работы и не выводит."""
-    return or_(FbsOrder.marketplace == "ozon", FbsOrder.deadline_at >= server_now)
-
-
-def _deadline_expired_clause(server_now: datetime) -> ColumnElement[bool]:
-    """Просрочен и потому нерабочий. Заказы Ozon сюда не попадают (WMS-422)."""
-    return and_(FbsOrder.marketplace != "ozon", FbsOrder.deadline_at < server_now)
 
 
 def _supplier_new_clause() -> ColumnElement[bool]:
@@ -339,16 +322,6 @@ async def _fetch_orders_page(
         stmt = stmt.where(FbsOrder.status.in_(allowed))
         if status_group == "new":
             stmt = stmt.where(_supplier_new_clause())
-            # BL-3: "Новые" показывают только заказы, которые WB ещё реально примет.
-            # WMS-422: у Ozon просрочка заказ из работы не выводит — кабинет
-            # продолжает отдавать отправление как неотгруженное. Работать с ним
-            # можно только здесь: чекбоксы и кнопки поставки живут на вкладке
-            # «Новые», на остальных вкладках строка нерабочая.
-            stmt = stmt.where(_deadline_in_work_clause(server_now))
-        elif status_group == "expired":
-            stmt = stmt.where(_supplier_new_clause())
-            # BL-3: "Просрочены" — зеркало "new", но с истёкшим дедлайном.
-            stmt = stmt.where(_deadline_expired_clause(server_now))
         elif status_group == "tsd_working":
             stmt = stmt.where(_tsd_working_clause())
     if wb_warehouse_id is not None:
@@ -434,10 +407,6 @@ async def _fetch_warehouse_options(
         stmt = stmt.where(FbsOrder.status.in_(allowed))
         if status_group == "new":
             stmt = stmt.where(_supplier_new_clause())
-            stmt = stmt.where(_deadline_in_work_clause(server_now))
-        elif status_group == "expired":
-            stmt = stmt.where(_supplier_new_clause())
-            stmt = stmt.where(_deadline_expired_clause(server_now))
         elif status_group == "tsd_working":
             stmt = stmt.where(_tsd_working_clause())
     stmt = stmt.order_by(TenantWbMpWarehouse.name.asc(), FbsOrder.wb_warehouse_id.asc())
@@ -918,12 +887,6 @@ async def _load_sticker_assets(
     return out
 
 
-def _as_utc(dt: datetime) -> datetime:
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=UTC)
-    return dt.astimezone(UTC)
-
-
 # Коды, которые показываем оператору как предупреждение, но выбор заказа не
 # запрещаем. «Не опубликован» сюда попал 01.09.2026: заказ уже приехал, срок
 # сборки идёт, и запрет собрать его не защищает ничего — публикация остатка на
@@ -977,14 +940,6 @@ def compute_selection_blockers(
                 ),
             }
         )
-    # WMS-420. Просрочка запирает выбор только у Wildberries: там сборку после
-    # срока уже не примут. Ozon отправление не аннулирует — живой ответ по
-    # 0110009646-0483-1 через полтора часа после срока по-прежнему отдаёт
-    # `awaiting_packaging` в списке неотгруженных, и запрета на ship в его
-    # спецификации нет. Сам факт просрочки оператор видит по вкладке
-    # «Просрочены»; отнимать у него возможность сдать заказ мы не вправе.
-    if order.marketplace != "ozon" and _as_utc(order.deadline_at) < _as_utc(server_now):
-        blockers.append({"code": "deadline_passed", "message": "Срок сборки истёк."})
     return blockers
 
 

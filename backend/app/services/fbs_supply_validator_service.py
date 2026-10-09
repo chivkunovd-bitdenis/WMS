@@ -75,7 +75,6 @@ _BLOCKER_TO_ISSUE: dict[str, tuple[str, str]] = {
         "Публикация FBS-остатка для товара выключена.",
     ),
     "insufficient_stock": ("insufficient_stock", "Недостаточно неупакованного остатка."),
-    "deadline_passed": ("deadline_passed", "Срок сборки истёк."),
     "order_external_processing": ("order_bad_status", "Заказ уже ушёл в кабинете WB."),
 }
 
