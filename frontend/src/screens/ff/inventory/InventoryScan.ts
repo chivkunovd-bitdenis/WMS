@@ -97,10 +97,35 @@ function hasCyrillic(value: string): boolean {
   return /[\u0400-\u04FF]/.test(value)
 }
 
-/** Коды-кандидаты: как пришло и как было бы в латинской раскладке. */
+/**
+ * Достаёт штрихкод товара из кода маркировки «Честного знака».
+ *
+ * На маркируемом товаре — обуви, одежде — на коробке рядом с обычным
+ * штрихкодом наклеен DataMatrix. Сканер, умеющий читать двумерные коды, часто
+ * хватает именно его, и вместо «4630452735395» присылает длинную марку вида
+ * «0104630452735395215%c5esMS…». Ни один товар по ней не находится, и для
+ * кладовщика это выглядит как «сканер пикает, а система не реагирует».
+ *
+ * Внутри марки после кода «01» лежит GTIN из четырнадцати цифр, а это тот же
+ * штрихкод с ведущим нулём. Возвращаем оба варианта — с нулём и без.
+ */
+function barcodesFromMarkingCode(code: string): string[] {
+  const match = /(?:^|[\x1d(])0?1?\)?\s*(\d{14})(?=\s*[\x1d(]?\s*21)/.exec(code)
+  const gtin = match?.[1] ?? (/^01(\d{14})21/.exec(code)?.[1])
+  if (!gtin) return []
+  const withoutLeadingZeros = gtin.replace(/^0+/, '')
+  return withoutLeadingZeros && withoutLeadingZeros !== gtin
+    ? [gtin, withoutLeadingZeros]
+    : [gtin]
+}
+
+/** Коды-кандидаты: как пришло, как в латинской раскладке, и штрихкод из марки. */
 export function scanCandidates(rawCode: string): string[] {
   const code = normalize(rawCode)
-  if (!code || !hasCyrillic(code)) return code ? [code] : []
+  if (!code) return []
+  const fromMarking = barcodesFromMarkingCode(code)
+  if (fromMarking.length > 0) return [code, ...fromMarking]
+  if (!hasCyrillic(code)) return [code]
   const converted = Array.from(code)
     .map((ch) => {
       const lower = ch.toLowerCase()

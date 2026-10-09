@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyScan, inventoryRowPathKeys, NOTHING_OPEN } from './InventoryScan'
+import { applyScan, inventoryRowPathKeys, NOTHING_OPEN , scanCandidates} from './InventoryScan'
 import { buildRows, EMPTY_FILTERS } from './InventoryRows'
 import type { InventoryCount, ProductNode } from './InventoryTypes'
 
@@ -302,5 +302,29 @@ describe('короб узнаётся и по видимому номеру', ()
     const count = countWithBox(product())
     const byLabel = applyScan(count, 'A-01', NOTHING_OPEN)
     expect(byLabel.open).toEqual({ containerId: null, cellId: 'cell-1' })
+  })
+})
+
+describe('код маркировки Честного знака', () => {
+  it('из марки достаётся штрихкод товара', () => {
+    // На коробке обуви рядом со штрихкодом наклеен DataMatrix. Сканер часто
+    // хватает именно его и присылает длинную марку — по ней не находится ни
+    // один товар, и для кладовщика это выглядит как «система не реагирует».
+    const codes = scanCandidates("0104630452735395215%c5esMS'cmDh")
+    expect(codes).toContain('04630452735395')
+    expect(codes).toContain('4630452735395')
+  })
+
+  it('товар считается, если пикнули марку вместо штрихкода', () => {
+    const count = countWithBox(product())
+    const opened = applyScan(count, 'BOX-BARCODE-1', NOTHING_OPEN)
+    const scanned = applyScan(opened.count, '0104601234567890215abcDEF', opened.open)
+
+    expect(scanned.tone).toBe('ok')
+    expect(scanned.message).toContain('1 из 3')
+  })
+
+  it('обычный штрихкод маркой не считается', () => {
+    expect(scanCandidates('4630452735395')).toEqual(['4630452735395'])
   })
 })
