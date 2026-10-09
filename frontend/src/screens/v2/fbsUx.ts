@@ -507,8 +507,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
     { grow: 2 },
     { width: compactPrintWidth('Артикул', input.rows.map(articleFor), 25, 12) },
     { width: compactPrintWidth('Цвет', input.rows.map((row) => row.color), 22, 12) },
-    // WMS-710 changes this width only for Imperiya; other tenants keep the former 13 mm short-size width.
-    { width: compactPrintWidth('Размер', input.rows.map((row) => row.size), 20, 20, 3, input.imperiyaPickList ? 13 : 9) },
+    { width: compactPrintWidth('Размер', input.rows.map((row) => row.size), 20, 20, 3, 9) },
     { grow: 1.3 },
     { width: 25 },
     { width: compactPrintWidth(`Заказы ${marketplaceLabel}`, input.rows.flatMap((row) => row.wbOrders), 24, 12) },
