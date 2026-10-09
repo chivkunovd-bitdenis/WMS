@@ -205,3 +205,23 @@ it('C25: общий шаблон листа оставляет колонке «
   // До hotfix компактная ширина считалась с обычным размером шрифта заголовка: 13 / 277 мм.
   expect(widths[5]).toBe('4.6931')
 })
+
+it('C26/R5: шаблон листа Империи сохраняет ширину 13 мм для короткого размера S', () => {
+  const html = buildFbsPickingListPrintHtml({
+    supplyName: 'Проверочная поставка',
+    wbSupplyId: 'WB-710',
+    marketplace: 'wb',
+    sellerName: 'Проверочный селлер',
+    wmsWarehouseName: 'Проверочный склад',
+    routeLabel: 'Склад / СЦ',
+    deadlineLabel: '09.10.2026',
+    printedAtLabel: '09.10.2026 12:00',
+    imperiyaPickList: true,
+    rows: [printRow('imperiya-short-size', 'Товар Империи с коротким размером', 1, 0)],
+  })
+  const colgroup = html.match(/<colgroup>([\s\S]*?)<\/colgroup>/)?.[1] ?? ''
+  const widths = [...colgroup.matchAll(/width:([\d.]+)%/g)].map((match) => match[1])
+
+  // Империи разрешено менять маршрут мест, но не ширину двенадцати колонок.
+  expect(widths[5]).toBe('4.6931')
+})
