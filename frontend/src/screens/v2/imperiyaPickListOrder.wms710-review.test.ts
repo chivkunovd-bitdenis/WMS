@@ -206,6 +206,43 @@ it('C25: общий шаблон листа оставляет колонке «
   expect(widths[5]).toBe('4.6931')
 })
 
+it('C28: unlinked сохраняет заголовок «Без привязки к документу:» над прежней строкой места', () => {
+  const productId = 'unlinked-loose'
+  const unlinkedLine = 'Россыпью: 5 шт.'
+  const optionList = [option(productId, 2, 0, [
+    {
+      ...looseLocation('loc-inbound', 'Ж-1-7', 1),
+      sources: [boxSource('box-p96', 1)],
+    },
+    looseLocation('loc-return', 'Ж-1-14', 1),
+    looseLocation('loc-unlinked', 'Без ячеек', 5),
+  ])]
+  const contexts = [context(productId, [
+    {
+      key: 'inbound:p96', title: 'П: 96', date: '12.10.2025',
+      lines: ['Короб №3 · BC-96 · Ж-1-7: 1 шт.'], line_keys: ['loc-inbound|box-p96'],
+    },
+    {
+      key: 'inbound:return12', title: 'В: 12', date: '13.10.2025',
+      lines: ['Россыпью · Ж-1-14: 1 шт.'], line_keys: ['loc-return|loose'],
+    },
+    {
+      key: 'unlinked', title: 'Без привязки к документу:',
+      lines: [unlinkedLine], line_keys: ['loc-unlinked|loose'],
+    },
+  ])]
+
+  // Проверяем готовый HTML реального маршрутизатора и генератора печати, как в C4.
+  const printed = imperiyaWalkRows([printRow(productId, 'Товар с россыпью без документа', 2, 0)], optionList, contexts)
+  const outputRows = tbodyRows(sheet(printed))
+  expect(outputRows).toHaveLength(1)
+  const source = sourcesCell(outputRows[0])
+  const groups = source.match(/<div class="source-group">[\s\S]*?<\/div><\/div>/g) ?? []
+  const unlinkedGroup = groups.find((group) => group.includes(`<div>${unlinkedLine}</div>`))
+
+  expect(unlinkedGroup).toBe(`<div class="source-group"><strong>Без привязки к документу:</strong><div>${unlinkedLine}</div></div>`)
+})
+
 it('C26/R5: шаблон листа Империи сохраняет ширину 13 мм для короткого размера S', () => {
   const html = buildFbsPickingListPrintHtml({
     supplyName: 'Проверочная поставка',
