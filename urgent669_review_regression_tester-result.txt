@@ -1,0 +1,10 @@
+Новый регрессионный контракт сохранён и опубликован **до исправления продукта**. Проверенный commit SHA: `bca2fc9d36ab7b81f5d405fb2a39c08c03e7045c`; remote-ветка `codex/wms669-urgent-confirmed-contract-20261006` указывает на него.
+
+В [отдельном файле тестов](/Users/deniscivkunov/Projects/WMS/.worktrees/wms669-urgent-confirmed-contract-20261006/backend/tests/test_wms669_visible_metadata_regression.py) четыре функции и пять случаев через настоящий HTTP API. Фактический результат на собственной SQLite, одним worker: **4 FAILED, 1 PASSED**.
+
+- Обе формы категории воспроизводят разрыв: **Футболки → Пуховики → Футболки**.
+- Импортированная карточка с показанным размером **48** исключается фильтром 48 и включается в 148; проверены `/page`, `/keys` и `total`.
+- Товар с собственным штрихкодом варианта также показывает **48**, но отбирается по 148.
+- Проверка некорректного JSON и существующих метаданных Ozon проходит.
+
+Ruff и проверка diff прошли. Команды, реальные результаты и условия передачи разработчику сохранены в [handoff](/Users/deniscivkunov/Projects/WMS/.worktrees/wms669-urgent-confirmed-contract-20261006/docs/reviews/WMS-669-visible-metadata-test-handoff.md). Продуктовый код, старые тесты, требования и отчёт ревьюера не изменены. Старые 36 PASS и DOM 32 PASS не повторял.
