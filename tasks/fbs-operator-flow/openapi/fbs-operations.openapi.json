@@ -198,6 +198,128 @@
         ]
       }
     },
+    "/operations/fbs-orders/counts": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Get Fbs Orders Counts",
+        "operationId": "get_fbs_orders_counts_operations_fbs_orders_counts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "seller_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Seller Id"
+            }
+          },
+          {
+            "name": "marketplace",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(wb|ozon)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Marketplace"
+            }
+          },
+          {
+            "name": "status_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "new",
+              "title": "Status Group"
+            }
+          },
+          {
+            "name": "wb_warehouse_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Wb Warehouse Id"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "integer"
+                    }
+                  },
+                  "title": "Response Get Fbs Orders Counts Operations Fbs Orders Counts Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-orders/worklist": {
       "get": {
         "tags": [
