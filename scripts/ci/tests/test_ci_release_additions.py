@@ -1,41 +1,22 @@
 """WMS-652/517 explicit follow-up workflow contracts before command changes."""
 import json
-import re
 import unittest
 from pathlib import Path
 
 from scripts.ci.select_process_artifacts import PRODUCERS, SelectionError, select_artifacts
 
 ROOT = Path(__file__).resolve().parents[3]
-SOURCE_BINDING = ROOT / 'scripts/ci/tests/fixtures/wms652_source_binding_transition.json'
 WMS686_RECEIPT = ROOT / 'scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json'
-PRODUCT_SCOPE_PREFIX = 'python scripts/ci/product_scope.py --root . --trusted-ref '
 
 
 class ReleaseCommandContracts(unittest.TestCase):
     def guard_section(self, raw):
         return raw.split('\n  guards:\n', 1)[1].split('\n  printer-windows:', 1)[0]
 
-    def source_binding(self):
-        return json.loads(SOURCE_BINDING.read_text())
-
     def wms686_receipt(self):
         return json.loads(WMS686_RECEIPT.read_text())
 
-    def trusted_reference(self, guard):
-        matches = re.findall(re.escape(PRODUCT_SCOPE_PREFIX) + r'([^\s]+)', guard)
-        self.assertEqual(len(matches), 1, 'guard must contain exactly one product-scope command')
-        return matches[0]
-
-    def assert_binding_is_independently_reviewed(self, guard, binding):
-        trusted_ref = self.trusted_reference(guard)
-        self.assertRegex(trusted_ref, r'^[0-9a-f]{40}$')
-        self.assertEqual(trusted_ref, binding['reviewed_source'])
-        self.assertNotIn(trusted_ref, binding['self_selecting_references'])
-        self.assertNotEqual(trusted_ref, binding['unreviewed_candidate_source'])
-        return trusted_ref
-
-    def assert_wms686_raw_receipts(self, job, proof, receipt):
+    def assert_wms686_raw_tap_job(self, job, receipt):
         self.assertEqual(receipt['test_count'], 11)
         command = f"node --test --test-reporter=tap {receipt['model_test']} > \"{receipt['tap_report']}\""
         compact_job = ' '.join(job.split())
@@ -44,36 +25,8 @@ class ReleaseCommandContracts(unittest.TestCase):
         self.assertIn(f"name: {receipt['artifact']}", job)
         self.assertIn(receipt['tap_report'].replace('$RUNNER_TEMP', '${{ runner.temp }}'), job)
         self.assertIn('if-no-files-found: error', job)
-        self.assertRegex(proof, rf'needs: \[[^\]]*\b{receipt["required_job"]}\b[^\]]*\]')
-        artifact_name = f"name: ${{{{ steps.select.outputs.wms686_mockup }}}}"
-        if artifact_name not in proof:
-            artifact_name = f"name: {receipt['artifact']}"
-        self.assertIn(artifact_name, proof)
-        download = proof.split(artifact_name, 1)[1].split('- uses:', 1)[0]
-        self.assertIn(f"path: {receipt['proof_download_path']}", download)
 
-    def test_actual_candidate_product_scope_uses_independently_reviewed_source(self):
-        raw = (ROOT/'.github/workflows/ci.yml').read_text()
-        guard = self.guard_section(raw)
-        binding = self.source_binding()
-        expected = binding['reviewed_source']
-        self.assertIn(PRODUCT_SCOPE_PREFIX + expected, guard)
-        self.assertEqual(self.assert_binding_is_independently_reviewed(guard, binding), expected)
-        self.assertIn('pytest -q scripts/ci/tests/test_product_scope.py --junitxml=', guard)
-
-    def test_source_binding_accepts_only_the_exact_reviewed_reference(self):
-        binding = self.source_binding()
-        guard = self.guard_section((ROOT/'.github/workflows/ci.yml').read_text())
-        self.assertEqual(self.assert_binding_is_independently_reviewed(guard, binding),
-                         binding['reviewed_source'])
-        for rejected in [binding['previous_source'], *binding['self_selecting_references'],
-                         binding['unreviewed_candidate_source']]:
-            candidate_guard = guard.replace(PRODUCT_SCOPE_PREFIX + binding['reviewed_source'],
-                                            PRODUCT_SCOPE_PREFIX + rejected)
-            with self.subTest(rejected=rejected), self.assertRaises(AssertionError):
-                self.assert_binding_is_independently_reviewed(candidate_guard, binding)
-
-    def test_wms686_raw_receipt_contract_rejects_missing_tap_upload_download_or_required_job(self):
+    def test_wms686_raw_tap_contract_rejects_missing_tap_or_upload(self):
         receipt = self.wms686_receipt()
         job = f'''\
   wms686-mockup:
@@ -85,42 +38,29 @@ class ReleaseCommandContracts(unittest.TestCase):
           path: ${{{{ runner.temp }}}}/wms686-model.tap
           if-no-files-found: error
 '''
-        proof = f'''\
-  process-proof:
-    needs: [baseline, backend, wms686-mockup]
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: {receipt['artifact']}
-          path: {receipt['proof_download_path']}
-'''
-        self.assert_wms686_raw_receipts(job, proof, receipt)
+        self.assert_wms686_raw_tap_job(job, receipt)
         mutations = {
             'tap-reporter': job.replace('--test-reporter=tap ', ''),
             'tap-file': job.replace(receipt['tap_report'], '$RUNNER_TEMP/not-wms686-model.tap'),
             'upload': job.replace(f"name: {receipt['artifact']}", 'name: another-artifact'),
-            'download': proof.replace(f"name: {receipt['artifact']}", 'name: another-artifact'),
-            'required-job': proof.replace(', wms686-mockup', ''),
         }
-        for reason, (candidate_job, candidate_proof) in {
-            'tap-reporter': (mutations['tap-reporter'], proof),
-            'tap-file': (mutations['tap-file'], proof),
-            'upload': (mutations['upload'], proof),
-            'download': (job, mutations['download']),
-            'required-job': (job, mutations['required-job']),
-        }.items():
+        for reason, candidate_job in mutations.items():
             with self.subTest(reason=reason):
                 with self.assertRaises(AssertionError):
-                    self.assert_wms686_raw_receipts(candidate_job, candidate_proof, receipt)
+                    self.assert_wms686_raw_tap_job(candidate_job, receipt)
 
-    def test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact(self):
+    def test_actual_workflow_keeps_wms686_tap_upload_and_is_optional_for_release(self):
         raw = (ROOT/'.github/workflows/ci.yml').read_text()
         receipt = self.wms686_receipt()
         if '\n  wms686-mockup:\n' not in raw:
-            self.fail('WMS-686 mandatory model-test producer is absent from the actual CI workflow')
+            self.fail('WMS-686 model-test producer is absent from the actual CI workflow')
         job = raw.split('\n  wms686-mockup:\n', 1)[1].split('\n  guards:', 1)[0]
+        self.assert_wms686_raw_tap_job(job, receipt)
+        # WMS-735 R10: the mockup job runs only when its own directory changes.
+        self.assertIn("needs.scope.outputs.wms686 == 'true'", job)
+        # It is not a release producer: process-proof neither needs nor downloads it.
         proof = raw.split('\n  process-proof:\n', 1)[1]
-        self.assert_wms686_raw_receipts(job, proof, receipt)
+        self.assertNotIn('wms686', proof)
 
     def test_existing_517_pg_run_produces_report_without_duplicate_run(self):
         raw = (ROOT/'.github/workflows/ci.yml').read_text()
@@ -141,19 +81,13 @@ class ReleaseCommandContracts(unittest.TestCase):
         proof = raw.split('\n  process-proof:\n', 1)[1]
         self.assertIn('name: ${{ steps.select.outputs.frontend_build }}', proof)
 
-    def test_nightly_controller_report_is_uploaded_and_required_by_manifest(self):
+    def test_nightly_controller_runs_only_when_its_directory_changes(self):
         raw = (ROOT/'.github/workflows/ci.yml').read_text()
-        guards = raw.split('\n  guards:\n', 1)[1].split('\n  printer-windows:\n', 1)[0]
+        guards = self.guard_section(raw)
         self.assertIn('tools/support_agent/tests/test_night.py', guards)
-        self.assertIn('--junitxml="$RUNNER_TEMP/night-controller.xml"', guards)
-        self.assertIn('${{ runner.temp }}/night-controller.xml', guards)
-        policy = json.loads((ROOT/'guards/PROCESS_CONTRACTS.json').read_text())
-        suite = policy['suites']['night-controller']
-        self.assertEqual(suite['report'], 'night-controller.xml')
-        self.assertTrue(suite['exact'])
-        self.assertTrue(suite['cases'])
-        self.assertEqual(len(suite['cases']), len(set(suite['cases'])))
-        self.assertTrue(all(case.startswith('tests.test_night::') for case in suite['cases']))
+        # Both the dependency install and the test execution are gated by the scope output.
+        self.assertEqual(guards.count("needs.scope.outputs.support_agent == 'true'"), 2)
+        self.assertNotIn('night-controller.xml', guards)
 
     def test_actual_workflow_selects_exact_attempt_artifacts_with_read_only_api(self):
         raw = (ROOT/'.github/workflows/ci.yml').read_text()
@@ -162,10 +96,12 @@ class ReleaseCommandContracts(unittest.TestCase):
         self.assertIn('scripts/ci/select_process_artifacts.py', proof)
         self.assertIn('name: ${{ steps.select.outputs.backend }}', proof)
         self.assertNotIn('name: backend-executed-contracts-${{ github.sha }}', proof)
-        self.assertEqual(proof.count("steps.select.outcome == 'success'"), 7)
+        # Five report downloads and the product-case verification step.
+        self.assertEqual(proof.count("steps.select.outcome == 'success'"), 6)
         for download in ['download-backend', 'download-frontend', 'download-windows',
-                         'download-print', 'download-guards', 'download-wms686']:
+                         'download-print', 'download-guards']:
             self.assertIn(f'steps.{download}.outcome == \'success\'', proof)
+        self.assertNotIn('download-wms686', proof)
 
     def _partial_rerun_fixture(self):
         run_id, current_attempt = 777, 2

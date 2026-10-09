@@ -2,7 +2,5 @@
   "model_test": "docs/mockups/WMS-686/model.test.ts",
   "test_count": 11,
   "tap_report": "$RUNNER_TEMP/wms686-model.tap",
-  "artifact": "wms686-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
-  "required_job": "wms686-mockup",
-  "proof_download_path": "${{ runner.temp }}/process-proof"
+  "artifact": "wms686-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}"
 }
