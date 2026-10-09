@@ -13,6 +13,8 @@ import { cellPickRowsOf, type CellPickRow, type PickPlace, type PickRow } from '
 import type { Cell, WarehouseObject } from './pickStub'
 import { FboKizCount, FboKizList } from './fboPickKiz'
 import { kizCodesOfProduct, kizCountsByProduct, type FboKizCode } from './fboKizData'
+import { FboPrintCheckbox } from './FboPrintCheckbox'
+import { printBranchKeys, type FboPrintSelection } from './fboPickPrint'
 
 const ICONS = {
   cell: <GridViewOutlined fontSize="small" color="action" />,
@@ -26,6 +28,7 @@ const ICONS = {
  * параметра таблица такая же, как в подборе поставки FBS (WMS-637, WMS-709).
  */
 export type FbsCellPickFbo = {
+  printSelection?: FboPrintSelection
   /** Свёрнутые ячейки и короба; по умолчанию всё раскрыто. */
   collapsed: Set<string>
   onToggleCollapsed: (key: string) => void
@@ -166,6 +169,11 @@ export function FbsCellPickTable({
             </ListItemButton>
           ) : (
             <>
+              {fbo?.printSelection ? <FboPrintCheckbox
+                selection={fbo.printSelection}
+                keys={printBranchKeys(rows, item.key, objects, cells)}
+                label={item.title}
+              /> : null}
               {fbo ? (
                 <IconAction
                   title={`${fbo.collapsed.has(item.key) ? 'Развернуть' : 'Свернуть'} ${item.title}`}

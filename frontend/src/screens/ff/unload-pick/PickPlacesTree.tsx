@@ -13,6 +13,8 @@ import { placeNodesOf } from './pickRows'
 import type { PickPlace, PickRow, PlaceKind, PlaceNode } from './pickRows'
 import { OBJECTS, PICK_CELLS } from './pickStub'
 import type { Cell, WarehouseObject } from './pickStub'
+import { FboPrintCheckbox } from './FboPrintCheckbox'
+import { printBranchKeys, printSourceKey, type FboPrintSelection } from './fboPickPrint'
 
 // Содержимое раскрывашки товара: раскрывающаяся структура склада, а не список.
 //
@@ -72,12 +74,14 @@ export function PickPlacesTree({
   onQtyChange,
   objects = OBJECTS,
   cells = PICK_CELLS,
+  printSelection,
 }: {
   row: PickRow
   highlightedKey: string | null
   onQtyChange: (place: PickPlace, next: number | null) => void
   objects?: WarehouseObject[]
   cells?: Cell[]
+  printSelection?: FboPrintSelection
 }) {
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(() => new Set())
   if (row.places.length === 0) {
@@ -110,6 +114,11 @@ export function PickPlacesTree({
       render: (node) =>
         node.kind === 'container' ? (
           <Indent depth={node.depth}>
+            {printSelection ? <FboPrintCheckbox
+              selection={printSelection}
+              keys={printBranchKeys([row], node.key, objects, cells)}
+              label={`${node.title}, ${row.product.sku}`}
+            /> : null}
             <Box sx={{ width: 24, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
               {hasChildren.has(node.key) ? (
                 <IconAction
@@ -156,6 +165,11 @@ export function PickPlacesTree({
           </Indent>
         ) : (
           <Indent depth={node.depth}>
+            {printSelection && !node.parentKey ? <FboPrintCheckbox
+              selection={printSelection}
+              keys={[printSourceKey(row, node.place, objects, cells)]}
+              label={`${node.place.sourceTitle}, ${row.product.sku}`}
+            /> : null}
             <Box sx={{ width: 24, flexShrink: 0 }} />
             <Box sx={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
               <ProductPhotoThumb src={row.product.photo} alt={row.product.name} size={24} />
