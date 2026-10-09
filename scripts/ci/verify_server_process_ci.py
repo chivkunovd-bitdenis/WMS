@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""WMS-652 direct server gate: public GET metadata only, no token or gh dependency.
+"""Server-side release gate: the exact etalon push CI run must have succeeded.
 
-Raw execution reports are verified by the frozen process-proof CI pipeline and
-DeployProduction verifier; this gate independently verifies their provenance.
+Public GET metadata only, no token or gh dependency. Process artifacts are not
+required; the product jobs (including process-proof, which checks the required
+product scenarios) must be green for this SHA.
 """
 from __future__ import annotations
 
@@ -23,7 +24,6 @@ from scripts.ci.verify_ci import GateError, pages, verify
 REPOSITORY = 'chivkunovd-bitdenis/WMS'
 EXTRA_JOBS = {'print-regressions', 'printer-windows', 'process-proof'}
 MAX_JSON = 8 * 1024 * 1024
-MAX_ARTIFACT = 64 * 1024 * 1024
 
 
 def public_api_get(path):
@@ -62,20 +62,9 @@ def verify_server_ci(get, repository, sha):
                     'head_sha': sha, 'run_id': run['run_id'], 'status': 'completed'}.items()) or
                     matches[0].get('conclusion') not in allowed):
                 raise GateError('Сервер не подтвердил обязательную задачу CI: ' + name)
-        name = f"process-proof-{sha}-{run['run_id']}-{run['run_attempt']}"
-        artifacts = pages(get, f"{root}/actions/runs/{run['run_id']}/artifacts", 'artifacts')
-        matches = [artifact for artifact in artifacts if artifact['name'] == name]
-        if len(matches) != 1:
-            raise GateError('Сервер не нашёл единственный отчёт текущей попытки CI')
-        artifact = matches[0]
-        if (artifact['expired'] is not False or type(artifact['size_in_bytes']) is not int or
-                not 0 < artifact['size_in_bytes'] <= MAX_ARTIFACT or
-                artifact['workflow_run']['id'] != run['run_id'] or
-                artifact['workflow_run']['head_sha'] != sha):
-            raise GateError('Отчёт CI просрочен, недоступен или принадлежит другой версии')
         if verify(get, repository, sha) != run:
             raise GateError('CI изменился во время серверной проверки; выпуск остановлен', 4)
-        return {**run, 'artifact_id': artifact['id'], 'proof': 'frozen-ci-validated-artifact-metadata'}
+        return run
     except GateError:
         raise
     except (KeyError, TypeError, ValueError, OSError) as exc:
