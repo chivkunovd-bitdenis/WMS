@@ -522,6 +522,18 @@ export function buildProductThermalLabelCss(size: LabelSize = DEFAULT_LABEL_SIZE
 /** Дефолтный (58×40) CSS — обратная совместимость для существующих импортов. */
 export const PRODUCT_THERMAL_LABEL_CSS = buildProductThermalLabelCss()
 
+/**
+ * WMS-702 (продолжение, 09.10.2026): высоту строк шаблон оценивает заранее, а у
+ * печатающего браузера клиента (другие шрифты/настройки) строки бывают выше —
+ * последняя строка («Цвет») обрезалась над «Пожалуйста оставьте отзыв». Скрипт
+ * в документе печати подгоняет масштаб текста на месте, по реальной высоте: если
+ * текст не влез в блок, масштаб уменьшается ступенями, пока не влезет. Где всё
+ * помещается — ничего не меняет. Стоит в <head> (в конце <body> он сломал бы
+ * .label:last-child и дал лишнюю пустую наклейку), запускается по DOMContentLoaded —
+ * до печати, которая идёт по load.
+ */
+export const PRODUCT_LABEL_FIT_SCRIPT = `<script>(function(){function fit(){var b=document.querySelectorAll('.label .body');for(var i=0;i<b.length;i++){var el=b[i];var s=parseFloat(el.style.getPropertyValue('--product-label-body-scale'))||1;var n=0;while(el.scrollHeight>el.clientHeight+1&&s>0.5&&n<30){s=Math.round((s-0.03)*1000)/1000;el.style.setProperty('--product-label-body-scale',String(s));n++}}}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',fit)}else{fit()}if(document.fonts&&document.fonts.ready){document.fonts.ready.then(fit)}})();</script>`
+
 export function buildProductLabelSectionHtml(
   data: ProductThermalLabelData,
   barcodeDataUrl: string,
@@ -565,6 +577,7 @@ export function buildProductThermalLabelDocument(
     <meta charset="utf-8" />
     <title>Этикетка товара</title>
     <style>${buildProductThermalLabelCss(labelSize)}</style>
+    ${PRODUCT_LABEL_FIT_SCRIPT}
   </head>
   <body>${labels}</body>
 </html>`
