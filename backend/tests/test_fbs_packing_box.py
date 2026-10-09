@@ -18,7 +18,8 @@ from sqlalchemy import func, select
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder
-from app.models.fbs_packing_box import FbsPackingBox
+from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
+from app.models.warehouse_box import WarehouseBox
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     FBS_SUPPLY_STATUS_ASSEMBLING,
@@ -415,6 +416,229 @@ async def test_box_retry_after_409_reconciles_timeout_with_same_operator_key(
             ).all()
         )
         assert set(states) == {WB_OPERATION_STATE_FAILED, WB_OPERATION_STATE_CONFIRMED}
+
+
+async def _legacy_unlinked_box_group(
+    supply_id: uuid.UUID,
+    order_ids: list[uuid.UUID],
+    *,
+    count: int = 5,
+    without_distribution: bool = False,
+) -> tuple[list[uuid.UUID], str, uuid.UUID]:
+    """Historical pre-hotfix state: physical boxes survived a definitive WB refusal."""
+    key = "wms681-original-physical-group"
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        ids = []
+        for number in range(1, count + 1):
+            physical = WarehouseBox(
+                tenant_id=supply.tenant_id, warehouse_id=supply.warehouse_id,
+                internal_barcode=f"FBS-681-{number}",
+            )
+            packing = FbsPackingBox(
+                tenant_id=supply.tenant_id, supply_id=supply_id, warehouse_box=physical,
+                box_number=number, creation_idempotency_key=key,
+                created_without_distribution=without_distribution,
+            )
+            session.add(packing)
+            await session.flush()
+            ids.append(packing.id)
+        if not without_distribution:
+            session.add(FbsPackingBoxItem(
+                tenant_id=supply.tenant_id, box_id=ids[0], fbs_order_id=order_ids[0],
+            ))
+        operation = FbsWbOperation(
+            tenant_id=supply.tenant_id, seller_id=supply.seller_id,
+            operation_kind=OPERATION_KIND_CARGO_PLACES_CREATE, idempotency_key=key,
+            local_entity_type="fbs_supply", local_entity_id=supply_id,
+            state=WB_OPERATION_STATE_FAILED, error_code="wb_upstream_error_404",
+            request_summary_json={"count": count, "wb_trbx_ids_before": []},
+        )
+        session.add(operation)
+        await session.commit()
+        return ids, key, operation.id
+
+
+async def _physical_group_snapshot(supply_id: uuid.UUID) -> list[tuple[object, ...]]:
+    async with SessionLocal() as session:
+        rows = await session.execute(
+            select(FbsPackingBox.id, FbsPackingBox.warehouse_box_id,
+                   FbsPackingBox.box_number, FbsPackingBox.creation_idempotency_key,
+                   FbsPackingBox.created_without_distribution, WarehouseBox.internal_barcode)
+            .join(WarehouseBox, WarehouseBox.id == FbsPackingBox.warehouse_box_id)
+            .where(FbsPackingBox.supply_id == supply_id).order_by(FbsPackingBox.box_number)
+        )
+        return [tuple(row) for row in rows]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("without_distribution", [False, True])
+async def test_wms681_qr_recovers_original_five_box_group_without_recreating_physical_boxes(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+    without_distribution: bool,
+) -> None:
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    ids, key, failed_id = await _legacy_unlinked_box_group(
+        supply_id, order_ids, without_distribution=without_distribution,
+    )
+    before = await _physical_group_snapshot(supply_id)
+    original_create = pvz_svc.create_marketplace_supply_trbx
+    calls: list[int] = []
+    reads: list[str] = []
+
+    async def create(*args: object, **kwargs: object) -> list[str]:
+        reads.append("create")
+        calls.append(int(kwargs["amount"]))
+        return await original_create(*args, **kwargs)  # type: ignore[arg-type]
+
+    async def remote_list(*args: object, **kwargs: object) -> list[str]:
+        reads.append("list")
+        return []
+
+    monkeypatch.setattr(pvz_svc, "create_marketplace_supply_trbx", create)
+    monkeypatch.setattr(pvz_svc, "fetch_marketplace_supply_trbx_list", remote_list)
+    url = f"/operations/fbs-supplies/{supply_id}/boxes/{ids[2]}/retry-qr"
+    recovered = await async_client.post(url, headers=headers)
+    assert recovered.status_code == 200, recovered.text
+    assert calls == [5]
+    assert reads.index("list") < reads.index("create")
+    assert await _physical_group_snapshot(supply_id) == before
+    boxes = recovered.json()["boxes"]
+    assert {box["id"] for box in boxes} == {str(one) for one in ids}
+    assert all(box["wb_trbx_id"] and box["qr_asset"]["status"] == "ready" for box in boxes)
+    assert boxes[0]["assigned_order_ids"] == ([] if without_distribution else [str(order_ids[0])])
+    repeated = await async_client.post(url, headers=headers)
+    assert repeated.status_code == 200, repeated.text
+    assert calls == [5]
+    async with SessionLocal() as session:
+        operation = await session.scalar(select(FbsWbOperation).where(
+            FbsWbOperation.idempotency_key == f"box-retry:{failed_id}",
+        ))
+        assert operation is not None and operation.state == WB_OPERATION_STATE_CONFIRMED
+        assert operation.created_by_user_id is not None
+        assert {str(one[3]) for one in before} == {key}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remote_result", ["exact", "empty", "ambiguous", "read_error"])
+async def test_wms681_qr_reconciles_timeout_without_blind_external_create(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+    remote_result: str,
+) -> None:
+    headers, supply_id, _ = await _packed_supply(async_client)
+    attempts = 0
+    remote_ids: list[str] = []
+    fail_read = False
+
+    async def lost_response(*args: object, **kwargs: object) -> list[str]:
+        nonlocal attempts
+        attempts += 1
+        raise WildberriesClientError("transport_error")
+
+    async def read(*args: object, **kwargs: object) -> list[str]:
+        if fail_read:
+            raise WildberriesClientError("transport_error")
+        return remote_ids
+
+    monkeypatch.setattr(pvz_svc, "create_marketplace_supply_trbx", lost_response)
+    monkeypatch.setattr(pvz_svc, "fetch_marketplace_supply_trbx_list", read)
+    timed_out = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes", headers=headers,
+        json={"count": 1, "idempotency_key": "wms681-timeout"},
+    )
+    assert timed_out.status_code == 504, timed_out.text
+    before = await _physical_group_snapshot(supply_id)
+    box_id = before[0][0]
+    remote_ids = {"exact": ["WB-MP-681-RECOVERED"], "ambiguous": ["WB-MP-681-A", "WB-MP-681-B"]}.get(remote_result, [])
+    fail_read = remote_result == "read_error"
+    recovered = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes/{box_id}/retry-qr", headers=headers,
+    )
+    if remote_result == "exact":
+        assert recovered.status_code == 200, recovered.text
+        assert recovered.json()["boxes"][0]["wb_trbx_id"] == "WB-MP-681-RECOVERED"
+        assert recovered.json()["boxes"][0]["qr_asset"]["status"] == "ready"
+    else:
+        assert recovered.status_code in (409, 504), recovered.text
+        assert recovered.json()["detail"]["code"] in {"wb_pending_confirmation", "wb_timeout"}
+    assert attempts == 1
+    assert await _physical_group_snapshot(supply_id) == before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wb_status", [404, 409])
+async def test_wms681_qr_refusal_preserves_old_group_and_next_explicit_retry(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+    wb_status: int,
+) -> None:
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    ids, _, _ = await _legacy_unlinked_box_group(supply_id, order_ids, count=1)
+    before = await _physical_group_snapshot(supply_id)
+    attempts = 0
+    original_create = pvz_svc.create_marketplace_supply_trbx
+
+    async def reject_once(*args: object, **kwargs: object) -> list[str]:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise WildberriesClientError("upstream_error", status_code=wb_status)
+        return await original_create(*args, **kwargs)  # type: ignore[arg-type]
+
+    async def read(*args: object, **kwargs: object) -> list[str]:
+        return []
+
+    monkeypatch.setattr(pvz_svc, "create_marketplace_supply_trbx", reject_once)
+    monkeypatch.setattr(pvz_svc, "fetch_marketplace_supply_trbx_list", read)
+    url = f"/operations/fbs-supplies/{supply_id}/boxes/{ids[0]}/retry-qr"
+    rejected = await async_client.post(url, headers=headers)
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["detail"]["code"] == "box_create_rejected_by_wb"
+    assert attempts == 1
+    assert await _physical_group_snapshot(supply_id) == before
+    async with SessionLocal() as session:
+        errors = list(await session.scalars(select(FbsWbOperation.error_code).where(
+            FbsWbOperation.local_entity_id == supply_id,
+        )))
+        assert f"wb_upstream_error_{wb_status}" in errors
+    retried = await async_client.post(url, headers=headers)
+    assert retried.status_code == 200, retried.text
+    assert attempts == 2
+    assert await _physical_group_snapshot(supply_id) == before
+
+
+@pytest.mark.asyncio
+async def test_wms681_qr_failed_group_does_not_duplicate_unattributable_remote_ids(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    ids, _, _ = await _legacy_unlinked_box_group(supply_id, order_ids, count=1)
+    calls = 0
+
+    async def forbidden_create(*args: object, **kwargs: object) -> list[str]:
+        nonlocal calls
+        calls += 1
+        raise AssertionError("unexpected WB ids must be resolved before another creation")
+
+    async def read(*args: object, **kwargs: object) -> list[str]:
+        return ["WB-MP-681-UNATTRIBUTED-A", "WB-MP-681-UNATTRIBUTED-B"]
+
+    monkeypatch.setattr(pvz_svc, "create_marketplace_supply_trbx", forbidden_create)
+    monkeypatch.setattr(pvz_svc, "fetch_marketplace_supply_trbx_list", read)
+    response = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes/{ids[0]}/retry-qr", headers=headers,
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "wb_pending_confirmation"
+    assert calls == 0
 
 
 @pytest.mark.asyncio
