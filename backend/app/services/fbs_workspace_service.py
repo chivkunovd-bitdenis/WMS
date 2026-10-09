@@ -59,6 +59,7 @@ from app.services.fbs_tracking_service import (
 )
 from app.services.fbs_worklist_service import build_worklist_items, print_asset_content_url
 from app.services.marking_code_service import count_available_for_products_batch
+from app.services.ozon_fbs_status_service import supply_display_statuses
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     get_or_create_sorting_location,
@@ -163,6 +164,10 @@ async def get_supply_workspace(
         tracking_summary = build_tracking_summary(supply, orders, server_now=server_now)
         partial_rejection = build_partial_rejection_summary(orders, server_now=server_now)
         wb_sync_stale = is_tracking_sync_stale(supply.last_wb_sync_at, server_now=server_now)
+    display_status = (await supply_display_statuses(session, [supply]))[supply.id]
+    if supply.marketplace == "ozon" and tracking_summary is not None:
+        tracking_summary["status"] = display_status
+        partial_rejection = None
     last_delivery_error = await _last_delivery_error(session, tenant_id, supply)
     return {
         "supply": {
@@ -176,7 +181,7 @@ async def get_supply_workspace(
             # нашего участия (требование владельца от 31.08.2026).
             "source": supply.source,
             "name": supply.name,
-            "status": supply.status,
+            "status": display_status,
             "delivery_type": supply.delivery_type,
             "delivery_route": order_delivery_route(orders[0]) if orders else None,
             "seller": {

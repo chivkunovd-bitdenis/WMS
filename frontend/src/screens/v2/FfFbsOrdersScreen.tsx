@@ -109,6 +109,7 @@ type Props = {
 const TABS = [
   { key: 'new', label: 'Новые' },
   { key: 'active', label: 'В работе' },
+  { key: 'shipped', label: 'Отгруженные' },
   { key: 'delivery', label: 'В доставке' },
   { key: 'expired', label: 'Просрочены' },
   { key: 'done', label: 'Завершённые' },
@@ -135,15 +136,16 @@ const stickyHeaderSx = (theme: Theme) => {
 // это работа с уже собранным документом (поставкой) целиком, не с отдельными заказами.
 // Бэкенд уже отдаёт поставки для всех трёх (fbs_supply_service.list_supply_worklist),
 // раньше фронт звал это только для 'active'.
-function isFbsSupplyGroup(group: FbsStatusGroup): group is 'active' | 'delivery' | 'done' {
-  return group === 'active' || group === 'delivery' || group === 'done'
+function isFbsSupplyGroup(group: FbsStatusGroup): group is 'active' | 'shipped' | 'delivery' | 'done' {
+  return group === 'active' || group === 'shipped' || group === 'delivery' || group === 'done'
 }
 
-const SUPPLY_EMPTY_STATE: Record<'active' | 'delivery' | 'done', { title: string; hint: string }> = {
+const SUPPLY_EMPTY_STATE: Record<'active' | 'shipped' | 'delivery' | 'done', { title: string; hint: string }> = {
   active: {
     title: 'Поставок в работе нет',
     hint: 'Создайте поставку на вкладке «Новые» или обновите список.',
   },
+  shipped: { title: 'Отгруженных поставок нет', hint: '' },
   delivery: {
     title: 'Поставок в доставке нет',
     hint: 'Поставки появятся здесь после передачи в доставку.',
@@ -558,6 +560,8 @@ function supplyStatusLabel(status: string): string {
     draft: 'Черновик',
     assembling: 'В работе',
     packed: 'Готова к сдаче',
+    shipped: 'Отгружена',
+    acceptance_in_progress: 'Идёт приёмка',
     in_delivery: 'В доставке',
     done: 'Завершена',
   }
@@ -804,7 +808,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         }
         const [suppliesPage, ordersPage, assemblyTasksPage] = await Promise.all([
           fetchFbsSupplyWorklist(token, authHeaders, params),
-          fetchFbsWorklist(token, authHeaders, params),
+          // «Отгруженные» — только поставки Ozon без своих статусов заказов: бэкенд
+          // отклоняет status_group=shipped для списка заказов (400), поэтому не спрашиваем.
+          statusGroup === 'shipped'
+            ? Promise.resolve({ items: [] })
+            : fetchFbsWorklist(token, authHeaders, params),
           statusGroup === 'active'
             ? fetchFbsAssemblyTasks(token, authHeaders, {
               marketplace: marketplace === '__all__' ? null : marketplace,
@@ -1497,7 +1505,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
           scrollButtons="auto"
           sx={{ px: 1.5, borderBottom: 1, borderColor: 'divider' }}
         >
-          {TABS.map((tab) => (
+          {TABS.filter((tab) => tab.key !== 'shipped' || marketplace !== 'wb').map((tab) => (
             <Tab
               key={tab.key}
               value={tab.key}
@@ -1554,6 +1562,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
               value={marketplace}
               onChange={(event) => {
                 setMarketplace(event.target.value as '__all__' | 'wb' | 'ozon')
+                if (event.target.value === 'wb' && statusGroup === 'shipped') setStatusGroup('active')
                 setWbWarehouseId('__all__')
               }}
               data-testid="fbs-worklist-marketplace"
