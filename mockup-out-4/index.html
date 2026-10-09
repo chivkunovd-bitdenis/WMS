@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Макет WMS — «Принято WB» вместо «упаковано»</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --primary: #5b21b6;
+    --primary-light: #7c3aed;
+    --primary-dark: #4c1d95;
+    --bg: #e8ecf4;
+    --paper: #ffffff;
+    --text: #0f172a;
+    --text2: #475569;
+    --divider: rgba(15, 23, 42, 0.11);
+    --outline: rgba(91, 33, 182, 0.2);
+    --head-bg: rgba(91, 33, 182, 0.08);
+    --head-border: rgba(91, 33, 182, 0.18);
+    --wb: #B01887;
+    --success-bg: #edf7ed;
+    --success-text: #1e4620;
+    --success-icon: #2e7d32;
+    --warn-bg: #fff8e1;
+    --warn-text: #663d00;
+    --mock-bar: #1e1b2e;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.43;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; }
+
+  /* ── панель макета ─────────────────────────────────────────────── */
+  .mock-bar {
+    background: var(--mock-bar);
+    color: #e2e8f0;
+    padding: 0 16px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .mock-bar .mock-name { font-weight: 600; letter-spacing: .01em; opacity: .9; white-space: nowrap; flex: none; }
+  .mock-bar .seg { display: flex; gap: 4px; margin-left: 8px; }
+  .mock-bar .seg button {
+    background: transparent; color: #cbd5e1; border: 1px solid rgba(255,255,255,.18);
+    border-radius: 8px; padding: 5px 12px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap;
+  }
+  .mock-bar .seg button.active { background: #fff; color: var(--mock-bar); border-color: #fff; }
+  .mock-bar .seg button:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; }
+  .mock-bar .hint { margin-left: auto; opacity: .7; white-space: nowrap; font-size: 12px; }
+
+  /* ── оболочка ──────────────────────────────────────────────────── */
+  .shell { min-height: calc(100vh - 44px); }
+  .appbar {
+    height: 64px; background: var(--paper); border-bottom: 1px solid var(--divider);
+    display: flex; align-items: center; gap: 12px; padding: 0 24px;
+  }
+  .logo {
+    width: 48px; height: 48px; border-radius: 50%; flex: none;
+    border: 2px solid #efe6ff; background: #fff; display: grid; place-items: center;
+    color: var(--primary); font-weight: 900; font-size: 18px; letter-spacing: -.04em;
+  }
+  .brand { font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+  .brand-sub { font-weight: 600; font-size: 16px; margin-left: 4px; color: var(--text2); }
+  .appbar-right { margin-left: auto; display: flex; align-items: center; gap: 16px; color: var(--text2); }
+
+  .layout { display: flex; align-items: stretch; min-height: calc(100vh - 44px - 64px); }
+  .nav {
+    width: 240px; flex: none; background: var(--paper); border-right: 1px solid var(--divider);
+    padding: 24px 0; display: flex; flex-direction: column;
+  }
+  .nav a { display: block; padding: 8px 24px; color: var(--text2); text-decoration: none; font-size: 15px; }
+  .nav a.active { color: var(--primary); font-weight: 600; background: rgba(91,33,182,.05); }
+  .content { flex: 1; min-width: 0; padding: 28px 28px 56px; }
+
+  /* ── заголовок страницы ─────────────────────────────────────────── */
+  .page-title { font-size: 26px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; }
+  .page-sub { font-size: 15px; margin: 0 0 20px; color: var(--text2); }
+
+  /* ── вкладки ────────────────────────────────────────────────────── */
+  .tabs { display: flex; border-bottom: 2px solid var(--divider); margin-bottom: 24px; }
+  .tab {
+    background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 18px;
+    font-weight: 600; font-size: 14px; color: var(--text2); cursor: default; margin-bottom: -2px;
+  }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  /* ── этапы поставки ─────────────────────────────────────────────── */
+  .stages { display: flex; align-items: center; gap: 0; margin-bottom: 24px; overflow-x: auto; }
+  .stage-btn {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px 8px 12px;
+    background: none; border: 0; cursor: default; font-size: 14px; color: var(--text2); font-weight: 500;
+    white-space: nowrap; border-bottom: 2px solid transparent;
+  }
+  .stage-btn.done { color: var(--success-icon); }
+  .stage-btn.active { color: var(--primary); font-weight: 700; border-bottom-color: var(--primary); }
+  .stage-dot {
+    width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; flex: none;
+  }
+  .stage-dot.done { background: var(--success-bg); color: var(--success-icon); }
+  .stage-dot.active { background: var(--primary); color: #fff; }
+  .stage-dot.idle { background: rgba(0,0,0,.08); color: var(--text2); }
+  .stage-arrow { color: var(--divider); font-size: 18px; padding: 0 2px; }
+
+  /* ── карточка поставки ──────────────────────────────────────────── */
+  .supply-card {
+    background: var(--paper); border: 1px solid var(--outline); border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(15,23,42,.06); overflow: hidden; margin-bottom: 20px;
+  }
+
+  /* ── заголовок секции упаковки (ключевой блок) ──────────────────── */
+  .pack-header {
+    padding: 14px 20px; border-bottom: 1px solid var(--divider);
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  }
+  .pack-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+  .pack-title { font-size: 17px; font-weight: 700; }
+  .progress-line { font-size: 13px; color: var(--text2); }
+
+  /* ─── ИЗМЕНЯЕМЫЙ ФРАГМЕНТ: старая и новая подпись ─── */
+  .progress-line .before { /* текущий текст — для варианта «До» */ }
+  .progress-line .after  { /* новый текст — для варианта «После» */ }
+  .highlight-change {
+    background: rgba(91,33,182,.12);
+    border-radius: 4px;
+    padding: 0 3px;
+    font-weight: 600;
+    color: var(--primary-dark);
+  }
+  .strikethrough {
+    text-decoration: line-through;
+    opacity: .55;
+  }
+
+  /* ── кнопки ─────────────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border-radius: 10px; border: 1px solid transparent; padding: 6px 14px; min-height: 36px;
+    font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap;
+    transition: background .12s;
+  }
+  .btn.contained { background: var(--primary); color: #fff; }
+  .btn.contained:hover { background: var(--primary-dark); }
+  .btn.outlined { background: transparent; color: var(--primary); border-color: rgba(91,33,182,.45); }
+  .btn.outlined:hover { background: rgba(91,33,182,.04); }
+  .btn.warn { background: transparent; color: #854f0b; border-color: rgba(133,79,11,.4); }
+  .btn:disabled { cursor: default; color: rgba(0,0,0,.3); border-color: rgba(0,0,0,.12); background: transparent; }
+  .btn.contained:disabled { background: rgba(0,0,0,.12); }
+
+  /* ── строки заказов ─────────────────────────────────────────────── */
+  .order-list { padding: 0 20px 12px; display: grid; gap: 0; }
+  .order-row {
+    display: flex; align-items: center; gap: 12px; padding: 12px 0;
+    border-bottom: 1px solid var(--divider);
+  }
+  .order-row:last-child { border-bottom: 0; }
+  .order-img { width: 40px; height: 40px; border-radius: 8px; background: #cbd5e1; flex: none; display: grid; place-items: center; font-size: 10px; color: #64748b; }
+  .order-info { flex: 1; min-width: 0; }
+  .order-name { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .order-meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .order-sticker {
+    border: 1px dashed rgba(176,24,135,.45); border-radius: 8px; padding: 4px 10px;
+    font-size: 12px; font-weight: 600; color: var(--wb); white-space: nowrap;
+  }
+  .order-sticker.printed { border-style: solid; background: rgba(176,24,135,.04); }
+  .chip-wb {
+    display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px;
+    font-size: 12px; border: 1px solid var(--wb); color: var(--wb); white-space: nowrap;
+  }
+  .badge-kiz {
+    display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px;
+    font-size: 12px; background: rgba(91,33,182,.1); color: var(--primary-dark); font-weight: 600;
+  }
+
+  /* ── scan bar ───────────────────────────────────────────────────── */
+  .scan-bar {
+    padding: 12px 20px; background: rgba(0,0,0,.025);
+    border-bottom: 1px solid var(--divider);
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .scan-bar .cap { font-size: 12px; color: var(--text2); flex-basis: 100%; margin-bottom: 2px; }
+  .scan-field {
+    flex: 1; min-width: 240px; height: 36px; border: 1px solid rgba(0,0,0,.23); border-radius: 10px;
+    padding: 0 12px; font: inherit; font-size: 14px; color: var(--text); outline: none;
+    background: #fff;
+  }
+
+  /* ── сравнение (аннотация) ──────────────────────────────────────── */
+  .compare-block {
+    background: var(--paper); border: 1px solid var(--outline); border-radius: 14px;
+    padding: 20px 24px; margin-bottom: 24px;
+  }
+  .compare-block h3 { margin: 0 0 16px; font-size: 15px; font-weight: 700; }
+  .compare-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .compare-side { flex: 1; min-width: 260px; border: 1px solid var(--divider); border-radius: 10px; padding: 12px 16px; }
+  .compare-side .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .compare-side.before .label { color: #b45309; }
+  .compare-side.after .label  { color: var(--success-icon); }
+  .compare-side.before { border-color: rgba(180,83,9,.25); background: rgba(180,83,9,.03); }
+  .compare-side.after  { border-color: rgba(46,125,50,.25); background: rgba(46,125,50,.03); }
+  .compare-text { font-size: 13px; color: var(--text2); font-family: "JetBrains Mono", "Courier New", monospace; }
+  .compare-text em { font-style: normal; font-weight: 700; }
+  .compare-text .old { color: #b45309; text-decoration: line-through; }
+  .compare-text .new { color: var(--success-icon); }
+
+  /* ── выноска «изменено» ─────────────────────────────────────────── */
+  .callout {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+    background: rgba(91,33,182,.1); border-radius: 6px; font-size: 12px;
+    color: var(--primary-dark); font-weight: 600; margin-left: 8px;
+  }
+  .callout-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); flex: none; }
+
+  /* ── notes ──────────────────────────────────────────────────────── */
+  .notes { padding: 0 0 48px; }
+  .notes details {
+    background: var(--paper); border: 1px solid var(--outline);
+    border-radius: 14px; padding: 4px 20px; margin-bottom: 8px;
+  }
+  .notes summary { cursor: pointer; font-weight: 600; padding: 12px 0; }
+  .notes p, .notes li { line-height: 1.6; max-width: 78ch; color: var(--text2); }
+  .notes ol { padding-left: 20px; }
+
+  @media (max-width: 900px) {
+    .nav { display: none; }
+    .content { padding: 20px 16px 40px; }
+    .appbar { padding: 0 16px; }
+    .mock-bar .hint { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ ПАНЕЛЬ МАКЕТА ════════════════════════════ -->
+<div class="mock-bar" aria-label="Панель макета">
+  <span class="mock-name">Макет — «Принято WB» вместо «упаковано»</span>
+  <div class="seg" role="tablist" aria-label="Вариант">
+    <button type="button" id="tab-before" class="active" role="tab" aria-selected="true"
+            onclick="switchVariant('before')">До (сейчас)</button>
+    <button type="button" id="tab-after" role="tab" aria-selected="false"
+            onclick="switchVariant('after')">После (задача)</button>
+  </div>
+  <span class="hint">Переключайте «До / После» — меняется только одна строка</span>
+</div>
+
+<!-- ═══════════════════════════ ОБОЛОЧКА ПРИЛОЖЕНИЯ ═════════════════════ -->
+<div class="shell">
+
+  <!-- AppBar -->
+  <div class="appbar">
+    <div class="logo">WM</div>
+    <span class="brand">WMS<span class="brand-sub">· ФФ «Пример»</span></span>
+    <div class="appbar-right">
+      <span>Иванова А.</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- Боковое меню -->
+    <nav class="nav">
+      <a href="#">Заказы FBS</a>
+      <a href="#" class="active">Поставки WB FBS</a>
+      <a href="#">Инвентаризация</a>
+      <a href="#">Ячейки</a>
+      <a href="#">Расчёты</a>
+      <a href="#">Настройки</a>
+    </nav>
+
+    <!-- Основной контент -->
+    <div class="content">
+
+      <!-- Заголовок страницы -->
+      <h1 class="page-title">Поставка WB-48731</h1>
+      <p class="page-sub">ИП Горячкина А. · Маршрут: Склад / СЦ · Отгрузить до: 05.10.2026</p>
+
+      <!-- Вкладки поставки -->
+      <div class="tabs">
+        <button class="tab">Подбор</button>
+        <button class="tab active">Упаковка и маркировка</button>
+        <button class="tab">Короба</button>
+        <button class="tab">Передача в WB</button>
+      </div>
+
+      <!-- ── Сравнение ── -->
+      <div class="compare-block">
+        <h3>Что меняется в этой задаче</h3>
+        <div class="compare-row">
+          <div class="compare-side before">
+            <div class="label">До (сейчас)</div>
+            <div class="compare-text">
+              Напечатано 6 из 12 · <span class="old">упаковано</span> 4 из 12
+            </div>
+          </div>
+          <div class="compare-side after">
+            <div class="label">После (задача)</div>
+            <div class="compare-text">
+              Напечатано 6 из 12 · <span class="new">Принято WB</span> 4 из 12
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Карточка упаковки ── -->
+      <div class="supply-card">
+
+        <!-- Заголовок секции упаковки — КЛЮЧЕВОЙ БЛОК -->
+        <div class="pack-header">
+          <div>
+            <div class="pack-title-row">
+              <span class="pack-title">Упаковка и маркировка</span>
+            </div>
+            <!-- ИЗМЕНЯЕМАЯ СТРОКА -->
+            <div class="progress-line">
+              Напечатано 6 из 12
+              &nbsp;·&nbsp;
+              <span id="progress-label">
+                <!-- меняется скриптом -->
+              </span>
+              4 из 12
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button class="btn outlined">Печать всего (12)</button>
+            <button class="btn contained">Всё упаковано</button>
+            <button class="btn warn">Сдать без Честного знака</button>
+          </div>
+        </div>
+
+        <!-- Строка сканирования КИЗ -->
+        <div class="scan-bar">
+          <span class="cap">Внесение КИЗ со стикера — только если Честный знак уже наклеен селлером</span>
+          <input class="scan-field" type="text" placeholder="Сканируйте QR стикера заказа" readonly>
+          <button class="btn outlined">Очистить</button>
+        </div>
+
+        <!-- Список заказов -->
+        <div class="order-list">
+
+          <div class="order-row">
+            <div class="order-img">фото</div>
+            <div class="order-info">
+              <div class="order-name">Платье Chin-5563 Изумруд / 50-52</div>
+              <div class="order-meta">Заказ WB #19827364 · ШК 2051083009112</div>
+            </div>
+            <span class="badge-kiz">КИЗ внесён</span>
+            <span class="chip-wb">WB</span>
+            <span class="order-sticker printed">1234-5678 ✓</span>
+          </div>
+
+          <div class="order-row">
+            <div class="order-img">фото</div>
+            <div class="order-info">
+              <div class="order-name">Платье Chin-5563 Изумруд / 54-56</div>
+              <div class="order-meta">Заказ WB #19827365 · ШК 2051083009129</div>
+            </div>
+            <span class="badge-kiz">КИЗ внесён</span>
+            <span class="chip-wb">WB</span>
+            <span class="order-sticker printed">1234-5679 ✓</span>
+          </div>
+
+          <div class="order-row">
+            <div class="order-img">фото</div>
+            <div class="order-info">
+              <div class="order-name">Юбка Fadina Black / 46</div>
+              <div class="order-meta">Заказ WB #19827366 · ШК 2051083009143</div>
+            </div>
+            <span class="badge-kiz">КИЗ внесён</span>
+            <span class="chip-wb">WB</span>
+            <span class="order-sticker printed">1234-5680 ✓</span>
+          </div>
+
+          <div class="order-row">
+            <div class="order-img">фото</div>
+            <div class="order-info">
+              <div class="order-name">Костюм Fadina Blue / 44</div>
+              <div class="order-meta">Заказ WB #19827367 · ШК 2051083009136</div>
+            </div>
+            <span class="badge-kiz">КИЗ внесён</span>
+            <span class="chip-wb">WB</span>
+            <span class="order-sticker printed">1234-5681 ✓</span>
+          </div>
+
+          <div class="order-row">
+            <div class="order-img">фото</div>
+            <div class="order-info">
+              <div class="order-name">Платье Chin-5563 Изумруд / 52-54</div>
+              <div class="order-meta">Заказ WB #19827368 · ШК 2051083009118</div>
+            </div>
+            <span class="chip-wb">WB</span>
+            <span class="order-sticker">1234-5682</span>
+          </div>
+
+          <div class="order-row">
+            <div class="order-img">фото</div>
+            <div class="order-info">
+              <div class="order-name">Костюм Fadina Red / 42</div>
+              <div class="order-meta">Заказ WB #19827369 · ШК 2051083009155</div>
+            </div>
+            <span class="chip-wb">WB</span>
+            <span class="order-sticker">1234-5683</span>
+          </div>
+
+        </div>
+      </div><!-- /supply-card -->
+
+      <!-- Заметки -->
+      <div class="notes">
+        <details>
+          <summary>Примечания к макету</summary>
+          <p>Меняется только одна строка прогресса (Typography variant="body2" color="text.secondary") в компоненте FfFbsSupplyWorkspace.tsx, строка 1726.</p>
+          <ol>
+            <li>Было: «Напечатано X из Y · упаковано {workspace.progress.packed} из {workspace.progress.total}»</li>
+            <li>Стало: «Напечатано X из Y · Принято WB {workspace.progress.packed} из {workspace.progress.total}»</li>
+            <li>Слово «упаковано» заменяется на «Принято WB» (с заглавной буквы, с сохранением точки с запятой-разделителя).</li>
+            <li>Кнопки «Печать всего», «Всё упаковано», «Сдать без Честного знака», логика упаковки, этапы и API — без изменений.</li>
+            <li>Значения X и Y берутся из тех же полей workspace.progress.packed / workspace.progress.total.</li>
+          </ol>
+        </details>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /layout -->
+
+</div><!-- /shell -->
+
+<script>
+(function () {
+  'use strict';
+
+  var LABELS = {
+    before: { text: 'упаковано',  cls: '' },
+    after:  { text: 'Принято WB', cls: 'highlight-change' },
+  };
+
+  var current = 'before';
+
+  function switchVariant(v) {
+    current = v;
+
+    // mock-bar кнопки
+    document.getElementById('tab-before').className = v === 'before' ? 'active' : '';
+    document.getElementById('tab-before').setAttribute('aria-selected', String(v === 'before'));
+    document.getElementById('tab-after').className  = v === 'after'  ? 'active' : '';
+    document.getElementById('tab-after').setAttribute('aria-selected', String(v === 'after'));
+
+    // подпись в строке прогресса
+    var el = document.getElementById('progress-label');
+    var info = LABELS[v];
+    el.textContent = info.text;
+    el.className = info.cls;
+  }
+
+  // экспортируем для onclick
+  window.switchVariant = switchVariant;
+
+  // инициализация
+  switchVariant('before');
+})();
+</script>
+</body>
+</html>
