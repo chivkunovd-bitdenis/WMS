@@ -66,20 +66,59 @@ def upgrade() -> None:
 
     # Existing FBO codes were tied to packaging-task lines. Link each of them
     # once to the shipment line of the same shipment and the same product.
-    op.execute(
-        """
-        UPDATE marking_codes AS mc
-        SET marketplace_unload_line_id = ul.id
-        FROM packaging_task_lines AS ptl
-        JOIN packaging_tasks AS pt ON pt.id = ptl.task_id
-        JOIN marketplace_unload_lines AS ul
-          ON ul.request_id = pt.marketplace_unload_request_id
-         AND ul.product_id = ptl.product_id
-        WHERE mc.packaging_task_line_id = ptl.id
-          AND pt.marketplace_unload_request_id IS NOT NULL
-          AND mc.marketplace_unload_line_id IS NULL
-        """
-    )
+    if op.get_bind().dialect.name == "postgresql":
+        # The physical-warehouse guard trigger rejects an UPDATE of a code whose
+        # foreign keys lead to a non-operational warehouse (e.g. the virtual
+        # 'fbs-wb'). Move the codes one by one so a protected row is skipped
+        # instead of rolling back the whole migration.
+        op.execute(
+            """
+            DO $$
+            DECLARE
+                r RECORD;
+            BEGIN
+                FOR r IN
+                    SELECT mc.id AS code_id, ul.id AS line_id
+                    FROM marking_codes AS mc
+                    JOIN packaging_task_lines AS ptl
+                      ON mc.packaging_task_line_id = ptl.id
+                    JOIN packaging_tasks AS pt ON pt.id = ptl.task_id
+                    JOIN marketplace_unload_lines AS ul
+                      ON ul.request_id = pt.marketplace_unload_request_id
+                     AND ul.product_id = ptl.product_id
+                    WHERE pt.marketplace_unload_request_id IS NOT NULL
+                      AND mc.marketplace_unload_line_id IS NULL
+                LOOP
+                    BEGIN
+                        UPDATE marking_codes
+                        SET marketplace_unload_line_id = r.line_id
+                        WHERE id = r.code_id
+                          AND marketplace_unload_line_id IS NULL;
+                    EXCEPTION WHEN check_violation THEN
+                        RAISE NOTICE
+                            'WMS-686: код % пропущен защитой физического склада',
+                            r.code_id;
+                    END;
+                END LOOP;
+            END
+            $$;
+            """
+        )
+    else:
+        op.execute(
+            """
+            UPDATE marking_codes AS mc
+            SET marketplace_unload_line_id = ul.id
+            FROM packaging_task_lines AS ptl
+            JOIN packaging_tasks AS pt ON pt.id = ptl.task_id
+            JOIN marketplace_unload_lines AS ul
+              ON ul.request_id = pt.marketplace_unload_request_id
+             AND ul.product_id = ptl.product_id
+            WHERE mc.packaging_task_line_id = ptl.id
+              AND pt.marketplace_unload_request_id IS NOT NULL
+              AND mc.marketplace_unload_line_id IS NULL
+            """
+        )
 
 
 def downgrade() -> None:
