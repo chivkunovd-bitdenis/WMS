@@ -150,6 +150,7 @@ export class FbsApiError extends Error {
 }
 
 export type FbsOrderMetadata = {
+  requirements_known?: boolean
   required: string[]
   optional: string[]
   states: Array<{
@@ -237,6 +238,7 @@ export type FbsWorklistOrder = {
     requires_honest_sign?: boolean
   }
   positions: Array<{
+    requires_honest_sign?: boolean
     id?: string | null
     image_url?: string | null
     barcode?: string | null
@@ -841,6 +843,20 @@ export async function fetchFbsWorkspace(
       headers: { ...ah(token) },
     }),
   )
+}
+
+export async function deleteFbsSupply(token: string, ah: AuthHeaders, id: string): Promise<void> {
+  const response = await fetch(apiUrl(`/operations/fbs-supplies/${id}`), {
+    method: 'DELETE', headers: { ...ah(token) },
+  })
+  if (!response.ok) await jsonOrThrow(response)
+}
+
+export async function isFbsSupplyAbsent(token: string, ah: AuthHeaders, id: string): Promise<boolean> {
+  const response = await fetch(apiUrl(`/operations/fbs-supplies/${id}/workspace`), { headers: { ...ah(token) } })
+  if (response.status === 404) return true
+  await jsonOrThrow<FbsWorkspace>(response)
+  return false
 }
 
 export async function updateFbsSupplyPlannedShipmentDate(

@@ -321,6 +321,7 @@ class FbsWorklistMetadataStateOut(BaseModel):
 
 
 class FbsWorklistMetadataOut(BaseModel):
+    requirements_known: bool | None = None
     required: list[str]
     optional: list[str]
     states: list[FbsWorklistMetadataStateOut]
@@ -352,6 +353,7 @@ class FbsWorklistBlockerOut(BaseModel):
 
 
 class FbsWorklistPositionOut(BaseModel):
+    requires_honest_sign: bool = False
     id: str
     barcode: str | None = None
     image_url: str | None = None

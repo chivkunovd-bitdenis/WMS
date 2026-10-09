@@ -54,7 +54,7 @@ import ReplayOutlinedIcon from '@mui/icons-material/ReplayOutlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { DeadlinePill } from '../../components/fbs/FbsChips'
-import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPage'
+import type { PackagingTask, PackagingTaskLine } from '../ff/FfPackagingPage'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { printMarkingCodeLabels, printMarkingCodeTape } from '../../utils/printMarkingCodeLabel'
 import { startAutoKizReprintPrint } from '../../utils/kizReprintPrint'
@@ -99,7 +99,6 @@ import {
   fbsOzonBoxLabelReady,
   fbsOzonLabelFailuresText,
   fbsUnassignedPositionQuantity,
-  fbsStageAfterWorkspaceRefresh,
   ordersWord,
   summarizeDeliveryChecks,
 } from './fbsUx'
@@ -144,7 +143,8 @@ import {
   skipFbsSupplyHonestSign,
   startFbsSupplyWork,
   undoFbsPick,
-  updateFbsSupplyPlannedShipmentDate,
+  deleteFbsSupply,
+  isFbsSupplyAbsent,
   validateFbsKiz,
   validateFbsPrintBindings,
   type FbsKizLookup,
@@ -197,7 +197,6 @@ type Props = {
 
 
 const STAGES = [
-  { key: 'composition', label: 'Состав' },
   { key: 'picking', label: 'Подбор' },
   { key: 'packing', label: 'Упаковка и маркировка' },
   { key: 'boxes', label: 'Короба' },
@@ -230,7 +229,8 @@ function clearPersistentOperationKey(supplyId: string, action: 'box-create' | 'b
   }
 }
 
-function visualStage(stage: FbsWorkspace['stage']): StageKey {
+function visualStage(stage: FbsWorkspace['stage'] | StageKey): StageKey {
+  if (stage === 'composition') return 'picking'
   if (stage === 'order_stickers') return 'packing'
   if (stage === 'handoff_prep' || stage === 'delivery' || stage === 'tracking') return 'boxes'
   return stage
@@ -576,7 +576,7 @@ export function FfFbsSupplyWorkspace({
   assemblyFrame,
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
-  const [selectedStage, setStage] = useState<StageKey>('composition')
+  const [selectedStage, setStage] = useState<StageKey>('picking')
   // WMS-574: рамка окна сборки всегда на упаковке и не трогает запомненную
   // вкладку карточки этой поставки.
   const stage: StageKey = assemblyFrame ? assemblyFrame.stage ?? 'packing' : selectedStage
@@ -607,6 +607,7 @@ export function FfFbsSupplyWorkspace({
   const [clearMarkingOrders, setClearMarkingOrders] = useState<FbsWorkspace['orders'] | null>(null)
   const [boxCount, setBoxCount] = useState('1')
   const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
+  const [boxAssignError, setBoxAssignError] = useState<string | null>(null)
   const [boxProductSearch, setBoxProductSearch] = useState('')
   const [boxProductQty, setBoxProductQty] = useState<Record<string, string>>({})
   const [boxSelectedPositionIds, setBoxSelectedPositionIds] = useState<Set<string>>(() => new Set())
@@ -698,14 +699,12 @@ export function FfFbsSupplyWorkspace({
   const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
   const [addableSelected, setAddableSelected] = useState<Set<string>>(() => new Set())
   const [addOrdersBusy, setAddOrdersBusy] = useState(false)
-  const [plannedShipmentDateDraft, setPlannedShipmentDateDraft] = useState('')
   const [skipHonestSignOpen, setSkipHonestSignOpen] = useState(false)
   const [skipHonestSignBusy, setSkipHonestSignBusy] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
   const boxAssignmentDirty = Object.values(boxProductQty).some((value) => Boolean(value.trim())) ||
     boxSelectedPositionIds.size > 0
   const unsavedInput = open && (
-    plannedShipmentDateDraft !== (workspace?.supply.planned_shipment_date ?? '') ||
     boxCount !== '1' || boxAssignmentDirty || addableSelected.size > 0 ||
     Boolean(kizScanValue.trim() || kizScanActive || kizConfirmTarget)
   )
@@ -724,6 +723,7 @@ export function FfFbsSupplyWorkspace({
     setBoxProductQty({})
     setBoxSelectedPositionIds(new Set())
     setBoxAssignTarget(null)
+    setBoxAssignError(null)
   }
   const closeAddOrders = () => {
     if (!confirmDiscardChanges(addableSelected.size > 0)) return
@@ -908,6 +908,7 @@ export function FfFbsSupplyWorkspace({
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
         if (!write.isCurrent()) return
         if (!write.isLatest()) return next
+        const firstRead = freshWorkspaceGeneration.current === null
         freshWorkspaceGeneration.current = workspaceOpenGeneration.current
         pendingInitialWorkspace.current = null
         setWorkspace(next)
@@ -919,11 +920,7 @@ export function FfFbsSupplyWorkspace({
         ))
         onApplied?.(next)
         if (!silent) {
-          setStage((current) => readFbsWorkspaceStage(supplyId) ?? fbsStageAfterWorkspaceRefresh(
-            next.supply.marketplace,
-            current,
-            visualStage(next.stage),
-          ))
+          setStage((current) => visualStage(readFbsWorkspaceStage(supplyId) ?? (firstRead ? visualStage(next.stage) : current)))
         }
         return next
       } catch (cause) {
@@ -954,7 +951,7 @@ export function FfFbsSupplyWorkspace({
       ? { generation: workspaceOpenGeneration.current, snapshot: initialWorkspace }
       : null
     freshWorkspaceGeneration.current = null
-    setStage(readFbsWorkspaceStage(supplyId) ?? (initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition'))
+    setStage(visualStage(readFbsWorkspaceStage(supplyId) ?? (initialWorkspace ? visualStage(initialWorkspace.stage) : 'picking')))
     const restoredDeliveryKey = persistentOperationKey(supplyId, 'delivery')
     deliveryKeyRef.current = restoredDeliveryKey
     setPrintBatch(null)
@@ -963,6 +960,7 @@ export function FfFbsSupplyWorkspace({
     setClearMarkingOrders(null)
     setBoxCount('1')
     setBoxAssignTarget(null)
+    setBoxAssignError(null)
     setBoxProductSearch('')
     setBoxProductQty({})
     setBoxSelectedPositionIds(new Set())
@@ -1017,10 +1015,6 @@ export function FfFbsSupplyWorkspace({
   useEffect(() => {
     setNotice(null)
   }, [workspace?.stage])
-
-  useEffect(() => {
-    setPlannedShipmentDateDraft(workspace?.supply.planned_shipment_date ?? '')
-  }, [workspace?.supply.planned_shipment_date])
 
   useEffect(() => {
     setScanPrintPreferences(loadFbsScanPrintPreferences(token))
@@ -1162,11 +1156,7 @@ export function FfFbsSupplyWorkspace({
       const applied = write.isLatest()
       if (applied) {
         setWorkspace(next)
-        setStage((current) => readFbsWorkspaceStage(next.supply.id) ?? fbsStageAfterWorkspaceRefresh(
-          next.supply.marketplace,
-          current,
-          visualStage(next.stage),
-        ))
+        setStage((current) => visualStage(readFbsWorkspaceStage(next.supply.id) ?? current))
       } else {
         // Снимок проиграл гонку, но операция сохранена: строки восстановит новое
         // чтение. Итог, считаемый по ответу, называем по его снимку и только если
@@ -1297,8 +1287,31 @@ export function FfFbsSupplyWorkspace({
     })
   }, [open, stage, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, deliverySubmitted, token, authHeaders, beginWorkspaceWrite, load])
 
+  const deleteCurrentSupply = async () => {
+    if (!workspace || workspace.orders.length || busy) return
+    const write = beginWorkspaceWrite()
+    const id = workspace.supply.id
+    setBusy(true)
+    setError(null)
+    try {
+      try {
+        await deleteFbsSupply(token, authHeaders, id)
+      } catch (cause) {
+        // A lost reply is resolved by reading the exact card before closing it.
+        if (!write.isCurrent()) return
+        if (!await isFbsSupplyAbsent(token, authHeaders, id)) throw cause
+      }
+      if (write.isCurrent()) onClose()
+    } catch (cause) {
+      if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось удалить поставку.')
+    } finally {
+      if (write.isCurrent()) setBusy(false)
+    }
+  }
+
   const openAddOrders = async () => {
     if (!workspace) return
+    const write = beginWorkspaceWrite()
     setAddOrdersOpen(true)
     setAddOrdersBusy(true)
     setAddableSelected(new Set())
@@ -1310,12 +1323,14 @@ export function FfFbsSupplyWorkspace({
         wb_warehouse_id: String(workspace.supply.wb_warehouse.id),
         limit: 500,
       })
+      if (!write.isCurrent()) return
       setAddableOrders(page.items.filter((order) => order.selection_blockers.length === 0))
     } catch (cause) {
+      if (!write.isCurrent()) return
       setAddableOrders([])
       setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось загрузить новые заказы для поставки.')
     } finally {
-      setAddOrdersBusy(false)
+      if (write.isCurrent()) setAddOrdersBusy(false)
     }
   }
 
@@ -1339,11 +1354,7 @@ export function FfFbsSupplyWorkspace({
         // назад. Сервер отдаёт «подбор», пока новый заказ не подобран, и прямой
         // setStage перекидывал человека с упаковки или коробов на подбор. Правило
         // проекта: серверные факты не управляют навигацией в рабочем месте WB.
-        setStage((current) => readFbsWorkspaceStage(next.supply.id) ?? fbsStageAfterWorkspaceRefresh(
-          next.supply.marketplace,
-          current,
-          visualStage(next.stage),
-        ))
+        setStage((current) => visualStage(readFbsWorkspaceStage(next.supply.id) ?? current))
       } else refreshAfterLostRace()
       setAddOrdersOpen(false)
       setAddableSelected(new Set())
@@ -1355,17 +1366,6 @@ export function FfFbsSupplyWorkspace({
       if (write.isCurrent()) setAddOrdersBusy(false)
     }
   }
-
-  const savePlannedShipmentDate = async () => {
-    if (!workspace) return
-    const raw = plannedShipmentDateDraft.trim()
-    const next = await run(
-      () => updateFbsSupplyPlannedShipmentDate(token, authHeaders, workspace.supply.id, raw || null),
-      raw ? 'Дата отгрузки сохранена.' : 'Дата отгрузки очищена.',
-    )
-    if (next) setPlannedShipmentDateDraft(next.supply.planned_shipment_date ?? '')
-  }
-
 
   // Return focus only while the scanner still owns it. A delayed print must
   // never pull the operator out of another control they deliberately chose.
@@ -2656,12 +2656,15 @@ export function FfFbsSupplyWorkspace({
 
   const assignBoxOrders = async () => {
     if (boxOperationsDisabled || !workspace || !boxAssignTarget || (isOzonSupply ? boxAssignSelectedPositionIds.length === 0 : boxAssignSelectedOrderIds.length === 0)) return
+    setBoxAssignError(null)
     const next = await run(
       () => assignFbsPackingBoxOrders(token, authHeaders, workspace.supply.id, boxAssignTarget, isOzonSupply ? [] : boxAssignSelectedOrderIds, isOzonSupply ? boxAssignSelectedPositionIds : undefined),
       '',
+      (cause) => setBoxAssignError(cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось добавить товары в короб.'),
     )
     if (next) {
       setBoxAssignTarget(null)
+      setBoxAssignError(null)
       setBoxProductSearch('')
       setBoxProductQty({})
       setBoxSelectedPositionIds(new Set())
@@ -3357,6 +3360,13 @@ export function FfFbsSupplyWorkspace({
   }, [reportPackingColumns, ownPackingShowsSize, ownPackingShowsMarkingAvailable])
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
   // Выбор сохраняет тот же порядок, что и исходная лента / лист подбора.
+  useEffect(() => {
+    const currentIds = new Set(workspace?.orders.map(order => order.id) ?? [])
+    setPackingSelectedIds(selected => {
+      if ([...selected].every(id => currentIds.has(id))) return selected
+      return new Set([...selected].filter(id => currentIds.has(id)))
+    })
+  }, [workspace])
   const selectedPackingOrders = fullTapeOrders.filter((order) => packingSelectedIds.has(order.id))
   const markingNeededByProduct = new Map<string, number>()
   for (const order of packingOrders) {
@@ -3382,14 +3392,14 @@ export function FfFbsSupplyWorkspace({
     const backendStage = stage
     return workspace?.blockers.filter((blocker) => blocker.stage === backendStage) ?? []
   }, [workspace, stage])
-  const currentStage = workspace ? visualStage(workspace.stage) : 'composition'
+  const currentStage = workspace ? visualStage(workspace.stage) : 'picking'
   const currentStageIndex = STAGES.findIndex((item) => item.key === currentStage)
   const accessibleStageIndex = workspace
     ? fbsAccessibleStageIndex({
       marketplace: workspace.supply.marketplace,
       currentStage,
     })
-    : currentStageIndex
+    : STAGES.length - 1
   const stageIsCurrent = stage === currentStage
   const allPicked = Boolean(workspace && workspace.progress.total > 0 && workspace.progress.picked === workspace.progress.total)
   const deliveryConfirmed = deliverySubmitted
@@ -3494,6 +3504,22 @@ export function FfFbsSupplyWorkspace({
       })
       .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
   }, [availableForBox, boxProductSearch])
+  const fillAllBoxItems = () => {
+    setBoxProductSearch('')
+    if (!isOzonSupply) {
+      const quantities: Record<string, string> = {}
+      for (const order of availableForBox) {
+        const key = order.product.id ?? order.id
+        quantities[key] = String(Number(quantities[key] ?? 0) + 1)
+      }
+      setBoxProductQty(quantities)
+      return
+    }
+    const assembledOrders = new Set(workspace?.boxes.filter(box => box.ozon_assembled).flatMap(box => box.assigned_order_ids) ?? [])
+    const available = ozonPositionRows.filter(row => !assignedBoxPositionIds.has(row.id) && !assembledOrders.has(row.order.id))
+    const orderId = boxAssignOrderId ?? available[0]?.order.id
+    setBoxSelectedPositionIds(new Set(boxAssignBox?.ozon_assembled ? [] : available.filter(row => row.order.id === orderId).map(row => row.id)))
+  }
   const boxAssignSelectedOrderIds = boxAssignRows.flatMap((row) => {
     const qty = Math.min(row.orders.length, Math.max(0, Number(boxProductQty[row.key]) || 0))
     return row.orders.slice(0, qty).map((order) => order.id)
@@ -3514,9 +3540,6 @@ export function FfFbsSupplyWorkspace({
 
   /** Почему нельзя перейти к следующему этапу — то же объяснение и для disabled-вкладки, и для кнопки «Далее». */
   function stageBlockedExplanation(fromStage: StageKey): string {
-    if (fromStage === 'composition') {
-      return 'Начните работу с поставкой, чтобы перейти к подбору.'
-    }
     if (fromStage === 'picking') {
       const remaining = Math.max(0, total - (workspace?.progress.picked ?? 0))
       return `Подберите ещё ${remaining} шт., чтобы перейти к упаковке.`
@@ -4195,7 +4218,17 @@ export function FfFbsSupplyWorkspace({
 
   // Keep current handlers in the workspace; report a memoized, immutable view to
   // the assembly. Parent re-renders do not publish a new subscription/state loop.
+  const selectWithoutHonestSign = () => {
+    const ids = fullTapeOrders.filter(order => {
+      const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
+      if (order.metadata.required.includes('sgtin') || order.product.requires_honest_sign || line?.requires_honest_sign) return false
+      if (isOzonSupply) return order.metadata.requirements_known === true && !order.positions.some(position => position.requires_honest_sign)
+      return true
+    }).map(order => order.id)
+    setPackingSelectedIds(new Set(ids))
+  }
   const currentPackingActions = {
+    selectWithoutHonestSign,
     select: (ids: string[]) => setPackingSelectedIds(new Set(ids)),
     print: (ids: string[], onClose: (completed: boolean) => void): boolean => {
       const selectedIds = new Set(ids)
@@ -4232,6 +4265,7 @@ export function FfFbsSupplyWorkspace({
     skipBusy: skipHonestSignBusy,
     packAllDisabled: !packagingEditable || busy || (assemblyWbPacking && !packagingTask),
     select: ids => packingActionHandlers.current.select(ids),
+    selectWithoutHonestSign: () => packingActionHandlers.current.selectWithoutHonestSign(),
     print: (ids, onClose) => packingActionHandlers.current.print(ids, onClose),
     verify: () => packingActionHandlers.current.verify(),
     packAll: () => packingActionHandlers.current.packAll(),
@@ -4514,6 +4548,7 @@ export function FfFbsSupplyWorkspace({
                               disabled={boxEditingDisabled || busy || box.without_distribution || box.ozon_assembled}
                               onClick={() => {
                                 setBoxAssignTarget(box.id)
+                                setBoxAssignError(null)
                                 setBoxProductSearch('')
                                 setBoxProductQty({})
                                 setBoxSelectedPositionIds(new Set())
@@ -5017,6 +5052,7 @@ export function FfFbsSupplyWorkspace({
         <DialogTitle>Добавить товары в короб {boxAssignName}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.5} sx={{ pt: 1 }}>
+            {boxAssignError ? <Alert severity="error">{boxAssignError}</Alert> : null}
             <TextField
               autoFocus
               fullWidth
@@ -5092,6 +5128,7 @@ export function FfFbsSupplyWorkspace({
           </Stack>
         </DialogContent>
         <DialogActions>
+          <Button disabled={busy} onClick={fillAllBoxItems}>Добавить все</Button>
           <Button variant="contained" disabled={busy || (isOzonSupply ? boxAssignSelectedPositionIds.length === 0 : boxAssignSelectedOrderIds.length === 0)} onClick={() => void assignBoxOrders()}>Добавить</Button>
         </DialogActions>
       </Dialog>
@@ -5314,56 +5351,7 @@ export function FfFbsSupplyWorkspace({
                 <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap' }} useFlexGap>
                   <Metric label="Склад WMS" value={workspace.supply.wms_warehouse.name} />
                   <Metric label={isOzonSupply ? 'Метод доставки Ozon' : 'Маршрут'} value={workspaceRouteLabel} />
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    sx={{ alignItems: 'center' }}
-                    data-testid="cal-02-fbs-shipment-date-control"
-                    data-task-id="CAL-02"
-                  >
-                    <TextField
-                      label="Дата отгрузки"
-                      type="date"
-                      size="small"
-                      value={plannedShipmentDateDraft}
-                      onChange={(event) => setPlannedShipmentDateDraft(event.target.value)}
-                      disabled={busy}
-                      slotProps={{
-                        inputLabel: { shrink: true },
-                        htmlInput: { 'data-testid': 'cal-02-fbs-shipment-date' },
-                      }}
-                      sx={{ width: 176 }}
-                      data-task-id="CAL-02"
-                    />
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => void savePlannedShipmentDate()}
-                      disabled={busy || plannedShipmentDateDraft === (workspace.supply.planned_shipment_date ?? '')}
-                      data-testid="cal-02-fbs-shipment-date-save"
-                      data-task-id="CAL-02"
-                    >
-                      Сохранить
-                    </Button>
-                    {workspace.supply.planned_shipment_date ? (
-                      <Button
-                        size="small"
-                        variant="text"
-                        onClick={() => {
-                          setPlannedShipmentDateDraft('')
-                          void run(
-                            () => updateFbsSupplyPlannedShipmentDate(token, authHeaders, workspace.supply.id, null),
-                            'Дата отгрузки очищена.',
-                          )
-                        }}
-                        disabled={busy}
-                        data-testid="cal-02-fbs-shipment-date-clear"
-                        data-task-id="CAL-02"
-                      >
-                        Очистить
-                      </Button>
-                    ) : null}
-                  </Stack>
+
                 </Stack>
               ) : null}
             </Stack>
@@ -5388,7 +5376,7 @@ export function FfFbsSupplyWorkspace({
 
       {/* История поставки нужна на любом этапе, а не только в составе: когда
           что-то пошло не так, оператор смотрит хронологию там, где стоит. */}
-      <Box sx={{ px: 2, pb: 1 }}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ px: 2, pb: 1, flexWrap: 'wrap' }}>
         <Button
           size="small"
           variant="text"
@@ -5398,7 +5386,14 @@ export function FfFbsSupplyWorkspace({
         >
           История поставки
         </Button>
-      </Box>
+        {workspace?.supply.marketplace === 'wb' ? (
+          <Button size="small" variant="outlined" onClick={() => void openAddOrders()}
+            disabled={busy || !['draft', 'assembling', 'packed'].includes(workspace.supply.status)}
+            data-testid="fbs-05-workspace-add-orders">Добавить заказы</Button>
+        ) : null}
+        <Button size="small" color="error" onClick={() => void deleteCurrentSupply()}
+          disabled={busy || !workspace || workspace.orders.length > 0}>Удалить поставку</Button>
+      </Stack>
 
       <Tabs
         value={stage}
@@ -5439,51 +5434,6 @@ export function FfFbsSupplyWorkspace({
             <Stack spacing={2} sx={{ alignItems: 'center', justifyContent: 'center', py: 10 }}>
               <CircularProgress />
               <Typography>Загружаем актуальное состояние поставки…</Typography>
-            </Stack>
-          ) : null}
-
-          {workspace && stage === 'composition' ? (
-            <Stack spacing={2}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-                  <Box>
-                    <Typography variant="h6">Состав поставки</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {workspace.orders.length} {ordersWord(workspace.orders.length)} в поставке
-                    </Typography>
-                  </Box>
-                  <Stack direction="row" spacing={1}>
-                    <Button
-                      variant="outlined"
-                      onClick={() => void openAddOrders()}
-                      disabled={!['draft', 'assembling', ...(!isOzonSupply ? ['packed'] : [])].includes(workspace.supply.status)}
-                      data-testid="fbs-05-workspace-add-orders"
-                    >
-                      Добавить заказы
-                    </Button>
-                    <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={() => void printPickingList()} data-testid="fbs-pick-list-print">
-                      Печать листа подбора
-                    </Button>
-                  </Stack>
-                </Stack>
-                <Divider sx={{ my: 2 }} />
-                <Table size="small">
-                  <TableHead><TableRow><TableCell>Фото</TableCell><TableCell>{isOzonSupply ? 'Отправление Ozon' : 'Заказ WB'}</TableCell><TableCell>Товар и идентификаторы</TableCell><TableCell>Количество</TableCell><TableCell>Маркировка</TableCell><TableCell>Подбор</TableCell></TableRow></TableHead>
-                  <TableBody>
-                    {workspace.orders.map((order) => {
-                      const positions = order.positions.length ? order.positions : [{ product_id: order.product.id, name: order.product.name, seller_article: order.product.seller_article, sku: order.product.sku, quantity: 1, picked_quantity: order.pick.status === 'picked' ? 1 : 0 }]
-                      return <TableRow key={order.id}>
-                        <TableCell><ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={42} previewSize={280} testId={`fbs-composition-photo-${order.id}`} /></TableCell>
-                        <TableCell><Link component="button" type="button" underline="hover" sx={{ textAlign: 'left' }} onClick={() => setHistoryOpen(true)} data-testid={`fbs-composition-history-${order.id}`}>{isOzonSupply ? order.external_order_id : `№${order.wb_order_id}`}</Link></TableCell>
-                        <TableCell><Stack spacing={0.5}>{positions.map((position, index) => <Box key={`${position.sku ?? position.product_id ?? position.name}-${index}`}><Typography variant="body2" sx={{ fontWeight: 700 }}>{position.name}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Артикул: {position.seller_article ?? '—'}{position.sku ? ` · SKU: ${position.sku}` : ''}</Typography></Box>)}</Stack></TableCell>
-                        <TableCell><Stack spacing={0.5}>{positions.map((position, index) => <Typography key={`${position.sku ?? position.product_id ?? position.name}-${index}`} variant="body2">{order.positions.length ? `${position.picked_quantity} из ${position.quantity} шт.` : '1 шт.'}</Typography>)}</Stack></TableCell>
-                        <TableCell>{order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется'}</TableCell><TableCell>{order.pick.status === 'picked' ? 'Подобран' : 'Ожидает'}</TableCell>
-                      </TableRow>
-                    })}
-                  </TableBody>
-                </Table>
-              </Paper>
-              {nextStageControl('composition')}
             </Stack>
           ) : null}
 
