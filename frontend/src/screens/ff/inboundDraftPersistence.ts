@@ -6,7 +6,6 @@ export type IntakeMutation = { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; path
 export type InboundLabelAttempt = {
   id: string
   printedBefore: Record<string, string | null>
-  html: string
   paths: string[]
   state: 'unknown' | 'transferred' | 'complete'
 }
@@ -19,10 +18,11 @@ type SavedIntake = {
   rejected?: IntakeMutation
 }
 const active = new Set<string>()
+const INTAKE_KEY_PREFIX = 'wms440:'
 
 export function intakeStorageKey(token: string, document: string): string {
   const claims = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { sub: string; tenant_id: string }
-  return `wms440:${apiUrl('')}:${claims.tenant_id}:${claims.sub}:${document}`
+  return `${INTAKE_KEY_PREFIX}${apiUrl('')}:${claims.tenant_id}:${claims.sub}:${document}`
 }
 export function readIntake(token: string, document: string): SavedIntake {
   // Read-only screens do not need draft persistence. Keep them renderable when
@@ -40,9 +40,49 @@ export function readIntake(token: string, document: string): SavedIntake {
 function writeIntake(token: string, document: string, value: SavedIntake) {
   localStorage.setItem(intakeStorageKey(token, document), JSON.stringify(value))
 }
-/** Retain the exact print source in the existing tenant/user/document recovery record. */
+/**
+ * Recovery data of a label print attempt: its identity, its state and the technical marks still to be set.
+ * Never the label HTML or barcode images: hundreds of base64 images do not fit the browser storage and
+ * nothing reads them, because a new print builds the labels again. The fields are picked one by one, so a
+ * record written by an earlier version (with html) is not carried over. A completed attempt keeps only
+ * its identity.
+ */
+function storedLabelAttempt(attempt: InboundLabelAttempt): InboundLabelAttempt {
+  const { id, printedBefore, paths, state } = attempt
+  return state === 'complete' ? { id, printedBefore: {}, paths: [], state } : { id, printedBefore, paths, state }
+}
+/** Earlier versions kept the whole label HTML in the attempt. Nothing reads it, but it still fills the storage. */
+function dropStaleLabelHtml() {
+  for (let index = localStorage.length - 1; index >= 0; index--) {
+    const key = localStorage.key(index)
+    if (!key?.startsWith(INTAKE_KEY_PREFIX)) continue
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) ?? 'null') as SavedIntake | null
+      if (!saved?.labelAttempt || !('html' in saved.labelAttempt)) continue
+      localStorage.setItem(key, JSON.stringify({ ...saved, labelAttempt: storedLabelAttempt(saved.labelAttempt) }))
+    } catch {
+      // A record that cannot be read or rewritten stays as it is.
+    }
+  }
+}
+/**
+ * Keep the recovery data of a label print attempt in the existing tenant/user/document record.
+ * The record only protects against a second silent print, so a failing storage (full quota, blocked
+ * storage) must never stop the print itself: nothing is thrown, the print continues without the record.
+ */
 export function saveInboundLabelAttempt(token: string, document: string, labelAttempt: InboundLabelAttempt) {
-  writeIntake(token, document, { ...readIntake(token, document), labelAttempt })
+  const stored = storedLabelAttempt(labelAttempt)
+  const write = () => writeIntake(token, document, { ...readIntake(token, document), labelAttempt: stored })
+  try {
+    write()
+  } catch {
+    try {
+      dropStaleLabelHtml()
+      write()
+    } catch {
+      // Continue without the record.
+    }
+  }
 }
 export function saveIntakeTotals(token: string, document: string, totals: Record<string, string>) {
   writeIntake(token, document, { ...readIntake(token, document), totals })
