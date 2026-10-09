@@ -1,0 +1,7 @@
+Тестовый контракт сохранён и опубликован **до исправления продукта**: `2feb9040d4f937f2ccfd0a250f8594d181bb3437`, ветка `codex/wms517-sales-report-contract`. SHA локальной и удалённой ветки совпадают.
+
+В [новом тесте](/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-sales-report-contract/backend/tests/test_wms517_raw_numeric_price.py) публичный POST получает сырой JSON с числом `finishedPrice:1e9999999999999999999` без кавычек и корректными идентификаторами и датами.
+
+**RED подтверждён: 4 failed.** Одиночная и смешанная страницы дают `decimal.InvalidOperation` в текущем парсере; при обычной обработке HTTP обе возвращают 500. Контракт требует ошибку `invalid_sale_price` у конкретного КИЗ и сохранение здорового соседа с ценой 1234 копейки.
+
+[Короткая передача разработчику](/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-sales-report-contract/docs/reviews/wms517-raw-numeric-price-test-handoff.md) содержит команду и результат. Ruff проходит. Использована отдельная SQLite; продуктовый код, существующие тесты и чужие файлы не изменены. F2 остаётся открытым до исправления и GREEN.

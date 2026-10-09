@@ -1,0 +1,8 @@
+Контракт F3 сохранён и опубликован **до исправления продукта**. Коммит: `eeaafc9f8bbb753e84fbd02a76ecf89eb0f93a72`, ветка `codex/wms517-sales-report-contract`; SHA в origin проверен.
+
+В новом [тесте](/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-sales-report-contract/backend/tests/test_wms517_raw_integer_price.py) ровно четыре случая: одиночная плохая цена и плохая рядом со здоровой, каждый с `raise_app_exceptions=True/False`. Fake HTTP передаёт `finishedPrice` как JSON-число из 5000 цифр без кавычек. Контракт требует `invalid_sale_price` только у плохой позиции и **1234 копейки** у здоровой.
+
+На существующем продукте получено **4 RED: во всех случаях HTTP 409 вместо 200**. Контрольный неизменённый `raw_numeric_price.py`: **4 passed**. Ruff нового файла прошёл. Прогоны выполнены на собственной SQLite.
+
+[Документ передачи разработчику](/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-sales-report-contract/docs/reviews/2026-10-06-wms517-raw-integer-testwriter-handoff.md) содержит команды и результаты. Коммит включает только эти два новых файла; продукт, существующие тесты и чужие изменения не затронуты.
+
