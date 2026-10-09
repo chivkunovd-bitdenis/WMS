@@ -178,11 +178,15 @@ const NAME_FONT_PT = 7
 const NAME_CHAR_WIDTH_RATIO = 0.55
 
 let nameMeasureContext: CanvasRenderingContext2D | undefined
+// Canvas is unavailable outside browsers (jsdom reports every getContext call as
+// not implemented). Ask once, then use the conservative bound without repeated calls.
+let nameMeasureUnavailable = false
 
 function nameWidthUnits(text: string, size: LabelSize): number {
   try {
-    if (!nameMeasureContext && typeof document !== 'undefined') {
+    if (!nameMeasureContext && !nameMeasureUnavailable && typeof document !== 'undefined') {
       nameMeasureContext = document.createElement('canvas').getContext('2d') ?? undefined
+      if (!nameMeasureContext) nameMeasureUnavailable = true
     }
     if (nameMeasureContext) {
       const fontPx = NAME_FONT_PT * labelTextFontScale(size) * 96 / 72
