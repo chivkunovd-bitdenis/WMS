@@ -47,7 +47,10 @@ function baseDetail(overrides: Partial<FboPackingDetail> = {}): FboPackingDetail
     boxes: [
       { id: 'B1', internal_barcode: 'INB-0001', lines: [{ id: 'BL1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity: 20 }] },
     ],
-    pick_allocations: [],
+    pick_allocations: [
+      { product_id: 'p1', quantity: 20 },
+      { product_id: 'p2', quantity: 5 },
+    ],
     ...overrides,
   }
 }
@@ -615,6 +618,7 @@ describe('WMS-686 FBO упаковка · «ШК + ЧЗ» (R51); «Допеча�
   const lineOf = (quantity: number, picked: number, requires = true) =>
     baseDetail({
       lines: [{ id: 'L1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity, picked_qty: picked, requires_honest_sign: requires }],
+      pick_allocations: picked > 0 ? [{ product_id: 'p1', quantity: picked }] : [],
     })
   const printKeys = () => mocks.printPrepared.mock.calls.map((call) => call[0].idempotencyKey)
   const barcodeKeys = () => printKeys().filter((key) => key.startsWith('fbo-bc:R1:'))
@@ -652,6 +656,23 @@ describe('WMS-686 FBO упаковка · «ШК + ЧЗ» (R51); «Допеча�
     await click('ff-packaging-line-print-L1')
     expect(posts('/marking-codes/issue')[0]?.body).toMatchObject({ product_id: 'p1', quantity: 8 })
     expect(barcodeKeys()).toHaveLength(10)
+  })
+
+  it('WMS-733: часть подобранного ещё не в коробах — N = подобрано, а не «в коробах»', async () => {
+    serverCodes = [code('c1')]
+    handlers.set('POST /marking-codes/issue', () => ({ body: { items: [code('n1'), code('n2'), code('n3')], shortage: 0 } }))
+    await mount(
+      baseDetail({
+        // Как отвечает сервер: picked_qty строки = штуки в коробах (1), подобрано 4.
+        lines: [{ id: 'L1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity: 4, picked_qty: 1, requires_honest_sign: true }],
+        boxes: [{ id: 'B1', internal_barcode: 'WHB-0001', lines: [{ id: 'BL1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity: 1 }] }],
+        pick_allocations: [{ product_id: 'p1', quantity: 4 }],
+      }),
+    )
+    await click('ff-packaging-line-print-L1')
+    expect(posts('/marking-codes/issue')[0]?.body).toMatchObject({ product_id: 'p1', quantity: 3 })
+    expect(barcodeKeys()).toHaveLength(4)
+    expect(chzKeys()).toEqual(['fbo-chz:n1', 'fbo-chz:n2', 'fbo-chz:n3'])
   })
 
   it('нехватка в пуле: «Выдано N из M: в пуле не хватает КИЗ», ШК напечатаны', async () => {

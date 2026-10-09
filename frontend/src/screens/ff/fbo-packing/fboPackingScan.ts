@@ -3,10 +3,15 @@ import type { FboPackingDetail, FboProductRow } from './fboPackingTypes'
 const GS = '\x1d'
 
 /**
- * Общая таблица товаров отгрузки: P (план) из строк, S (подобрано) из строк или
- * из подборов, B (в коробах) из составов коробов. Ничего не хранится отдельно.
+ * Общая таблица товаров отгрузки: P (план) из строк, S (подобрано) из подборов,
+ * B (в коробах) из составов коробов. Ничего не хранится отдельно.
+ *
+ * WMS-733: lines[].picked_qty в ответе сервера — это штуки в коробах, а не подбор,
+ * поэтому S берётся из pick_allocations. Поле строки — только запасной вариант,
+ * если подборы в ответе не пришли вовсе.
  */
 export function buildProductRows(detail: FboPackingDetail): FboProductRow[] {
+  const hasAllocations = Array.isArray(detail.pick_allocations)
   const pickedByProduct = new Map<string, number>()
   for (const allocation of detail.pick_allocations ?? []) {
     pickedByProduct.set(
@@ -27,7 +32,7 @@ export function buildProductRows(detail: FboPackingDetail): FboProductRow[] {
     if (existing) {
       existing.lineIds.push(line.id)
       existing.need += line.quantity
-      existing.picked += line.picked_qty ?? 0
+      if (!hasAllocations) existing.picked += line.picked_qty ?? 0
       existing.kizCount += line.kiz_count ?? 0
       if (line.requires_honest_sign !== undefined) {
         existing.requiresHonestSign = (existing.requiresHonestSign ?? false) || line.requires_honest_sign
@@ -41,7 +46,7 @@ export function buildProductRows(detail: FboPackingDetail): FboProductRow[] {
       skuCode: line.sku_code,
       productName: line.product_name,
       need: line.quantity,
-      picked: line.picked_qty ?? pickedByProduct.get(line.product_id) ?? 0,
+      picked: hasAllocations ? (pickedByProduct.get(line.product_id) ?? 0) : (line.picked_qty ?? 0),
       inBoxes: boxedByProduct.get(line.product_id) ?? 0,
       requiresHonestSign: line.requires_honest_sign,
       kizCount: line.kiz_count ?? 0,

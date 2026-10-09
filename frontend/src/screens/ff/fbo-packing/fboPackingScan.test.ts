@@ -26,16 +26,31 @@ const detail: FboPackingDetail = {
     { id: 'B1', internal_barcode: 'INB-0001', lines: [{ id: 'BL1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity: 12 }] },
     { id: 'B2', internal_barcode: 'WHB-0002', lines: [{ id: 'BL2', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity: 8 }] },
   ],
-  pick_allocations: [{ product_id: 'p2', quantity: 3 }],
+  pick_allocations: [{ product_id: 'p1', quantity: 20 }, { product_id: 'p2', quantity: 3 }],
 }
 
 describe('WMS-686 FBO упаковка · числа общей таблицы', () => {
-  it('P из плана, B — сумма по всем коробам, S из строки либо из подборов', () => {
+  it('P из плана, B — сумма по всем коробам, S из подборов', () => {
     const rows = buildProductRows(detail)
     expect(rows.map((row) => [row.productId, row.need, row.inBoxes, row.picked])).toEqual([
       ['p1', 30, 20, 20],
       ['p2', 5, 0, 3],
     ])
+  })
+
+  it('WMS-733: S из подборов, а не из picked_qty строки (там штуки в коробах)', () => {
+    const rows = buildProductRows({
+      ...detail,
+      lines: [{ id: 'L1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка 50', quantity: 4, picked_qty: 1 }],
+      boxes: [{ id: 'B1', internal_barcode: 'WHB-1', lines: [{ id: 'BL1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка 50', quantity: 1 }] }],
+      pick_allocations: [{ product_id: 'p1', quantity: 4 }],
+    })
+    expect(rows.map((row) => [row.picked, row.inBoxes, printTargetOf(row)])).toEqual([[4, 1, 4]])
+  })
+
+  it('подборы не пришли в ответе — запасной вариант по строке', () => {
+    const rows = buildProductRows({ ...detail, pick_allocations: undefined })
+    expect(rows.map((row) => row.picked)).toEqual([20, 0])
   })
 
   it('N для «ШК + ЧЗ»: подобрано, а при S = 0 — план', () => {
