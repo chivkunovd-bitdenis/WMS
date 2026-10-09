@@ -1,7 +1,7 @@
 import { Avatar, Box } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import PersonIcon from '@mui/icons-material/Person'
-import { memo, useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 type Props = {
@@ -10,6 +10,9 @@ type Props = {
   size?: number | string
   previewSize?: number
   testId?: string
+  // Необязательный счётчик обновления данных (WMS-720, список FBS): при его смене
+  // адрес, который не загрузился, проверяется снова. Без него поведение прежнее.
+  retryKey?: number
 }
 
 type PreviewPos = { top: number; left: number }
@@ -42,6 +45,7 @@ function ProductPhotoThumbBase({
   size = 44,
   previewSize = 240,
   testId,
+  retryKey,
 }: Props) {
   const theme = useTheme()
   const [previewPos, setPreviewPos] = useState<PreviewPos | null>(null)
@@ -58,8 +62,15 @@ function ProductPhotoThumbBase({
   // независимый пробник (тот же приём, что и внутри MUI) — он не привязан к тому,
   // что и когда рендерит Avatar, и его результат надёжно приходит в наше состояние.
   const [loadFailed, setLoadFailed] = useState(false)
+  const checkedSrcRef = useRef<string | null>(null)
   useEffect(() => {
-    setLoadFailed(false)
+    // Ошибка относится к конкретному адресу: при его смене старый результат сбрасывается.
+    // Повтор с тем же адресом (новый retryKey) оставляет заглушку до ответа новой проверки,
+    // чтобы на время проверки не появлялся пустой или битый <img>.
+    if (checkedSrcRef.current !== rawSrc) {
+      checkedSrcRef.current = rawSrc
+      setLoadFailed(false)
+    }
     if (!rawSrc) {
       return undefined
     }
@@ -79,7 +90,7 @@ function ProductPhotoThumbBase({
     return () => {
       active = false
     }
-  }, [rawSrc])
+  }, [rawSrc, retryKey])
   const imageSrc = loadFailed ? null : rawSrc
 
   const openPreview = useCallback(
