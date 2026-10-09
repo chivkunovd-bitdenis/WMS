@@ -1,5 +1,5 @@
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { apiUrl } from '../../api'
 import {
@@ -73,6 +73,7 @@ import {
   fetchFbsAssemblyTasks,
   fetchFbsSupplyWorklist,
   fetchFbsWorklist,
+  fetchFbsOrderCounts,
   fetchFbsCargoPlaces,
   addFbsOrdersToSupply,
   cancelFbsOrder,
@@ -83,6 +84,7 @@ import {
   syncFbsOrderStatuses,
   syncFbsSupplyTracking,
   type FbsAssemblyTask,
+  type FbsOrderCounts,
   type FbsPrintAsset,
   type FbsPrintBatch,
   type FbsSupplyWorklistItem,
@@ -241,7 +243,7 @@ function LazyProductPhotoThumb({
 }: {
   src: string | null | undefined
   alt: string
-  size: number
+  size: number | string
   previewSize: number
   testId: string
 }) {
@@ -282,6 +284,75 @@ function LazyProductPhotoThumb({
       />
     </Box>
   )
+}
+
+// Фото исключено из расчёта высоты строки: её задают текст и действия.
+// Измерение лишь резервирует такую же ширину рядом с текстом, без роста по кругу.
+function OrderProductCell({ order, children }: { order: FbsWorklistOrder; children: React.ReactNode }) {
+  const cellRef = useRef<HTMLTableCellElement | null>(null)
+  const [photoWidth, setPhotoWidth] = useState(0)
+  useLayoutEffect(() => {
+    const cell = cellRef.current
+    const row = cell?.closest('tr')
+    if (!cell || !row) return
+    const measure = () => {
+      const positionHeights = new Map<string, number>()
+      row.querySelectorAll<HTMLElement>('[data-fbs-position-content]').forEach((content) => {
+        const index = content.dataset.fbsPositionContent!
+        positionHeights.set(index, Math.max(positionHeights.get(index) ?? 0, content.getBoundingClientRect().height))
+      })
+      positionHeights.forEach((height, index) => row.style.setProperty(`--fbs-position-${index}-height`, `${height}px`))
+      const border = Number.parseFloat(getComputedStyle(cell).borderBottomWidth) || 0
+      setPhotoWidth(Math.max(0, row.getBoundingClientRect().height - border))
+    }
+    measure()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(row)
+    row.querySelectorAll('[data-fbs-position-content]').forEach((content) => observer?.observe(content))
+    window.addEventListener('resize', measure)
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure) }
+  }, [order])
+  const positions = order.marketplace === 'ozon' && order.positions.length > 0 ? order.positions : null
+  return (
+    <TableCell ref={cellRef} sx={{ minWidth: 300, position: 'relative' }}>
+      <Box sx={{ position: 'absolute', top: 0, bottom: 0, left: 16, width: photoWidth, height: '100%', aspectRatio: '1 / 1' }}>
+        <LazyProductPhotoThumb
+          src={positions?.[0]?.image_url ?? order.product.image_url}
+          alt={positions?.[0]?.name ?? order.product.name}
+          size="100%"
+          previewSize={280}
+          testId={`fbs-product-photo-${order.id}`}
+        />
+      </Box>
+      <Box sx={{ pl: `${photoWidth + 10}px`, minWidth: 220 }}>{children}</Box>
+    </TableCell>
+  )
+}
+
+// Все характеристики одной позиции занимают одинаковую высоту, даже когда
+// её название или размер перенесены. Измеряется только текст внутри обёртки.
+function OrderPositionText({ index, children, ...props }: React.ComponentProps<typeof Typography> & { index: number }) {
+  return <Typography {...props} sx={{ ...props.sx, minHeight: `var(--fbs-position-${index}-height, 0px)` }}>
+    <Box component="span" data-fbs-position-content={index} sx={{ display: 'block' }}>{children}</Box>
+  </Typography>
+}
+
+function OrderSizeCell({ order }: { order: FbsWorklistOrder }) {
+  const sizes = order.marketplace === 'ozon' && order.positions.length > 0
+    ? order.positions.map((position) => position.size) : [order.product.size]
+  return <TableCell sx={{ minWidth: 80, maxWidth: 170 }}>
+    {sizes.map((size, index) => <OrderPositionText index={index} key={index} variant="body2" sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
+      {size?.trim() || '—'}
+    </OrderPositionText>)}
+  </TableCell>
+}
+
+function OrderCountBadge({ count }: { count: number }) {
+  return <Box component="span" sx={{
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    minWidth: 22, height: 22, px: 0.5, borderRadius: '50%',
+    bgcolor: 'error.main', color: 'error.contrastText', fontSize: '0.75rem', lineHeight: 1,
+  }}>{count}</Box>
 }
 
 /** Коды, которые показываем как предупреждение, но выбор заказа не запрещают.
@@ -340,51 +411,42 @@ const NewOrderRow = memo(function NewOrderRow({
           onChange={() => onToggle(order)}
         />
       </TableCell>
-      <TableCell sx={{ minWidth: 300 }}>
-        <Stack direction="row" spacing={1.25}>
-          <LazyProductPhotoThumb
-            src={ozonPositions?.[0]?.image_url ?? order.product.image_url}
-            alt={ozonPositions?.[0]?.name ?? order.product.name}
-            size={52}
-            previewSize={280}
-            testId={`fbs-product-photo-${order.id}`}
-          />
-          <Box sx={{ minWidth: 220 }}>
-            {ozonPositions ? ozonPositions.map((position) => (
-              <Typography key={position.id ?? position.sku ?? position.name} variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
-                {position.name}
-              </Typography>
-            )) : (
-              <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
-                {order.product.id ? order.product.name : 'Товар не сопоставлен'}
-              </Typography>
-            )}
-            <Stack direction="row" spacing={0.75} sx={{ mt: 0.25, alignItems: 'center' }}>
-              <Typography variant="caption" color="text.secondary">
-                {orderNumberLabel(order)}
-              </Typography>
-              <MarketplaceChip marketplace={order.marketplace} testId={`fbs-order-${order.id}-marketplace`} />
+      <OrderProductCell order={order}>
+        <Box sx={{ minWidth: 220 }}>
+          {ozonPositions ? ozonPositions.map((position, index) => (
+            <OrderPositionText index={index} key={position.id ?? position.sku ?? position.name} variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
+              {position.name}
+            </OrderPositionText>
+          )) : (
+            <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
+              {order.product.id ? order.product.name : 'Товар не сопоставлен'}
+            </Typography>
+          )}
+          <Stack direction="row" spacing={0.75} sx={{ mt: 0.25, alignItems: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              {orderNumberLabel(order)}
+            </Typography>
+            <MarketplaceChip marketplace={order.marketplace} testId={`fbs-order-${order.id}-marketplace`} />
+          </Stack>
+          {blocked ? (
+            <Stack sx={{ mt: 0.75 }} spacing={0.25}>
+              {order.selection_blockers.map((blocker) => (
+                <BlockerLine
+                  key={blocker.code}
+                  blocker={blocker}
+                  marketplace={order.marketplace}
+                  onGoToCatalog={() => onGoToCatalog(order.product.id)}
+                />
+              ))}
             </Stack>
-            {blocked ? (
-              <Stack sx={{ mt: 0.75 }} spacing={0.25}>
-                {order.selection_blockers.map((blocker) => (
-                  <BlockerLine
-                    key={blocker.code}
-                    blocker={blocker}
-                    marketplace={order.marketplace}
-                    onGoToCatalog={() => onGoToCatalog(order.product.id)}
-                  />
-                ))}
-              </Stack>
-            ) : null}
-          </Box>
-        </Stack>
-      </TableCell>
+          ) : null}
+        </Box>
+      </OrderProductCell>
       <TableCell sx={{ minWidth: 170 }}>
-        {ozonPositions ? ozonPositions.map((position) => (
-          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+        {ozonPositions ? ozonPositions.map((position, index) => (
+          <OrderPositionText index={index} key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ whiteSpace: 'nowrap' }}>
             {position.seller_article ?? '—'}
-          </Typography>
+          </OrderPositionText>
         )) : <>
           <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
             {order.product.seller_article ?? '—'}
@@ -395,28 +457,15 @@ const NewOrderRow = memo(function NewOrderRow({
           </Typography>
         ) : null}</>}
       </TableCell>
-      <TableCell sx={{ minWidth: 170 }}>
-        {ozonPositions ? ozonPositions.map((position) => (
-          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-            {position.sku ?? '—'}
-          </Typography>
-        )) : <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-          {order.product.sku ?? '—'}
-        </Typography>}
-      </TableCell>
+      <OrderSizeCell order={order} />
       <TableCell sx={{ minWidth: 150 }}>
-        {ozonPositions ? ozonPositions.map((position) => (
-          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
+        {ozonPositions ? ozonPositions.map((position, index) => (
+          <OrderPositionText index={index} key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
             {position.barcode ?? '—'}
-          </Typography>
+          </OrderPositionText>
         )) : <Typography variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
           {order.product.barcode ?? '—'}
         </Typography>}
-      </TableCell>
-      <TableCell sx={{ minWidth: 80 }}>
-        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-          {order.product.size ?? '—'}
-        </Typography>
       </TableCell>
       <TableCell>
         <Tooltip title={order.seller.name ?? '—'}>
@@ -429,6 +478,8 @@ const NewOrderRow = memo(function NewOrderRow({
       </TableCell>
       <TableCell>
         <DeadlinePill
+          elapsed
+          createdAt={order.created_at_wb}
           deadlineAt={order.deadline_at}
           serverNow={serverNow}
           cancelled={order.status === 'cancelled'}
@@ -630,6 +681,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   const resumedPendingAssemblyTaskFor = useRef<string | null>(null)
   const loadingRef = useRef(false)
   const loadSequence = useRef(0)
+  const countsContext = JSON.stringify([token, sellerId, marketplace, statusGroup, wbWarehouseId, activeSearch])
+  const [countsResult, setCountsResult] = useState<{ context: string; value: FbsOrderCounts } | null>(null)
+  const counts = countsResult?.context === countsContext ? countsResult.value : null
+  const tableContainerRef = useRef<HTMLDivElement | null>(null)
+  const [tableTop, setTableTop] = useState(0)
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
   // собой последние строки таблицы — оператор кликал по чекбоксу второго заказа и
   // попадал в панель (см. tests-e2e/ff-fbs-orders.spec.ts:277). Меряем реальную высоту
@@ -637,6 +693,17 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
   // панель — так нижние строки остаются кликабельными при любой высоте панели.
   const selectionBarRef = useRef<HTMLDivElement | null>(null)
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
+
+  useLayoutEffect(() => {
+    const node = tableContainerRef.current
+    if (!node) return
+    const measure = () => setTableTop(Math.max(0, Math.ceil(node.getBoundingClientRect().top)))
+    measure()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    if (node.parentElement) observer?.observe(node.parentElement)
+    window.addEventListener('resize', measure)
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure) }
+  })
 
   // A successful server commit whose reply was lost is safe to replay under
   // its saved key. Leave a failed recovery on disk for the dialog retry.
@@ -653,6 +720,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
     loadingRef.current = true
     setBusy(true)
     setError(null)
+    void fetchFbsOrderCounts(token, authHeaders, {
+      seller_id: sellerId === '__all__' ? null : sellerId,
+      marketplace: marketplace === '__all__' ? null : marketplace,
+      status_group: statusGroup, search: activeSearch,
+      wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
+    }).then((value) => {
+      if (sequence === loadSequence.current) setCountsResult({ context: countsContext, value })
+    }).catch((cause: unknown) => {
+      if (sequence === loadSequence.current) setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
+    })
     try {
       if (isFbsSupplyGroup(statusGroup)) {
         // Задача 4 пула (HANDOFF-POLISH.md, решение П3): «В работе», «В доставке» и
@@ -725,7 +802,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         loadingRef.current = false
       }
     }
-  }, [token, authHeaders, sellerId, marketplace, statusGroup, wbWarehouseId, activeSearch])
+  }, [token, authHeaders, sellerId, marketplace, statusGroup, wbWarehouseId, activeSearch, countsContext])
 
   useEffect(() => {
     void load()
@@ -1266,7 +1343,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
     <Box
       data-testid="fbs-orders-screen"
       sx={{
-        pb: hasNewSelection ? 24 : 3,
+        pb: hasNewSelection ? `${selectionBarHeight + 54}px` : 3,
         minWidth: 0,
         width: '100%',
         maxWidth: 'calc(100vw - 308px)',
@@ -1362,7 +1439,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
             <Tab
               key={tab.key}
               value={tab.key}
-              label={tab.label}
+              label={<Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                <span>{tab.label}</span>
+                {counts && (tab.key === 'new' || tab.key === 'active' || tab.key === 'delivery')
+                  ? <OrderCountBadge count={counts.tabs[tab.key]} /> : null}
+              </Stack>}
               data-task-id={
                 tab.key === 'cancelled' ? 'FBS-06' : tab.key === 'expired' ? 'FBS-03' : undefined
               }
@@ -1395,7 +1476,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
               <MenuItem value="__all__">Все селлеры</MenuItem>
               {sellers.map((seller) => (
                 <MenuItem key={seller.id} value={seller.id}>
-                  {seller.name}
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <span>{seller.name}</span>
+                    {counts && counts.sellers[seller.id] != null ? <OrderCountBadge count={counts.sellers[seller.id]} /> : null}
+                  </Stack>
                 </MenuItem>
               ))}
             </Select>
@@ -1539,7 +1623,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
       ) : null}
 
       {isFbsSupplyGroup(statusGroup) ? (
-        <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: 'calc(100vh - 330px)' }}>
+        <TableContainer ref={tableContainerRef} component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: `calc(100vh - ${tableTop + 24}px)`, overflowY: 'auto' }}>
           <Table stickyHeader size="small" data-testid="fbs-18-supplies-table">
             <TableHead>
               <TableRow>
@@ -1588,6 +1672,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         </TableContainer>
       ) : (
       <TableContainer
+        ref={tableContainerRef}
         component={Paper}
         variant="outlined"
         sx={{
@@ -1596,9 +1681,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
           // низа вьюпорта (18px) + небольшой воздух, чтобы нижняя строка таблицы
           // никогда не пряталась под панелью, а не «подрезалась» вплотную к ней.
           maxHeight: hasNewSelection
-            ? `calc(100vh - 330px - ${selectionBarHeight + 30}px)`
-            : 'calc(100vh - 330px)',
-          transition: 'max-height 0.15s ease',
+            ? `calc(100vh - ${tableTop + 24}px - ${selectionBarHeight + 30}px)`
+            : `calc(100vh - ${tableTop + 24}px)`,
+          // Если фильтры и панель заняли всё окно, оставляем шапку и строку:
+          // до них можно дойти прокруткой страницы, не схлопывая список.
+          minHeight: hasNewSelection ? 128 : undefined,
+          overflowY: 'auto',
         }}
       >
         <Table stickyHeader size="small" data-testid="fbs-worklist-table">
@@ -1617,9 +1705,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                 <>
                   <TableCell sx={{ minWidth: 300 }}>Товар</TableCell>
                   <TableCell sx={{ minWidth: 170 }}>Артикул продавца</TableCell>
-                  <TableCell sx={{ minWidth: 170 }}>SKU</TableCell>
-                  <TableCell sx={{ minWidth: 150 }}>ШК</TableCell>
                   <TableCell sx={{ minWidth: 80 }}>Размер</TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>ШК</TableCell>
                   <TableCell sx={{ minWidth: 135 }}>Селлер</TableCell>
                   <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
                   <TableCell sx={{ minWidth: 105 }}>Отгрузить до</TableCell>
@@ -1628,9 +1715,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                 <>
                   <TableCell sx={{ minWidth: 300 }}>Товар</TableCell>
                   <TableCell sx={{ minWidth: 170 }}>Артикул продавца</TableCell>
-                  <TableCell sx={{ minWidth: 170 }}>SKU</TableCell>
-                  <TableCell sx={{ minWidth: 150 }}>ШК</TableCell>
                   <TableCell sx={{ minWidth: 80 }}>Размер</TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>ШК</TableCell>
                   <TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>
                   <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
                   <TableCell sx={{ minWidth: 105 }}>Отгрузить до</TableCell>
@@ -1685,37 +1771,28 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                 >
                   <TableCell padding="checkbox" />
                     <>
-                      <TableCell sx={{ minWidth: 300 }}>
-                        <Stack direction="row" spacing={1.25}>
-                          <ProductPhotoThumb
-                            src={ozonPositions?.[0]?.image_url ?? order.product.image_url}
-                            alt={ozonPositions?.[0]?.name ?? order.product.name}
-                            size={56}
-                            previewSize={280}
-                            testId={`fbs-product-photo-${order.id}`}
-                          />
-                          <Box sx={{ minWidth: 220 }}>
-                            {ozonPositions ? ozonPositions.map((position) => (
-                              <Typography key={position.id ?? position.sku ?? position.name} variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
-                                {position.name}
-                              </Typography>
-                            )) : <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
-                              {order.product.id ? order.product.name : 'Товар не сопоставлен'}
-                            </Typography>}
-                            <Stack direction="row" spacing={0.75} sx={{ mt: 0.25, alignItems: 'center' }}>
-                              <Typography variant="caption" color="text.secondary">
-                                Заказ {orderNumberLabel(order)}
-                              </Typography>
-                              <MarketplaceChip marketplace={order.marketplace} testId={`fbs-order-${order.id}-marketplace`} />
-                            </Stack>
-                          </Box>
-                        </Stack>
-                      </TableCell>
+                      <OrderProductCell order={order}>
+                        <Box sx={{ minWidth: 220 }}>
+                          {ozonPositions ? ozonPositions.map((position, index) => (
+                            <OrderPositionText index={index} key={position.id ?? position.sku ?? position.name} variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
+                              {position.name}
+                            </OrderPositionText>
+                          )) : <Typography variant="subtitle2" sx={{ lineHeight: 1.25, fontWeight: 700 }}>
+                            {order.product.id ? order.product.name : 'Товар не сопоставлен'}
+                          </Typography>}
+                          <Stack direction="row" spacing={0.75} sx={{ mt: 0.25, alignItems: 'center' }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Заказ {orderNumberLabel(order)}
+                            </Typography>
+                            <MarketplaceChip marketplace={order.marketplace} testId={`fbs-order-${order.id}-marketplace`} />
+                          </Stack>
+                        </Box>
+                      </OrderProductCell>
                       <TableCell sx={{ minWidth: 170 }}>
-                        {ozonPositions ? ozonPositions.map((position) => (
-                          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                        {ozonPositions ? ozonPositions.map((position, index) => (
+                          <OrderPositionText index={index} key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ whiteSpace: 'nowrap' }}>
                             {position.seller_article ?? '—'}
-                          </Typography>
+                          </OrderPositionText>
                         )) : <>
                           <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
                             {order.product.seller_article ?? '—'}
@@ -1726,28 +1803,15 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                           </Typography>
                         ) : null}</>}
                       </TableCell>
-                      <TableCell sx={{ minWidth: 170 }}>
-                        {ozonPositions ? ozonPositions.map((position) => (
-                          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-                            {position.sku ?? '—'}
-                          </Typography>
-                        )) : <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-                          {order.product.sku ?? '—'}
-                        </Typography>}
-                      </TableCell>
+                      <OrderSizeCell order={order} />
                       <TableCell sx={{ minWidth: 150 }}>
-                        {ozonPositions ? ozonPositions.map((position) => (
-                          <Typography key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
+                        {ozonPositions ? ozonPositions.map((position, index) => (
+                          <OrderPositionText index={index} key={position.id ?? position.sku ?? position.name} variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
                             {position.barcode ?? '—'}
-                          </Typography>
+                          </OrderPositionText>
                         )) : <Typography variant="body2" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}>
                           {order.product.barcode ?? '—'}
                         </Typography>}
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 80 }}>
-                        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-                          {order.product.size ?? '—'}
-                        </Typography>
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">{order.seller.name ?? '—'}</Typography>
@@ -1758,6 +1822,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                       </TableCell>
                       <TableCell>
                         <DeadlinePill
+                          elapsed
+                          createdAt={order.created_at_wb}
                           deadlineAt={order.deadline_at}
                           serverNow={serverNow}
                           cancelled={order.status === 'cancelled'}
@@ -1810,7 +1876,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
             })}
             {!busy && orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={statusGroup === 'new' ? 9 : 10}>
+                <TableCell colSpan={statusGroup === 'new' ? 8 : 9}>
                   <Box sx={{ py: 8, textAlign: 'center' }}>
                     <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
                     <Typography variant="subtitle1" sx={{ mt: 1 }}>

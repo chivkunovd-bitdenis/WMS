@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom'
 type Props = {
   src: string | null | undefined
   alt?: string
-  size?: number
+  size?: number | string
   previewSize?: number
   testId?: string
 }

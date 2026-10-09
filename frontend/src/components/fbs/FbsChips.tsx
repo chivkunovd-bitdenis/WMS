@@ -24,7 +24,7 @@ function createDeadlineClock(serverNow: string | null | undefined) {
 
   const getSnapshot = () => {
     const clientNow = readClock()
-    if (clientAnchor === null) return clientNow
+    if (clientAnchor === null) return Number.isFinite(serverMs) ? serverMs : clientNow
     return Number.isFinite(serverMs) ? serverMs + (clientNow - clientAnchor) : clientNow
   }
 
@@ -33,7 +33,12 @@ function createDeadlineClock(serverNow: string | null | undefined) {
       clientAnchor = readClock()
       onStoreChange()
       const timer = window.setInterval(onStoreChange, CLOCK_TICK_MS)
-      return () => window.clearInterval(timer)
+      const onVisibility = () => { if (!document.hidden) onStoreChange() }
+      document.addEventListener('visibilitychange', onVisibility)
+      return () => {
+        window.clearInterval(timer)
+        document.removeEventListener('visibilitychange', onVisibility)
+      }
     },
     getSnapshot,
     getServerSnapshot: () => (Number.isFinite(serverMs) ? serverMs : 0),
@@ -92,11 +97,15 @@ export function DeadlinePill({
   cancelled,
   serverNow,
   marketplace = 'wb',
+  createdAt,
+  elapsed = false,
 }: {
   deadlineAt: string | null
   cancelled?: boolean
   serverNow?: string | null
   marketplace?: 'wb' | 'ozon'
+  createdAt?: string | null
+  elapsed?: boolean
 }) {
   // Серверное время — базовая отметка, а клиентские часы измеряют только прошедшее после
   // получения этой отметки время. Поэтому clock-skew оператора не меняет старт дедлайна,
@@ -104,35 +113,40 @@ export function DeadlinePill({
   const clock = useMemo(() => createDeadlineClock(serverNow), [serverNow])
   const now = useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.getServerSnapshot)
 
-  if (cancelled || !deadlineAt) {
-    return (
-      <Chip size="small" variant="outlined" color="default" label="—" data-testid="fbs-deadline-pill" />
-    )
+  const createdMs = createdAt ? Date.parse(createdAt) : Number.NaN
+  const deadlineMs = deadlineAt ? Date.parse(deadlineAt) : Number.NaN
+  if (cancelled || (elapsed ? !Number.isFinite(createdMs) : !Number.isFinite(deadlineMs))) {
+    return <Chip size="small" variant="outlined" color="default" label="—" data-testid="fbs-deadline-pill" />
   }
-  const msLeft = new Date(deadlineAt).getTime() - now
-  if (marketplace === 'ozon' && msLeft <= 0) return null
+  const hasDeadline = Number.isFinite(deadlineMs)
+  const msLeft = deadlineMs - now
+  if (!elapsed && marketplace === 'ozon' && msLeft <= 0) return null
   const hoursLeft = Math.floor(msLeft / 3_600_000)
-  let color: ChipProps['color'] = 'success'
-  let label = `${hoursLeft} ч`
-  if (msLeft <= 0) {
-    color = 'error'
-    label = 'Просрочен'
-  } else if (hoursLeft <= 12) {
-    color = 'warning'
-  } else if (hoursLeft <= 48) {
-    color = 'info'
+  const minutesElapsed = Math.max(0, Math.floor((now - createdMs) / 60_000))
+  let color: ChipProps['color'] = 'default'
+  let label = elapsed
+    ? `${Math.floor(minutesElapsed / 60)} ч ${String(minutesElapsed % 60).padStart(2, '0')} мин`
+    : `${hoursLeft} ч`
+  if (hasDeadline) {
+    if (msLeft <= 0) {
+      color = marketplace === 'ozon' ? 'default' : 'error'
+      if (!elapsed) label = 'Просрочен'
+    } else if (hoursLeft <= 12) color = 'warning'
+    else if (hoursLeft <= 48) color = 'info'
+    else color = 'success'
   }
   return (
-    <Tooltip title={marketplace === 'ozon'
-      ? `Отгрузить в Ozon до ${new Date(deadlineAt).toLocaleString('ru-RU')}.`
-      : `Отгрузить до ${new Date(deadlineAt).toLocaleString('ru-RU')}. Рассчитано WMS: 120 часов с момента создания заказа в WB.`}>
+    <Tooltip title={!hasDeadline ? '' : marketplace === 'ozon'
+      ? `Отгрузить в Ozon до ${new Date(deadlineMs).toLocaleString('ru-RU')}.`
+      : `Отгрузить до ${new Date(deadlineMs).toLocaleString('ru-RU')}. Рассчитано WMS: 120 часов с момента создания заказа в WB.`}>
       <Chip
         size="small"
         variant="outlined"
         color={color}
         label={label}
+        sx={{ whiteSpace: 'nowrap' }}
         data-testid="fbs-deadline-pill"
-        data-overdue={msLeft <= 0 ? 'true' : 'false'}
+        data-overdue={hasDeadline && msLeft <= 0 && marketplace !== 'ozon' ? 'true' : 'false'}
       />
     </Tooltip>
   )

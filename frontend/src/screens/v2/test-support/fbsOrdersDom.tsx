@@ -64,6 +64,17 @@ export function installNetwork(read: (url: URL) => Response | Promise<Response>)
     if (url.pathname.endsWith('/fbs/assembly-time')) return json({ hours: 0, orders: 0, in12: null, in24: null })
     if (url.pathname.endsWith('/operations/fbs-assembly-tasks')) return json({ items: [] })
     if (/\/operations\/fbs-sellers\/[^/]+\/warehouses$/.test(url.pathname)) return json([])
+    // Neighboring list contracts do not supply a counts response. Give only
+    // that new read a neutral fixture; WMS-716's explicit responses, failures
+    // and delayed requests still go through the caller unchanged.
+    if (url.pathname.endsWith('/fbs-orders/counts')) {
+      let response: Response | Promise<Response>
+      try { response = read(url) } catch (cause) {
+        if (!(cause instanceof Error) || !cause.message.startsWith('Unexpected') || !cause.message.includes('/fbs-orders/counts')) throw cause
+        return json({ tabs: { new: 0, active: 0, delivery: 0 }, sellers: {} })
+      }
+      return response
+    }
     return read(url)
   })
 }

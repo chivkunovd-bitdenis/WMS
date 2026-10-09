@@ -681,6 +681,32 @@ export function resolveFbsAssetUrl(path: string): string {
   return /^(https?:|data:)/i.test(path) ? path : apiUrl(path)
 }
 
+export type FbsOrderCounts = {
+  tabs: { new: number; active: number; delivery: number }
+  sellers: Record<string, number>
+}
+
+export async function fetchFbsOrderCounts(
+  token: string,
+  ah: AuthHeaders,
+  params: {
+    seller_id?: string | null
+    marketplace?: 'wb' | 'ozon' | null
+    status_group: string
+    wb_warehouse_id?: string | null
+    search?: string | null
+  },
+): Promise<FbsOrderCounts> {
+  const qs = new URLSearchParams({ status_group: params.status_group })
+  if (params.seller_id) qs.set('seller_id', params.seller_id)
+  if (params.marketplace) qs.set('marketplace', params.marketplace)
+  if (params.wb_warehouse_id) qs.set('wb_warehouse_id', params.wb_warehouse_id)
+  if (params.search) qs.set('search', params.search)
+  return jsonOrThrow<FbsOrderCounts>(await fetch(apiUrl(`/operations/fbs-orders/counts?${qs}`), {
+    headers: { ...ah(token) },
+  }))
+}
+
 export async function fetchFbsWorklist(
   token: string,
   ah: AuthHeaders,
