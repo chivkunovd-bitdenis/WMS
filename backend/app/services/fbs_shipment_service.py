@@ -1461,17 +1461,17 @@ async def _write_off_delivered_orders_once(
     for order in active_orders:
         ledger = existing_ledgers.get(order.id)
         resolution = resolutions.get(order.id)
+        if order.marketplace == "ozon":
+            if order.product_id is not None:
+                stock_product_ids.add(order.product_id)
+            stock_product_ids.update(
+                position.product_id
+                for position in order.product_positions
+                if position.product_id is not None
+            )
         if ledger is None:
             if resolution is not None:
                 stock_product_ids.add(resolution.product_id)
-            if order.marketplace == "ozon":
-                if order.product_id is not None:
-                    stock_product_ids.add(order.product_id)
-                stock_product_ids.update(
-                    position.product_id
-                    for position in order.product_positions
-                    if position.product_id is not None
-                )
             continue
 
         if ledger.shipment_movement_id is None:
