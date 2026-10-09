@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, Response
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from test_ozon_posting_contract import _seed, posting_row
 from test_wms744_inbound_product_lock_order import (
     BASE,
     _assert_successful_posts,
@@ -20,14 +23,19 @@ from test_wms744_inbound_product_lock_order import (
 )
 
 from app.db.session import SessionLocal, engine
-from app.models.fbs_order import FbsOrder
+from app.models.fbs_order import FbsOrder, FbsOrderProductReservation
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
+from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.services import inbound_intake_service as intake_svc
 from app.services import inventory_service as inv_svc
+from app.services import ozon_fbs_sync_service as sync_svc
 from app.services.fbs_order_import_scope_service import FbsOrderImportStats, import_wb_order_rows
+from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -286,3 +294,102 @@ async def test_wms744_wb_import_prelocks_all_products_in_stable_order(
         "before per-order reservation locks; observed "
         f"{lock_events}"
     )
+
+
+@pytest.mark.asyncio
+async def test_wms744_ozon_import_prelocks_all_orders_before_individual_reserves(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if engine.dialect.name != "postgresql":
+        pytest.skip("PostgreSQL row locks are required")
+    ctx = await _seed(db_session)
+    second = Product(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id,
+        name="Second Ozon product", sku_code=f"wms744-{uuid.uuid4().hex}",
+        fbs_stock_sync_enabled=True,
+    )
+    location = StorageLocation(
+        tenant_id=ctx.tenant.id, warehouse_id=ctx.warehouse.id,
+        code="W744", barcode=f"wms744-{uuid.uuid4().hex}",
+    )
+    db_session.add_all([second, location])
+    await db_session.flush()
+    db_session.add(ProductMarketplaceLink(
+        tenant_id=ctx.tenant.id, seller_id=ctx.seller.id, product_id=second.id,
+        marketplace="ozon", external_sku="5680762791",
+        external_product_id="6204279712", external_offer_id="W744-SECOND",
+    ))
+    product_ids = {ctx.product.id, second.id}
+    for product_id in product_ids:
+        db_session.add(InventoryBalance(
+            tenant_id=ctx.tenant.id, product_id=product_id,
+            storage_location_id=location.id, quantity=10,
+            quantity_unpacked=10, quantity_packed=0,
+        ))
+    await db_session.commit()
+    rows = [posting_row(), posting_row(sku=5680762791)]
+    rows[1]["posting_number"] = "W744-SECOND-1"
+    rows[1]["products"][0]["offer_id"] = "W744-SECOND"
+    # Import larger UUID first: row order must not set global stock-lock order.
+    if str(ctx.product.id) < str(second.id):
+        rows.reverse()
+    events: list[tuple[str, set[uuid.UUID]]] = []
+    sql_locks: list[str] = []
+    original_batch = inv_svc.lock_stock_products
+    original_single = inv_svc.lock_stock_product
+
+    async def observe_batch(
+        session: AsyncSession, tenant_id: uuid.UUID, ids: Iterable[uuid.UUID],
+    ) -> None:
+        ids = set(ids)
+        await original_batch(session, tenant_id, ids)
+        events.append(("batch", ids))
+
+    async def observe_single(
+        session: AsyncSession, tenant_id: uuid.UUID, product_id: uuid.UUID,
+    ):
+        events.append(("single", {product_id}))
+        return await original_single(session, tenant_id, product_id)
+
+    def observe_sql(_connection, _cursor, statement, _parameters, _context, _many):
+        if "FROM products" in statement and "FOR UPDATE" in statement:
+            sql_locks.append(statement)
+
+    monkeypatch.setattr(inv_svc, "lock_stock_products", observe_batch)
+    monkeypatch.setattr(inv_svc, "lock_stock_product", observe_single)
+    event.listen(engine.sync_engine, "before_cursor_execute", observe_sql)
+    try:
+        result = await sync_svc.sync_ozon_orders(
+            db_session, ctx.tenant.id, ctx.seller.id,
+            OzonMarketplaceProvider(transport=FakeMarketplaceTransport(orders=rows)),
+            AsyncMock(),
+        )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", observe_sql)
+    assert result["orders_created"] == 2
+    assert events and events[0] == ("batch", product_ids), (
+        f"All imported products must be prelocked before per-order locks: {events}"
+    )
+    assert sum(kind == "batch" for kind, _ids in events) == 1
+    assert {next(iter(ids)) for kind, ids in events if kind == "single"} == product_ids
+    assert sql_locks and "ORDER BY products.id" in sql_locks[0]
+    orders = (await db_session.scalars(select(FbsOrder).where(
+        FbsOrder.tenant_id == ctx.tenant.id, FbsOrder.marketplace == "ozon",
+    ))).all()
+    assert len(orders) == 2
+    assert {order.reserve_status for order in orders} == {"reserved"}
+    reservations = (await db_session.scalars(select(FbsOrderProductReservation).where(
+        FbsOrderProductReservation.product_id.in_(product_ids),
+    ))).all()
+    assert len(reservations) == 2
+    assert {(r.product_id, r.quantity) for r in reservations} == {
+        (product_id, 2) for product_id in product_ids
+    }
+    balances = (await db_session.scalars(select(InventoryBalance).where(
+        InventoryBalance.product_id.in_(product_ids),
+    ))).all()
+    assert len(balances) == 2
+    assert {(b.product_id, b.quantity, b.quantity_unpacked, b.quantity_packed,
+             b.storage_location_id) for b in balances} == {
+        (product_id, 10, 10, 0, location.id) for product_id in product_ids
+    }
