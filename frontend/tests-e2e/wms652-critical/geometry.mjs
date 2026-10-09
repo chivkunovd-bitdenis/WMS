@@ -47,14 +47,14 @@ const metrics=`(()=>{
  qr:qr&&{checked:qr.checked,disabled:qr.disabled},
  text:document.body.innerText};})()`;
 export async function geometryContracts(ctx){
- const {cdp,evaluate,until,click,clickElement,report,dir,origin,startPacking,startSelection,logs}=ctx;
+ const {cdp,evaluate,until,click,clickElement,report,dir,origin,startPacking,startSelection,logs,isolate}=ctx;
  let lastMeasurement;
  const pause=ms=>new Promise(r=>setTimeout(r,ms));
  async function save(id,measurements){const stem=id.replaceAll(/[^a-zA-Z0-9_-]/g,'-');
   await writeFile(`${dir}/${stem}.json`,JSON.stringify({measurements,...logs()},null,2));
   const png=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
   await writeFile(`${dir}/${stem}.png`,Buffer.from(png.data,'base64'));}
- async function run(id,fn){report.currentCase=id;lastMeasurement=undefined;let result;
+ async function run(id,fn){await isolate(id);report.currentCase=id;lastMeasurement=undefined;let result;
   try{result=await fn();assert.equal(logs().blocked.length,0);assert.equal(logs().errors.length,0);report.cases.push({id,status:'PASS'});console.log(`${id}: PASS`);}
   catch(e){report.cases.push({id,status:'FAIL',failure:String(e)});console.error(`${id}: ${e}`);}
   await save(id,result??lastMeasurement??await evaluate(metrics));

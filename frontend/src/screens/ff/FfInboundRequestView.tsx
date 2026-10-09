@@ -1698,7 +1698,7 @@ export function FfInboundRequestView({
           const items = target.kind === 'box' ? detail?.boxes : detail?.cargo_places
           return [paths[index], items?.find((item) => item.id === target.id)?.label_printed_at ?? null]
         }))
-        const prepared: InboundLabelAttempt = { id: randomId(), printedBefore, html: '', paths, state: 'unknown' }
+        const prepared: InboundLabelAttempt = { id: randomId(), printedBefore, paths, state: 'unknown' }
         // One complete iframe, with concurrent decode, before technical marks.
         await printBarcodeLabels(targets.map((target) => ({
           title: target.kind === 'box'
@@ -1713,9 +1713,9 @@ export function FfInboundRequestView({
           ] : undefined,
           labelSize,
           layout: 'internalBox' as const,
-        })), { beforeTransfer: (html) => {
-          prepared.html = html
-          // Synchronous durable write must succeed before external print.
+        })), { beforeTransfer: () => {
+          // Synchronous record right before the external print, so that a later press recognises an
+          // unknown outcome. If the browser storage refuses it, the print goes on without the record.
           saveInboundLabelAttempt(token, requestId, prepared)
         } })
         attempt = { ...prepared, state: 'transferred' }
