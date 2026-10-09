@@ -12,7 +12,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import Select, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1420,6 +1420,43 @@ async def get_supply(
     return supply
 
 
+def supply_worklist_statement(
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None = None,
+    marketplace: str | None = None,
+    status_group: str = "active",
+    search: str | None = None,
+) -> Select[tuple[FbsSupply]]:
+    """The same supply selection for list rows and derived order counts."""
+    status_map = {
+        "active": FBS_SUPPLY_ACTIVE_STATUSES,
+        "delivery": {FBS_SUPPLY_STATUS_IN_DELIVERY},
+        "done": {FBS_SUPPLY_STATUS_DONE},
+    }
+    statuses = status_map.get(status_group)
+    if statuses is None:
+        raise FbsSupplyError("invalid_status_group", http_status=400)
+    stmt = select(FbsSupply).where(
+        FbsSupply.tenant_id == tenant_id, FbsSupply.status.in_(statuses)
+    )
+    if seller_id is not None:
+        stmt = stmt.where(FbsSupply.seller_id == seller_id)
+    if marketplace is not None:
+        stmt = stmt.where(FbsSupply.marketplace == marketplace)
+    if search and search.strip():
+        term = search.strip()
+        stmt = stmt.where(or_(
+            supply_number_search_clause(term),
+            exists(select(FbsOrder.id).where(
+                FbsOrder.supply_id == FbsSupply.id,
+                FbsOrder.tenant_id == tenant_id,
+                order_search_clause(term),
+            )),
+        ))
+    return stmt
+
+
 async def list_supply_worklist(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1430,50 +1467,19 @@ async def list_supply_worklist(
     limit: int = 100,
     search: str | None = None,
 ) -> dict[str, Any]:
-    status_map = {
-        "active": FBS_SUPPLY_ACTIVE_STATUSES,
-        "delivery": {FBS_SUPPLY_STATUS_IN_DELIVERY},
-        "done": {FBS_SUPPLY_STATUS_DONE},
-    }
-    statuses = status_map.get(status_group)
-    if statuses is None:
-        raise FbsSupplyError("invalid_status_group", http_status=400)
-    stmt = (
-        select(FbsSupply)
-        .options(
-            selectinload(FbsSupply.seller),
-            selectinload(FbsSupply.warehouse),
-            selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
-        )
-        .where(FbsSupply.tenant_id == tenant_id, FbsSupply.status.in_(statuses))
-        .order_by(FbsSupply.updated_at.desc(), FbsSupply.id.desc())
-        .limit(limit)
+    stmt = supply_worklist_statement(
+        tenant_id, seller_id=seller_id, marketplace=marketplace,
+        status_group=status_group, search=search,
     )
-    if seller_id is not None:
-        stmt = stmt.where(FbsSupply.seller_id == seller_id)
-    if marketplace is not None:
-        stmt = stmt.where(FbsSupply.marketplace == marketplace)
-    total = None
-    if search and search.strip():
-        term = search.strip()
-        stmt = stmt.where(
-            or_(
-                supply_number_search_clause(term),
-                exists(
-                    select(FbsOrder.id).where(
-                        FbsOrder.supply_id == FbsSupply.id,
-                        FbsOrder.tenant_id == tenant_id,
-                        order_search_clause(term),
-                    )
-                ),
-            )
-        )
-        total = int(
-            await session.scalar(
-                select(func.count()).select_from(stmt.limit(None).order_by(None).subquery())
-            )
-            or 0
-        )
+    total = (
+        int(await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
+        if search and search.strip() else None
+    )
+    stmt = stmt.options(
+        selectinload(FbsSupply.seller),
+        selectinload(FbsSupply.warehouse),
+        selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
+    ).order_by(FbsSupply.updated_at.desc(), FbsSupply.id.desc()).limit(limit)
     supplies = list((await session.execute(stmt)).scalars().all())
     if not supplies:
         return {"items": [], "total": total, "server_now": datetime.now(tz=UTC).isoformat()}
