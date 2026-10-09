@@ -3,8 +3,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
+import { FfFbsSupplyAssembly } from './FfFbsSupplyAssembly'
 import type { FbsWorkspace } from './fbsApi'
 import { saveFbsWorkspaceStage } from './fbsWorkspaceStage'
+import * as packingScan from './fbsSequentialPacking'
 
 // WMS-712: предупреждение о недоборе на вкладке «Упаковка и маркировка».
 // Тесты читают только сохранённые ответы сервера (фикстуры ниже) и не открывают
@@ -143,6 +145,22 @@ function workspaceOf(marketplace: 'wb' | 'ozon', orders: ReturnType<typeof order
     last_wb_sync_at: null,
     server_now: '2026-10-09T12:00:00+03:00',
   } as unknown as FbsWorkspace
+}
+
+function forAssembly(base: FbsWorkspace, supplyId: string, taskId: string): FbsWorkspace {
+  return {
+    ...base,
+    supply: { ...base.supply, id: supplyId, name: `Поставка ${supplyId}`, packaging_task_id: taskId },
+    orders: base.orders.map((item, index) => ({
+      ...item,
+      id: `${supplyId}-${index}`,
+      supply_id: supplyId,
+      positions: item.positions.map((position, positionIndex) => ({
+        ...position,
+        id: `${supplyId}-${index}-${positionIndex}`,
+      })),
+    })),
+  }
 }
 
 // C1, C3, C7, C9: одна недостающая штука у одного товара.
@@ -376,6 +394,45 @@ describe('WMS-712 · предупреждение о недоборе на уп�
     expect(shortageLines()).toEqual([])
   })
 
+  it('C8: в групповой сборке предупреждение есть только у поставки с недобором', async () => {
+    const supplyIds = ['supply-wms712-short', 'supply-wms712-complete']
+    const groupedWorkspaces = new Map([
+      [supplyIds[0], forAssembly(oneShortage, supplyIds[0], 'task-wms712-short')],
+      [supplyIds[1], forAssembly(fullyPicked, supplyIds[1], 'task-wms712-complete')],
+    ])
+    window.sessionStorage.setItem(`wms:fbs:assembly:${supplyIds.join(',')}:stage`, 'packing')
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://wms.test')
+      const method = (init?.method ?? 'GET').toUpperCase()
+      const path = url.pathname.replace(/^\/api/, '')
+      requests.push(`${method} ${path}`)
+      if (method !== 'GET') return json({ detail: 'WMS-712 C8: записи не ожидаются' }, 503)
+      const supply = [...groupedWorkspaces].find(([id]) => path.endsWith(`/fbs-supplies/${id}/workspace`))
+      if (supply) return json(supply[1])
+      const taskId = [...groupedWorkspaces.values()].map((item) => item.supply.packaging_task_id)
+        .find((id) => path.endsWith(`/packaging-tasks/${id}`))
+      if (taskId) return json({ ...packagingTask, id: taskId })
+      return json({ detail: 'WMS-712 C8: неожиданное чтение' }, 503)
+    }) as typeof fetch
+
+    await act(async () => {
+      root.render(<FfFbsSupplyAssembly
+        token="token-wms712"
+        authHeaders={authHeaders}
+        supplyIds={supplyIds}
+        open
+        onClose={() => undefined}
+      />)
+    })
+
+    await vi.waitFor(() => {
+      expect(document.querySelectorAll('[data-testid="fbs-unpicked-warning"]')).toHaveLength(1)
+    }, { timeout: 5_000 })
+    expect(shortageLines()).toEqual(['Не подобрана 1 штука: Футболка белая, ART-A'])
+    expect(document.querySelectorAll('[data-order-id]')).toHaveLength(5)
+    expect(requests.filter((request) => !request.startsWith('GET '))).toEqual([])
+  })
+
   it('C9: после сбоя обновления старое предупреждение не остаётся, после повтора показаны новые числа', { timeout: 60_000 }, async () => {
     // Окно видимо: тихое обновление раз в 15 секунд работает только при видимой вкладке.
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
@@ -402,6 +459,51 @@ describe('WMS-712 · предупреждение о недоборе на уп�
     await waitForRows(2)
 
     expect(shortageLines()).toEqual(['Не подобрана 1 штука: Футболка белая, ART-A'])
+  })
+
+  it('C12: старый запрос завершился ошибкой после успешного более нового обновления — warning остаётся по данным нового workspace', async () => {
+    // Наблюдаем существующий callback фонового обновления, переданный сканеру.
+    // Сам callback и load(true) настоящие; сканирование не выполняем, таймеров не ждём.
+    const scanDeps = vi.spyOn(packingScan, 'makePackingScanDeps')
+    await renderCard({ initial: groupedShortage })
+    expect(document.querySelectorAll('[data-order-id]')).toHaveLength(6)
+    expect(shortageLines()).toHaveLength(2)
+    const refresh = scanDeps.mock.calls.at(-1)?.[4]
+    if (!refresh) throw new Error('WMS-712 C12: callback обновления workspace не зарегистрирован')
+
+    // Управляем только границей чтения: оба запроса остаются незавершёнными,
+    // пока тест явно не выдаст ответ. Остальные GET обслуживает прежняя обвязка.
+    const fixtureFetch = globalThis.fetch
+    const pendingLoads: Array<{
+      resolve: (response: Response) => void
+      reject: (cause: Error) => void
+    }> = []
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://wms.test')
+      const method = (init?.method ?? 'GET').toUpperCase()
+      const path = url.pathname.replace(/^\/api/, '')
+      if (method === 'GET' && path.endsWith(`/fbs-supplies/${SUPPLY_ID}/workspace`)) {
+        requests.push(`${method} ${path}`)
+        return new Promise<Response>((resolve, reject) => pendingLoads.push({ resolve, reject }))
+      }
+      return fixtureFetch(input, init)
+    }) as typeof fetch
+
+    // Callback начинает A сразу, затем refreshPackagingTask после своего GET
+    // начинает B. Оба чтения workspace удерживаем до явного ответа теста.
+    await act(async () => { refresh() })
+    expect(pendingLoads).toHaveLength(2)
+
+    await act(async () => { pendingLoads[1].resolve(json(freshShortage)) })
+    // Шесть старых строк сменились двумя строками B, недобор теперь одна штука.
+    expect(document.querySelectorAll('[data-order-id]')).toHaveLength(2)
+    expect(shortageLines()).toEqual(['Не подобрана 1 штука: Футболка белая, ART-A'])
+
+    await act(async () => { pendingLoads[0].reject(new Error('WMS-712 C12: запоздалая ошибка A')) })
+    expect(document.querySelectorAll('[data-order-id]')).toHaveLength(2)
+    expect(requests.filter((request) => !request.startsWith('GET '))).toEqual([])
+    expect(shortageLines(), 'ошибка старого A не должна скрывать предупреждение свежего workspace B')
+      .toEqual(['Не подобрана 1 штука: Футболка белая, ART-A'])
   })
 
   it('C11: на вкладке «Подбор» предупреждения о недоборе нет, кнопка печати листа подбора на месте', async () => {
