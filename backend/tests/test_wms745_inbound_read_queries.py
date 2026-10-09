@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import time
 import uuid
 from datetime import UTC, datetime
@@ -201,9 +200,6 @@ async def test_get_inbound_request_queries_are_bounded_and_json_matches_legacy_s
 
     assert large_response.status_code == 200, large_response.text
     assert small_response.status_code == 200, small_response.text
-    if os.environ.get("WMS745_CAPTURE_LEGACY_JSON") == "1":
-        LEGACY_JSON.parent.mkdir(parents=True, exist_ok=True)
-        LEGACY_JSON.write_bytes(large_response.content)
     assert LEGACY_JSON.is_file(), "legacy response snapshot must be captured before product changes"
     assert large_response.content == LEGACY_JSON.read_bytes()
 
