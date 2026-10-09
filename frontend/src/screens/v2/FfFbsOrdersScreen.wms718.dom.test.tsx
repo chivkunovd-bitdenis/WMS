@@ -160,15 +160,15 @@ describe('WMS-718 applied header styles and DOM state, without layout claims', (
       expect(headers()).toEqual(expect.arrayContaining(['Товар', 'Селлер', 'Маршрут сдачи', 'Отгрузить до', 'Статус']))
       consistentCells(row())
     } else {
-      expect(headers()).toEqual(['Номер / название поставки', 'Селлер', 'Склад', 'Заказы / единицы', 'Короба', 'Статус', 'Дата отгрузки', 'Печать'])
+      expect(headers()).toEqual(['Номер / название поставки', 'Селлер', 'Склад', 'Заказы / единицы', 'Короба', 'Статус', 'Печать'])
       const regular = document.querySelector('[data-testid="fbs-18-supply-supply-b"]') as HTMLTableRowElement
       expect(regular).toBeTruthy(); consistentCells(regular)
       if (label === 'В работе') {
         const task = document.querySelector('[data-testid="fbs-assembly-task-task-718"]') as HTMLTableRowElement
-        expect(task).toBeTruthy(); expect(task.cells).toHaveLength(1); expect(task.cells[0].colSpan).toBe(8)
+        expect(task).toBeTruthy(); expect(task.cells).toHaveLength(1); expect(task.cells[0].colSpan).toBe(7)
       }
       for (const current of Array.from(table().tBodies[0].rows)) {
-        expect(Array.from(current.cells).reduce((sum, cell) => sum + cell.colSpan, 0)).toBe(8)
+        expect(Array.from(current.cells).reduce((sum, cell) => sum + cell.colSpan, 0)).toBe(7)
       }
     }
     assertStickyStructure()
@@ -229,7 +229,7 @@ describe('WMS-718 applied header styles and DOM state, without layout claims', (
       resolve(json(page([order('late-a')]))); await flush()
       expect(document.body.textContent).toContain('Поставка нового контекста')
       expect(document.querySelector('[data-testid="fbs-order-late-a"]')).toBeNull()
-      expect(headers()).toContain('Дата отгрузки'); expect(headers()).not.toContain('Товар')
+      expect(headers()).not.toContain('Товар')
       assertStickyStructure(); await refresh(); assertStickyStructure()
       expect(document.body.textContent).not.toMatch(/Unexpected Application Error|служебная страница/)
     } finally { resolve(json(page([]))); await flush() }

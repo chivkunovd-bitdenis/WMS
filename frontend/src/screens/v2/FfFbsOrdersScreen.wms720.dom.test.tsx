@@ -278,7 +278,7 @@ describe('WMS-720 photo sizing rules, loading and neighboring calls without brow
     await refresh()
     for (const label of ['В работе', 'В доставке', 'Завершённые']) {
       await tab(label)
-      expect(headers()).toEqual(['Номер / название поставки', 'Селлер', 'Склад', 'Заказы / единицы', 'Короба', 'Статус', 'Дата отгрузки', 'Печать'])
+      expect(headers()).toEqual(['Номер / название поставки', 'Селлер', 'Склад', 'Заказы / единицы', 'Короба', 'Статус', 'Печать'])
     }
     expect(network.mock.calls.every(([, init]) => (init?.method ?? 'GET') === 'GET')).toBe(true)
     expect(item).toEqual(before)
