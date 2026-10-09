@@ -253,10 +253,13 @@ async def _shipment_service_entries(
         ),
         key=lambda entry: (_as_moscow(entry.occurred_at), str(entry.id)),
     )
-    if include_finance and historical and not reversed_operation:
-        # Сохраняем ссылку на счёт в строке передачи, но не переносим сюда
-        # сумму начисления, относящуюся к предыдущему периоду.
-        base.update(result="completed", billing_ledger_entry_id=str(historical[0].id))
+    if historical and not reversed_operation:
+        # Не переносим физическую штуку на дату передачи: ранняя упаковка уже
+        # учтена в периоде начисления. Если включены деньги, сохраняем ссылку
+        # на тот же корень начисления без его суммы.
+        base["item_quantity"] = 0
+        if include_finance:
+            base.update(result="completed", billing_ledger_entry_id=str(historical[0].id))
         return [base]
     if include_finance and allow_live_price and not reversed_operation:
         tariff = await _resolve_v2_tariff(

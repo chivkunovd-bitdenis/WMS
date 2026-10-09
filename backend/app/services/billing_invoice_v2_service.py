@@ -423,10 +423,14 @@ async def _selected_shipment_charge(
             if (fact_moment is None and moment is None
                     and order.status in {"cancelled", "defect"}):
                 raise BillingInvoiceV2Error("selected_source_not_found")
-            # Reissuing a reversed early charge stays in the period of its first
-            # accrual, even when Ozon's handover fact arrived in a later period.
-            moment = original_charge_moment or (
-                existing.occurred_at if existing is not None else fact_moment or moment
+            # An active root owns its own period. Only fall back to the first
+            # historical root when the charge being restored was reversed;
+            # otherwise an old early invoice would move a later partial-handover
+            # charge into the earlier period.
+            moment = (
+                existing.occurred_at
+                if existing is not None
+                else original_charge_moment or fact_moment or moment
             )
         if order.id in work_dates:
             # The first saved service fixes the work date for both services.
@@ -559,7 +563,10 @@ async def _preview_selected_operations(
                     FbsOrder.tenant_id == tenant_id,
                     FbsOrder.seller_id == seller_id,
                     FbsOrder.id.in_(order_ids),
-                ).with_for_update().execution_options(populate_existing=True)
+                )
+                .order_by(FbsOrder.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
         }
         if order_ids
@@ -723,6 +730,47 @@ async def _preview_selected_operations(
     }
 
 
+async def _lock_selected_invoice_sources(
+    session: AsyncSession, *, tenant_id: uuid.UUID, request: dict[str, Any]
+) -> None:
+    """Fence invoice creation in the same order as handoff: orders, then seller."""
+    seller_id = uuid.UUID(str(request["seller_id"]))
+    order_ids = {
+        uuid.UUID(str(source["source_id"]))
+        for source in request.get("selected_sources", [])
+        if source["source_type"] == "fbs_order"
+    }
+    root_ids = {uuid.UUID(str(value)) for value in request.get("selected_root_ids", [])}
+    if root_ids:
+        root_sources = await session.execute(
+            select(BillingLedgerEntry.source_id).where(
+                BillingLedgerEntry.tenant_id == tenant_id,
+                BillingLedgerEntry.id.in_(root_ids),
+                BillingLedgerEntry.source_type == "fbs_order",
+            )
+        )
+        order_ids.update(root_sources.scalars().all())
+    if order_ids:
+        # Handoff locks every order in a stable ID order before touching seller.
+        list(await session.scalars(
+            select(FbsOrder.id)
+            .where(
+                FbsOrder.tenant_id == tenant_id,
+                FbsOrder.seller_id == seller_id,
+                FbsOrder.id.in_(order_ids),
+            )
+            .order_by(FbsOrder.id)
+            .with_for_update()
+        ))
+    seller = await session.scalar(
+        select(Seller.id)
+        .where(Seller.tenant_id == tenant_id, Seller.id == seller_id)
+        .with_for_update(key_share=True)
+    )
+    if seller is None:
+        raise BillingInvoiceV2Error("seller_not_found")
+
+
 async def create_invoice_v2(
     session: AsyncSession,
     *,
@@ -734,18 +782,9 @@ async def create_invoice_v2(
     if not idempotency_key.strip():
         raise BillingInvoiceV2Error("idempotency_key_required")
     if request.get("creation_mode") == "selected_operations":
-        # Оба запроса одного селлера проходят проверку последовательно, до
-        # записи счёта и до проверки повторного ключа. В PostgreSQL блокировка
-        # живёт до commit вызывающего API; следующий запрос увидит его счёт.
-        # NO KEY UPDATE не мешает обычным вставкам со ссылкой на селлера.
-        seller_id = uuid.UUID(str(request["seller_id"]))
-        seller = await session.scalar(
-            select(Seller.id)
-            .where(Seller.tenant_id == tenant_id, Seller.id == seller_id)
-            .with_for_update(key_share=True)
-        )
-        if seller is None:
-            raise BillingInvoiceV2Error("seller_not_found")
+        # Serialize same-seller creates before the idempotency lookup, but take
+        # order locks first so handoff cannot form a seller/order lock cycle.
+        await _lock_selected_invoice_sources(session, tenant_id=tenant_id, request=request)
     canonical = _canonical(request)
     request_hash = hashlib.sha256(canonical.encode()).hexdigest()
     existing = await session.scalar(
