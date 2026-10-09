@@ -1699,6 +1699,13 @@ async def complete_receiving(
         req.primary_accepted_at = datetime.now(UTC)
     elif req.status not in RECEIVING_STATUSES:
         raise InboundIntakeError("not_verifying")
+    from app.services import inbound_intake_box_service as inbound_box_svc
+
+    await inbound_box_svc.close_open_boxes_for_completion(
+        session,
+        tenant_id,
+        req.id,
+    )
     await sync_request_actuals_from_boxes(session, req)
     line_discrepancy = False
     ff_document = is_ff_inbound(req)
