@@ -598,7 +598,7 @@ async def test_c25_ozon_split_services_are_reported_in_their_occurrence_month(
     assert (august_amount, september_amount, combined_amount) == (1000, 1000, 2000), (
         "сборка и упаковка должны учитываться по 10 ₽ каждая в месяце своего начисления, "
         f"а общий период должен сохранять 20 ₽: август={august_amount}, "
-        f"сентябрь={september_amount}, август–сентябрь={combined_amount} коп."
+        f"сентябрь={september_amount}, август-сентябрь={combined_amount} коп."
     )
 
 
@@ -641,7 +641,7 @@ async def test_c26_ozon_assembly_reversal_remains_in_report_after_handover(async
             )
         ))
     assert any(row.amount == -1000 for row in reversals), (
-        "в журнале должно сохраниться сторно сборки на −10 ₽"
+        "в журнале должно сохраниться сторно сборки на -10 ₽"
     )
 
     report = await _details(
