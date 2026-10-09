@@ -13,13 +13,14 @@ import urllib.parse
 import urllib.request
 
 
+# wms686-mockup is optional (runs only when its own directory changes), so its
+# skipped execution must not be required here; a failing run still fails CI itself.
 PRODUCERS = {
     'backend': 'backend-executed-contracts',
     'frontend-build': 'frontend-executed-contracts',
     'printer-windows': 'printer-windows-contracts',
     'print-regressions': 'release-print',
     'охрана': 'guard-executed-contracts',
-    'wms686-mockup': 'wms686-executed-contracts',
 }
 
 
