@@ -1,0 +1,6 @@
+WMS666.native.consecutive[supply_id=A]: PASS
+WMS666.native.consecutive[supply_ids=A,B]: PASS
+Error: UI timeout: window.__AUDIT_HTML_PRINTS__.length>=1
+    at until (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms666-prod-integration-1009/docs/evidence/WMS-666/prod-integration-1009/native/browser-native.mjs:120:9)
+    at async manualContracts (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms666-prod-integration-1009/docs/evidence/WMS-666/prod-integration-1009/native/browser-native.mjs:319:5)
+    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms666-prod-integration-1009/docs/evidence/WMS-666/prod-integration-1009/native/browser-native.mjs:294:3

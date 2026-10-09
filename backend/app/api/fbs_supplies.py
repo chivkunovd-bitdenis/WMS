@@ -228,6 +228,11 @@ class FbsPickingSourceGroupOut(BaseModel):
     key: str
     title: str
     lines: list[str]
+    # WMS-710 (аддитивно, текст листа не меняют): дата документа группы и ключ
+    # места для каждой строки «ячейка|тара» — по ним печать Империи ФФ
+    # выстраивает те же строки в порядке вкладки «Подбор».
+    date: str | None = None
+    line_keys: list[str] = Field(default_factory=list)
 
 
 class FbsPickingContextOut(BaseModel):

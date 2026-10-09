@@ -1,0 +1,2 @@
+WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]: PASS
+WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]: PASS

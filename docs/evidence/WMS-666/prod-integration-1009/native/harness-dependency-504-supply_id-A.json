@@ -1,0 +1,161 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-10-01T22%3A44%3A50.560Z&to=2026-10-08T22%3A44%3A50.560Z",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+      "body": {
+        "barcode": "*DUIkWJJF",
+        "idempotency_key": "2b97694e-686a-465f-be8b-422dbc2551a7",
+        "print_qr": true,
+        "print_chz": false,
+        "reprint_chz": true,
+        "await_honest_sign": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/kiz/lookup?supply_id=wb-a&sticker=*DUIkWJJF",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+      "body": {
+        "barcode": "*DUIkWJJF",
+        "idempotency_key": "4e921d7e-64ba-4239-b702-eb7f411b5dad",
+        "print_qr": true,
+        "print_chz": false,
+        "reprint_chz": true,
+        "await_honest_sign": true,
+        "order_id": "wb-a-order"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/assets/qr-wb-a-order.png",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-orders/kiz/validate",
+      "body": {
+        "order_id": "wb-a-order",
+        "value": "010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-orders/kiz/commit",
+      "body": {
+        "pairs": [
+          {
+            "order_id": "wb-a-order",
+            "value": "010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A",
+            "confirmed": false,
+            "scan_auto_print_id": "supplyidA:scan-wb-a-order"
+          }
+        ],
+        "idempotency_key": "supplyidA:scan-wb-a-order:1fd3340d08b1bc36149c3954b3de2356480a54e0cc2c67a06098e9ec03cfd05f:bind",
+        "scan_no_wb_wait": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print/supplyidA:scan-wb-a-order/print-claim",
+      "body": {
+        "target": "qr",
+        "attempt_key": "supplyidA:scan-wb-a-order"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print/supplyidA:scan-wb-a-order/print-started",
+      "body": {
+        "target": "qr",
+        "attempt_key": "supplyidA:scan-wb-a-order"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print/supplyidA:scan-wb-a-order/reprint-claim",
+      "body": {
+        "attempt_key": "supplyidA:scan-wb-a-order:copy"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print/supplyidA:scan-wb-a-order/print-failed",
+      "body": {
+        "target": "chz",
+        "attempt_key": "supplyidA:scan-wb-a-order:copy"
+      }
+    }
+  ],
+  "printLog": [
+    {
+      "imageDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAH4AAAB+CAYAAADiI6WIAAAAHnRFWHRTb2Z0d2FyZQBid2lwLWpzLm1ldGFmbG9vci5jb21Tnbi0AAADGklEQVR4nO2XQY7cMBAD/f9PJy8YGO0lxaZdBOYUhSqxnEOu67r+lfx+JdXv5rHvmQZAPOIRj3jEIx7xiEf8AfGpuHlS4lNB/MN+xKdBQ/2IT4OG+hGfBg31Iz4NGupH/E3R9DcGLedZx18DWs6zjr8GtJxnHX8NaDnPOv4a0HKedfw1oOU86/hrQENDT1OzZw1oaOhpavasAQ0NPU3NnjWgoaGnqdmzBjQ09DQ1e9aAhoaepmbPGtBh3vohIv4miL/hqQEdBvE3PDWgwyD+hqcGdBjE3/DUgA6D+Bse1dCqpD4UVWp4akBF592p4akBFZ13p4anBlR03p0anhpQ0Xl3anhqQEXn3anh+fUH237jhy07v+0XB0A84hGP+P0iEY94xCM+v9Nf96yJ6mGvHeitQfxHg/iPBvEfDeI/GsSL0/7fHnfcnO4e2V9APOIRj3j/cIhHPOIHPbK/gPiXi48BiZIS436vrB/xiEe8oAfxalDzu1Q9iFeDmt+l6kG8GtT8LlVPvXhVT2qgFKd7T9m9iEc84hGvA0U84hEv4JTdi3jErxam4p/2qO7d9mEh/qZHdS/ixUE84hHvHA7xz+5FvDiIF4t396QevE1A7B8Y4hGP+GIe2cXunvaht/HILnb3tA+9jUd2sbunfehtPK9NagjVB+Hmf+2HgngtZ00Qr+WsCeK1nDVBvJazJoh/yDkFSv3cg6oEpN4bA0W8dk83Z1wo4hGPeMQj3s0ZF4r4ZeJTcYvfJiC2P+IRj3jE54J4xCPeGcQj/ujQKp5U3Duo7h0XpR6MeO2946LUgxGvvXdclHow4rX3jotSD0a89t5xUerBiNfeOy5KPTj1oXzug0O8tscdxD887+5xB/EPz7t73EH8w/PuHncQ//C8u8cdxD8caFtPbE/EZ3sQf2jobT2IPzT0th7EHxp6Ww/iDw29radGvDupD0XFuW3Pn9kGivhD2QaK+EPZBor4Q9kGivhD2QaK+EOZPiD12/Zed+z/ANJCET/jVJ2PC0X8jFN1Pi4U8TNO1fm4UMTPOFXn40IRP+OUnP8P1C5DYzmKcWsAAAAASUVORK5CYII=",
+      "idempotencyKey": "supplyidA:scan-wb-a-order",
+      "widthMm": 60,
+      "heightMm": 80
+    }
+  ],
+  "trace": [
+    "product-miss:*DUIkWJJF",
+    "lookup:wb-a-order",
+    "select:wb-a-order",
+    "bind:wb-a-order",
+    "print:supplyidA:scan-wb-a-order"
+  ],
+  "blocked": [],
+  "errors": []
+}

@@ -1,0 +1,17 @@
+{
+  "sha": "b61330e31323a7c8dd52a9ed2bd4efeedcfdeaa4",
+  "cases": [
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+  "status": "PASS"
+}

@@ -90,9 +90,10 @@ describe('printProductThermalLabel', () => {
   it('seller CSS reserves min-height and line spacing uses margin (not flex gap)', () => {
     const css = buildProductLabelContentCss(resolveLabelSize('70x120'))
     expect(css).toMatch(/\.seller \{[\s\S]*min-height:/)
+    // WMS-702 scales margin with the body so every line keeps its spacing.
     // Межстрочный зазор — margin-bottom на строках, а не flex gap: термопринтер
     // игнорирует gap и строки слипаются (наезд названия на «Артикул»).
-    expect(css).toMatch(/\.body > p \{[\s\S]*margin:\s*0 0 [0-9.]+mm/)
+    expect(css).toMatch(/\.body > p \{[\s\S]*margin:\s*0 0 calc\([0-9.]+mm \* var\(--product-label-body-scale\)\)/)
     expect(css).not.toMatch(/\.body \{[\s\S]*gap:/)
     expect(css).toMatch(/margin-top:\s*[0-9.]+mm/)
   })

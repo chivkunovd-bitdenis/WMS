@@ -1,0 +1,12 @@
+{
+  "baseline": "9971abed35e003abd5be8d2bc3e0032f3ca9f5c7",
+  "accepted_source": "61012808c26ba8dabcd271ef21bbbc362caaffaa",
+  "file": "scripts/deploy/prod-update.sh",
+  "before_byte_identical_baseline": true,
+  "after_byte_identical_accepted": true,
+  "helper_already_byte_identical_accepted": true,
+  "existing_checks_preserved": "only52lineinsertion; allbaselinebytesretained",
+  "actual_deploy": false,
+  "before_sha256": "fa72bbfd356b15cf074f13052845e902e7c6d5fed5361c22b564d977c66420f6",
+  "after_sha256": "23cca25cb444c8fbe594c56acc4b6f8056672d5fed9362c85545c8a5ec9b75a8"
+}

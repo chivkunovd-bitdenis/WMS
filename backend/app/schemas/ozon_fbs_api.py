@@ -50,8 +50,12 @@ def _sku_list_as_text(key: str, value: Any) -> Any:
     """Ozon шлёт SKU в `requirements.products_requiring_*` числами, а в
     спеке они строки. 1 и 2 октября 2026 сборка заказов с требованием ГТД падала
     на «Ozon вернул ответ неизвестного формата» и блокировала всю поставку.
+    WMS-714: 9 октября то же пришло в `optional.products_with_possible_mandatory_mark`
+    (Руспро, 56906774-0280-1) — сборка по QR и документы экземпляров падали так же.
     """
-    if key.startswith("products_requiring_") and isinstance(value, list):
+    requiring = key.startswith("products_requiring_")
+    possible_mark = key == "products_with_possible_mandatory_mark"
+    if (requiring or possible_mark) and isinstance(value, list):
         return [
             str(item) if isinstance(item, int) and not isinstance(item, bool) else item
             for item in value

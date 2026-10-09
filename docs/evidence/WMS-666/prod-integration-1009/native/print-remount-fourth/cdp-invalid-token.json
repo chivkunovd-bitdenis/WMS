@@ -1,0 +1,166 @@
+[
+  {
+    "utcMs": 1791506724209,
+    "kind": "request-paused",
+    "requestId": "interception-job-6943.0",
+    "frameId": "2F5CED28EE5831E15D3CF58C76C0BD07",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+    "attempts": 0,
+    "disposition": "paused",
+    "ambiguous": true
+  },
+  {
+    "utcMs": 1791506724209,
+    "kind": "command-send",
+    "commandId": 7870,
+    "method": "Fetch.fulfillRequest",
+    "requestId": "interception-job-6943.0",
+    "frameId": "2F5CED28EE5831E15D3CF58C76C0BD07",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+    "attempt": 1
+  },
+  {
+    "utcMs": 1791506724211,
+    "kind": "command-result",
+    "commandId": 7870,
+    "method": "Fetch.fulfillRequest",
+    "requestId": "interception-job-6943.0",
+    "frameId": "2F5CED28EE5831E15D3CF58C76C0BD07",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+    "nativeError": {
+      "code": -32602,
+      "message": "Invalid InterceptionId."
+    }
+  },
+  {
+    "utcMs": 1791506724197,
+    "kind": "generation-boundary",
+    "method": "Runtime.executionContextsCleared",
+    "generation": 121,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]"
+  },
+  {
+    "utcMs": 1791506724199,
+    "kind": "generation-boundary",
+    "method": "Runtime.executionContextsCleared",
+    "generation": 122,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]"
+  },
+  {
+    "utcMs": 1791506724199,
+    "kind": "generation-boundary",
+    "method": "Page.frameNavigated",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]"
+  },
+  {
+    "utcMs": 1791506724209,
+    "kind": "command-result",
+    "commandId": 7868,
+    "method": "Runtime.evaluate",
+    "generation": 120,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]"
+  },
+  {
+    "utcMs": 1791506724209,
+    "kind": "command-send",
+    "commandId": 7869,
+    "method": "Fetch.continueRequest",
+    "requestId": "interception-job-6942.0",
+    "networkId": "5106.7067",
+    "frameId": "2F5CED28EE5831E15D3CF58C76C0BD07",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+    "attempt": 1
+  },
+  {
+    "utcMs": 1791506724211,
+    "kind": "request-paused",
+    "requestId": "interception-job-6944.0",
+    "networkId": "5106.7068",
+    "frameId": "2F5CED28EE5831E15D3CF58C76C0BD07",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+    "attempts": 0,
+    "disposition": "paused"
+  },
+  {
+    "utcMs": 1791506724211,
+    "kind": "command-send",
+    "commandId": 7871,
+    "method": "Fetch.continueRequest",
+    "requestId": "interception-job-6944.0",
+    "networkId": "5106.7068",
+    "frameId": "2F5CED28EE5831E15D3CF58C76C0BD07",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+    "attempt": 1
+  },
+  {
+    "utcMs": 1791506724211,
+    "kind": "request-paused",
+    "requestId": "interception-job-6945.0",
+    "networkId": "5106.7072",
+    "frameId": "2F5CED28EE5831E15D3CF58C76C0BD07",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+    "attempts": 0,
+    "disposition": "paused"
+  },
+  {
+    "utcMs": 1791506724211,
+    "kind": "command-send",
+    "commandId": 7872,
+    "method": "Fetch.continueRequest",
+    "requestId": "interception-job-6945.0",
+    "networkId": "5106.7072",
+    "frameId": "2F5CED28EE5831E15D3CF58C76C0BD07",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+    "attempt": 1
+  },
+  {
+    "utcMs": 1791506724211,
+    "kind": "command-result",
+    "commandId": 7869,
+    "method": "Fetch.continueRequest",
+    "requestId": "interception-job-6942.0",
+    "networkId": "5106.7067",
+    "frameId": "2F5CED28EE5831E15D3CF58C76C0BD07",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]"
+  },
+  {
+    "utcMs": 1791506724214,
+    "kind": "command-result",
+    "commandId": 7871,
+    "method": "Fetch.continueRequest",
+    "requestId": "interception-job-6944.0",
+    "networkId": "5106.7068",
+    "frameId": "2F5CED28EE5831E15D3CF58C76C0BD07",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]"
+  },
+  {
+    "utcMs": 1791506724215,
+    "kind": "command-result",
+    "commandId": 7872,
+    "method": "Fetch.continueRequest",
+    "requestId": "interception-job-6945.0",
+    "networkId": "5106.7072",
+    "frameId": "2F5CED28EE5831E15D3CF58C76C0BD07",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]"
+  },
+  {
+    "utcMs": 1791506724222,
+    "kind": "network-terminal",
+    "method": "Network.loadingFinished",
+    "networkId": "5106.7067",
+    "generation": 123,
+    "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]"
+  }
+]

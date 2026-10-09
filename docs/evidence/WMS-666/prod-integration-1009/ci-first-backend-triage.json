@@ -1,0 +1,52 @@
+{
+  "run_id": 37856202750,
+  "tested_sha": "9625259fab37601dcce138a33268f9839778e1a2",
+  "status": "failed; two backend shards cancelled after timeout",
+  "failed_reports": 52,
+  "files": {
+    "tests/test_fbs_openapi_contract.py": 1,
+    "tests/test_fbs_create_http_connection.py": 11,
+    "tests/test_wms517_sales_partial_decimal_regressions.py": 18,
+    "tests/test_wms666_workspace_marking_pool.py": 4,
+    "tests/test_withdrawal_access.py": 1,
+    "tests/test_wms517_legacy_price_source_contract.py": 2,
+    "tests/test_wms517_raw_integer_price.py": 4,
+    "tests/test_wms517_raw_numeric_price.py": 4,
+    "tests/test_wms517_sales_contract.py": 1,
+    "tests/test_withdrawal_ledger.py": 2,
+    "tests/test_wms537_draft_supply_stickers.py": 2,
+    "tests/test_withdrawal_orchestration.py": 2
+  },
+  "long_waits": [
+    {
+      "nodeid": "tests/test_withdrawal_access.py::test_c2_c5_allowed_registry_and_idempotent_create",
+      "duration_seconds": 900.752461468
+    },
+    {
+      "nodeid": "tests/test_wms517_legacy_price_source_contract.py::test_valid_sale_is_not_blocked_by_missing_or_bad_legacy_snapshot[missing]",
+      "duration_seconds": 900.1928475909999
+    },
+    {
+      "nodeid": "tests/test_withdrawal_ledger.py::test_registry_server_scope_and_moscow_date",
+      "duration_seconds": 900.1878606849998
+    },
+    {
+      "nodeid": "tests/test_withdrawal_orchestration.py::test_emulator_sign_submit_recover_once[None-False]",
+      "duration_seconds": 900.294932728
+    },
+    {
+      "nodeid": "tests/test_withdrawal_ledger.py::test_registry_missing_price_is_an_actual_local_error",
+      "duration_seconds": 900.1789274789999
+    },
+    {
+      "nodeid": "tests/test_wms517_legacy_price_source_contract.py::test_valid_sale_is_not_blocked_by_missing_or_bad_legacy_snapshot[bad_currency]",
+      "duration_seconds": 900.189798949
+    },
+    {
+      "nodeid": "tests/test_withdrawal_orchestration.py::test_emulator_sign_submit_recover_once[expired-False]",
+      "duration_seconds": 900.0858191319999
+    }
+  ],
+  "runtime_after_fixes": "a32306cfe8a37e063711fd77ab1246b9ade836ee",
+  "product_changes_from_this_backend_triage": false
+}

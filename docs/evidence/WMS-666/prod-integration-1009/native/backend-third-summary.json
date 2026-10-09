@@ -1,0 +1,13 @@
+{
+  "sha": "76532e2bdcda80b6859a69bcfaa4ef5083ac0fbd",
+  "run_id": 37863891620,
+  "run_attempt": 1,
+  "artifact_id": 11587970883,
+  "junit_sha256": "b2a9e102fcfb4d5d263b6aa4ca2c71ee4dbe6653f0bb136fee3960e39a8281f4",
+  "outcomes": {
+    "passed": 4600,
+    "skipped": 210
+  },
+  "mandatory_backend_cases": 826,
+  "all_mandatory_pass": true
+}

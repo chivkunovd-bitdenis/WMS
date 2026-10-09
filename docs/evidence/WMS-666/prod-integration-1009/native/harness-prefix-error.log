@@ -1,0 +1,5 @@
+WMS666.native.consecutive[supply_id=A]: AssertionError [ERR_ASSERTION]: next QR/KIZ did not complete: product-miss:*DUIkWJJF -> lookup:wb-a-order -> select:wb-a-order -> bind:wb-a-order -> print:supplyidA:scan-wb-a-order
+WMS666.native.consecutive[supply_ids=A,B]: AssertionError [ERR_ASSERTION]: next QR/KIZ did not complete: product-miss:*DUIkWJJF -> lookup:wb-a-order -> select:wb-a-order -> bind:wb-a-order -> print:supplyidsAB:scan-wb-a-order
+ReferenceError: click is not defined
+    at manualContracts (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms666-prod-integration-1009/docs/evidence/WMS-666/prod-integration-1009/native/browser-native.mjs:314:5)
+    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms666-prod-integration-1009/docs/evidence/WMS-666/prod-integration-1009/native/browser-native.mjs:293:3
