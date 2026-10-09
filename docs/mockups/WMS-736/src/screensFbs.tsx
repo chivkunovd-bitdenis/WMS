@@ -2,13 +2,15 @@ import React, { useEffect, useRef, useState } from "react";
 import { Order, Supply, productById, sellerById } from "./data";
 import { fmtFull, fmtShort, isDeadlineNear, ordersLabel, ruPlural, underpicks } from "./logic";
 import { World, newId, useScan, useStore } from "./store";
-import { Btn, Chip, Dialog, Photo, Scaffold } from "./ui";
+import { Btn, Chip, Dialog, Icon, Photo, Scaffold } from "./ui";
+import { UnderpickBlock } from "./screenPack";
 
 export const TODAY = "09.10.2026";
 
 // ---------------- FBS · Заказы (без изменений, кроме окна создания по WMS-713) ----------------
 
-type Group = { key: string; sellerId: string; orderIds: string[]; status: "checking" | "ready" | "incompatible" | "creating" | "created"; error?: string; supplyId?: string };
+type Group = { key: string; sellerId: string; orderIds: string[]; status: "checking" | "ready" | "incompatible" | "creating" | "created"; error?: string; badIds?: string[]; supplyId?: string };
+type CreateDialog = { groups: Group[]; busy: boolean; delivery: "warehouse_sc" | "pvz"; createdIds: string[] };
 
 function OrderCard({ o, selected, onClick }: { o: Order; selected: boolean; onClick: () => void }) {
   const p = productById(o.productId);
@@ -48,7 +50,9 @@ function SupplyCard({ sup, w, onClick }: { sup: Supply; w: World; onClick: () =>
 export function FbsOrdersScreen() {
   const s = useStore();
   const w = s.w;
-  const [dialog, setDialog] = useState<null | { groups: Group[]; busy: boolean; delivery: "warehouse_sc" | "pvz" }>(null);
+  const [dialog, setDialog] = useState<null | CreateDialog>(null);
+  const dialogRef = useRef<CreateDialog | null>(null);
+  dialogRef.current = dialog;
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   useScan((c) => s.log(`Скан «${c}» на списке заказов не обрабатывается`), []);
@@ -61,20 +65,21 @@ export function FbsOrdersScreen() {
   const sel = w.selected;
   const toggle = (id: string) => s.update((x) => ({ ...x, selected: x.selected.includes(id) ? x.selected.filter((y) => y !== id) : [...x.selected, id] }));
 
-  const runChecks = (groups: Group[], delivery: "warehouse_sc" | "pvz") => {
-    // Как в сборке 19: группы проверяются по одной, всё окно занято, пока идёт проверка (WMS-741).
-    setDialog({ groups, busy: true, delivery });
+  const preflight = (g: Group) => {
+    const bad = g.orderIds.map((id) => w.orders.find((o) => o.id === id)!).filter((o) => o.cancelledAtWb);
+    s.log(`POST preflight группы «${sellerById(g.sellerId).name}» → ${bad.length ? "несовместима" : "можно создать"}`);
+    return bad.length
+      ? { ...g, status: "incompatible" as const, badIds: bad.map((o) => o.id), error: bad.map((o) => `Заказ WB ${o.wbId}: заказ отменён или брак.`).join(" ") }
+      : { ...g, status: "ready" as const, badIds: undefined, error: undefined };
+  };
+  const runChecks = (groups: Group[], delivery: "warehouse_sc" | "pvz", createdIds: string[] = []) => {
+    // Как в сборке 19: группы проверяются по одной, окно занято, пока идёт проверка (WMS-741).
+    setDialog({ groups, busy: true, delivery, createdIds });
     groups.forEach((g, i) => {
+      if (g.status === "created") return;
       timers.current.push(window.setTimeout(() => {
-        const bad = g.orderIds.map((id) => w.orders.find((o) => o.id === id)!).filter((o) => o.cancelledAtWb);
-        s.log(`POST preflight группы «${sellerById(g.sellerId).name}» → ${bad.length ? "несовместима" : "можно создать"}`);
-        setDialog((d) => {
-          if (!d) return d;
-          const next = d.groups.map((x) => x.key !== g.key ? x : bad.length
-            ? { ...x, status: "incompatible" as const, error: bad.map((o) => `Заказ WB ${o.wbId}: Заказ отменён или брак.`).join(" ") }
-            : { ...x, status: "ready" as const });
-          return { ...d, groups: next, busy: i < groups.length - 1 };
-        });
+        const checked = preflight(g);
+        setDialog((d) => d && { ...d, groups: d.groups.map((x) => x.key === g.key ? checked : x), busy: i < groups.length - 1 });
       }, 750 * (i + 1)));
     });
   };
@@ -87,29 +92,17 @@ export function FbsOrdersScreen() {
       .map(([sellerId, orderIds]) => ({ key: sellerId, sellerId, orderIds, status: "checking" }));
     runChecks(groups, "warehouse_sc");
   };
-  const create = () => {
-    if (!dialog) return;
-    const ready = dialog.groups.filter((g) => g.status === "ready");
-    if (ready.length === 0) {
-      // Сборка 19: повтор после частичного создания ничего не отправляет, но звучит как успех (WMS-741, V2).
-      s.flashOk();
-      s.log("«Создать» повторно: готовых групп нет, запросов нет (как в сборке 19 — успех без действия)");
-      return;
-    }
-    setDialog({ ...dialog, busy: true, groups: dialog.groups.map((g) => g.status === "ready" ? { ...g, status: "creating" } : g) });
+  /** Создать поставки по готовым группам (каждая — from-orders со своим ключом повтора). */
+  const createSupplies = (ready: Group[], after: (d: CreateDialog) => void) => {
+    setDialog((d) => d && { ...d, busy: true, groups: d.groups.map((g) => ready.some((r) => r.key === g.key) ? { ...g, status: "creating" } : g) });
     timers.current.push(window.setTimeout(() => {
-      const createdIds: string[] = [];
       const created: Record<string, string> = {};
-      ready.forEach((g) => { const id = newId("sup"); created[g.key] = id; createdIds.push(id); });
-      const taskId = newId("task");
-      const taskNo = String(17 + w.tasks.length);
-      const allCreated = dialog.groups.every((g) => g.status === "ready" || g.status === "created");
+      ready.forEach((g) => { created[g.key] = newId("sup"); });
       s.update((x) => {
         const createdOrderIds = ready.flatMap((g) => g.orderIds);
         return {
           ...x,
-          supplies: [...x.supplies, ...ready.map((g) => ({ id: created[g.key], name: `FBS ${TODAY}`, sellerId: g.sellerId, delivered: false, taskId }))],
-          tasks: [...x.tasks, { id: taskId, number: taskNo, createdAt: new Date().toISOString(), supplyIds: createdIds }],
+          supplies: [...x.supplies, ...ready.map((g) => ({ id: created[g.key], name: `FBS ${TODAY}`, sellerId: g.sellerId, delivered: false, taskId: null }))],
           orders: x.orders.map((o) => {
             const g = ready.find((gg) => gg.orderIds.includes(o.id));
             return g ? { ...o, supplyId: created[g.key] } : o;
@@ -118,15 +111,45 @@ export function FbsOrdersScreen() {
         };
       });
       ready.forEach((g) => s.log(`POST from-orders «${sellerById(g.sellerId).name}» (${ordersLabel(g.orderIds.length)}) → 201, поставка создана`));
-      s.log(`POST сборочное задание №${taskNo} → 201`);
       s.flashOk();
-      if (allCreated) {
-        setDialog(null);
-        s.push({ name: "pick", supplyIds: createdIds, single: false });
-      } else {
-        setDialog((d) => d && { ...d, busy: false, groups: d.groups.map((g) => created[g.key] ? { ...g, status: "created", supplyId: created[g.key] } : g) });
-      }
+      setDialog((d) => d && { ...d, busy: false, createdIds: [...d.createdIds, ...Object.values(created)], groups: d.groups.map((g) => created[g.key] ? { ...g, status: "created" as const, supplyId: created[g.key] } : g) });
+      window.setTimeout(() => { if (dialogRef.current) after(dialogRef.current); }, 30);
     }, 900));
+  };
+  /** Одно сборочное задание на все поставки, созданные в этом окне. */
+  const finalize = (d: CreateDialog, open: boolean) => {
+    if (d.createdIds.length) {
+      const taskId = newId("task");
+      const taskNo = String(17 + w.tasks.length);
+      s.update((x) => ({
+        ...x,
+        tasks: [...x.tasks, { id: taskId, number: taskNo, createdAt: new Date().toISOString(), supplyIds: d.createdIds }],
+        supplies: x.supplies.map((sp) => d.createdIds.includes(sp.id) ? { ...sp, taskId } : sp),
+      }));
+      s.log(`POST сборочное задание №${taskNo} (${d.createdIds.length} пост.) → 201`);
+    }
+    setDialog(null);
+    if (open && d.createdIds.length) s.push({ name: "pick", supplyIds: d.createdIds, single: false });
+  };
+  const create = () => {
+    if (!dialog) return;
+    const ready = dialog.groups.filter((g) => g.status === "ready");
+    if (ready.length === 0) return;
+    createSupplies(ready, (d) => { if (d.groups.every((g) => g.status === "created")) finalize(d, true); });
+  };
+  /** «Создать без WB …»: убрать мешающие заказы из группы и выбора, проверить и создать — не закрывая окно. */
+  const createWithout = (g: Group) => {
+    const bad = g.badIds ?? [];
+    const cleaned: Group = { ...g, orderIds: g.orderIds.filter((id) => !bad.includes(id)), status: "checking", error: undefined, badIds: undefined };
+    s.update((x) => ({ ...x, selected: x.selected.filter((id) => !bad.includes(id)) }));
+    s.log(`Из группы «${sellerById(g.sellerId).name}» убраны: ${bad.map((id) => `WB ${w.orders.find((o) => o.id === id)!.wbId}`).join(", ")} (остаются в «Новых»)`);
+    setDialog((d) => d && { ...d, busy: true, groups: d.groups.map((x) => x.key === g.key ? cleaned : x) });
+    timers.current.push(window.setTimeout(() => {
+      const checked = preflight(cleaned);
+      setDialog((d) => d && { ...d, groups: d.groups.map((x) => x.key === g.key ? checked : x) });
+      if (checked.status === "ready") createSupplies([checked], () => {});
+      else setDialog((d) => d && { ...d, busy: false });
+    }, 750));
   };
   const statusRu = (g: Group) => ({ checking: "Проверяем", ready: "Можно создать", creating: "Создаём", created: "Создано", incompatible: "Несовместима" }[g.status]);
   const statusColor = (g: Group) => g.status === "ready" || g.status === "created" ? "var(--success)" : g.status === "incompatible" ? "var(--error)" : "var(--text2)";
@@ -195,35 +218,46 @@ export function FbsOrdersScreen() {
           </>
         )}
       </div>
-      {dialog ? (
-        <Dialog
-          title="Создать поставки"
-          onDismiss={() => !dialog.busy && setDialog(null)}
-          actions={<>
-            <Btn kind="text" onClick={() => setDialog(null)}>Закрыть</Btn>
-            <Btn kind="filled" disabled={dialog.busy || !dialog.groups.some((g) => g.status === "ready" || g.status === "created")} onClick={create}>Создать</Btn>
-          </>}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div>Название: FBS {TODAY}</div>
-            {(["warehouse_sc", "pvz"] as const).map((dv) => (
-              <div key={dv} className={`radio${dialog.delivery === dv ? " on" : ""}`} style={{ minHeight: 40, opacity: dialog.busy ? 0.5 : 1 }} onClick={() => { if (!dialog.busy && dialog.delivery !== dv) runChecks(dialog.groups.map((g) => g.status === "created" ? g : { ...g, status: "checking", error: undefined }), dv); }}>
-                <span className="dot" />{dv === "pvz" ? "ПВЗ" : "Склад / СЦ"}
+      {dialog ? (() => {
+        const anyReady = dialog.groups.some((g) => g.status === "ready");
+        const anyCreated = dialog.groups.some((g) => g.status === "created");
+        const done = !anyReady && anyCreated && !dialog.busy;
+        return (
+          <Dialog
+            title="Создать поставки"
+            onDismiss={() => !dialog.busy && finalize(dialog, false)}
+            actions={<>
+              <Btn kind="text" h={48} fs={16} disabled={dialog.busy} onClick={() => finalize(dialog, false)}>Закрыть</Btn>
+              {done
+                ? <Btn kind="filled" h={48} fs={16} onClick={() => finalize(dialog, true)} testId="create-done">Готово</Btn>
+                : <Btn kind="filled" h={48} fs={16} disabled={dialog.busy || !anyReady} onClick={create} testId="create-go">Создать</Btn>}
+            </>}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div>Название: FBS {TODAY}</div>
+              <div style={{ display: "flex", gap: 16 }}>
+                {(["warehouse_sc", "pvz"] as const).map((dv) => (
+                  <div key={dv} className={`radio${dialog.delivery === dv ? " on" : ""}`} style={{ opacity: dialog.busy || anyCreated ? 0.5 : 1 }} onClick={() => { if (!dialog.busy && !anyCreated && dialog.delivery !== dv) runChecks(dialog.groups.map((g) => ({ ...g, status: "checking", error: undefined })), dv); }}>
+                    <span className="dot" />{dv === "pvz" ? "ПВЗ" : "Склад / СЦ"}
+                  </div>
+                ))}
               </div>
-            ))}
-            {dialog.groups.map((g) => (
-              <div key={g.key} style={{ background: "var(--bg)", borderRadius: 8, padding: "6px 10px" }}>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>{sellerById(g.sellerId).name} · {ordersLabel(g.orderIds.length)}</div>
-                <div style={{ fontSize: 13, color: statusColor(g) }}>{statusRu(g)}</div>
-                {g.error ? <div style={{ fontSize: 13, color: "var(--error)" }}>{g.error}</div> : null}
-              </div>
-            ))}
-            {dialog.groups.some((g) => g.status === "created") ? (
-              <Btn kind="text" onClick={() => { const ids = dialog.groups.flatMap((g) => g.supplyId ? [g.supplyId] : []); setDialog(null); s.push({ name: "pick", supplyIds: ids, single: false }); }}>Открыть общий подбор</Btn>
-            ) : null}
-          </div>
-        </Dialog>
-      ) : null}
+              {dialog.groups.map((g) => (
+                <div key={g.key} style={{ background: "var(--bg)", borderRadius: 8, padding: "8px 10px", fontSize: 16 }}>
+                  <div style={{ fontWeight: 600 }}>{sellerById(g.sellerId).name} · {ordersLabel(g.orderIds.length)}</div>
+                  <div style={{ color: statusColor(g) }}>{statusRu(g)}</div>
+                  {g.error ? <div style={{ color: "var(--error)" }}>{g.error}</div> : null}
+                  {g.status === "incompatible" && g.badIds?.length && g.badIds.length < g.orderIds.length ? (
+                    <Btn kind="outlined" block h={48} fs={16} style={{ marginTop: 6, padding: "0 8px" }} disabled={dialog.busy} onClick={() => createWithout(g)} testId="create-without">
+                      {g.badIds.length === 1 ? `Создать без WB ${w.orders.find((o) => o.id === g.badIds![0])!.wbId}` : `Создать без ${g.badIds.length} заказов`}
+                    </Btn>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </Dialog>
+        );
+      })() : null}
     </Scaffold>
   );
 }
@@ -233,34 +267,38 @@ export function DeliveryDialog({ supplyId, onClose }: { supplyId: string; onClos
   const s = useStore();
   const [phase, setPhase] = useState<"checking" | "ready" | "sending">("checking");
   const t = useRef<number>(0);
+  const orders = s.w.orders.filter((o) => o.supplyId === supplyId);
+  const unpacked = orders.filter((o) => !o.packed);
+  const under = underpicks(s.w.orders, supplyId);
   useEffect(() => {
-    t.current = window.setTimeout(() => { setPhase("ready"); s.log("POST delivery-preflight → замечаний нет"); }, 700);
+    t.current = window.setTimeout(() => { setPhase("ready"); s.log("POST delivery-preflight → блокеров нет"); }, 700);
     return () => clearTimeout(t.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const send = () => {
     setPhase("sending");
     t.current = window.setTimeout(() => {
-      const n = s.w.orders.filter((o) => o.supplyId === supplyId).length;
       s.update((w) => ({ ...w, supplies: w.supplies.map((x) => x.id === supplyId ? { ...x, delivered: true } : x) }));
-      s.log(`POST deliver → поставка передана в WB, остаток списан: ${n} шт. (единственное списание FBS)`);
+      s.log(`POST deliver → поставка передана в WB, остаток списан: ${orders.length} шт. (единственное списание FBS)${unpacked.length ? `; не упаковано на момент передачи: ${unpacked.length}` : ""}`);
       s.flashOk();
       onClose();
     }, 900);
   };
+  const list = (xs: string[]) => (xs.length > 3 ? `${xs.slice(0, 3).join(", ")} и ещё ${xs.length - 3}` : xs.join(", "));
   return (
     <Dialog
       title="Передать поставку в WB?"
       onDismiss={() => phase !== "sending" && onClose()}
       actions={<>
-        <Btn kind="text" disabled={phase === "sending"} onClick={onClose}>Не передавать</Btn>
-        <Btn kind="filled" disabled={phase !== "ready"} onClick={send}>Передать в WB</Btn>
+        <Btn kind="text" h={48} fs={16} disabled={phase === "sending"} onClick={onClose}>Не передавать</Btn>
+        <Btn kind="filled" h={48} fs={16} disabled={phase !== "ready"} onClick={send} testId="deliver-confirm">Передать в WB</Btn>
       </>}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div>После передачи поставку нельзя будет отменить или вернуть в работу.</div>
+        {unpacked.length ? <div className="warn-line" data-testid="warn-unpacked">Не упаковано: {ordersLabel(unpacked.length)} — {list(unpacked.map((o) => `WB ${o.wbId}`))}</div> : null}
+        {under.length ? <div className="warn-line" data-testid="warn-underpick">Не подобрано: {under.reduce((a, u) => a + u.count, 0)} шт. — {list(under.map((u) => u.name))}</div> : null}
         {phase !== "ready" ? <><div className="progress" /><div>{phase === "checking" ? "Проверяем поставку…" : "Передаём…"}</div></> : null}
-        {phase === "ready" ? <Btn kind="text" onClick={() => { setPhase("checking"); t.current = window.setTimeout(() => setPhase("ready"), 600); }}>Проверить ещё раз</Btn> : null}
       </div>
     </Dialog>
   );
@@ -270,42 +308,83 @@ export function DeliveryDialog({ supplyId, onClose }: { supplyId: string; onClos
 export function SupplyScreen({ id }: { id: string }) {
   const s = useStore();
   const [deliver, setDeliver] = useState(false);
+  const [showComp, setShowComp] = useState(false);
   useScan(() => {}, []);
   const sup = s.w.supplies.find((x) => x.id === id)!;
   const orders = s.w.orders.filter((o) => o.supplyId === id);
   const byProduct = new Map<string, number>();
   orders.forEach((o) => byProduct.set(o.productId, (byProduct.get(o.productId) ?? 0) + 1));
+  const picked = orders.filter((o) => o.picked).length;
+  const packedN = orders.filter((o) => o.packed).length;
+  const pickBtn = () => s.push({ name: "pick", supplyIds: [id], single: true });
+  const packBtn = () => s.push({ name: "pack", supplyId: id });
+
+  if (s.supplyLayout === "r8") {
+    // Вид, утверждённый владельцем в WMS-584 R8: состав карточками, кнопки под составом.
+    return (
+      <Scaffold title="Поставка FBS" onExit={s.back} camera={false}>
+        <div className="scroll" style={{ flex: 1, padding: 12, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{sup.name}</div>
+          <div>WB · {sup.delivered ? "В доставке" : "В сборке"}</div>
+          <div>{orders.length} заказов · Подобрано {picked} · Упаковано {packedN}</div>
+          <div style={{ fontWeight: 700 }}>Состав</div>
+          {[...byProduct.entries()].map(([pid, q]) => {
+            const p = productById(pid);
+            return (
+              <div key={pid} style={{ display: "flex" }}>
+                <Photo p={p} w={112} h={146} />
+                <div style={{ flex: 1, paddingLeft: 12 }}>
+                  <div className="clamp3" style={{ fontSize: 15 }}>{p.name}, {p.size}</div>
+                  <div style={{ fontSize: 13 }}>{p.sku}</div>
+                  <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>ШК: {p.barcode}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, marginTop: 8 }}>{q} шт.</div>
+                </div>
+              </div>
+            );
+          })}
+          <Btn kind="filled" block h={72} fs={20} onClick={pickBtn}>Подбор</Btn>
+          <Btn kind="filled" block h={72} fs={20} onClick={packBtn}>Упаковка и этикетки</Btn>
+          {sup.delivered ? <div style={{ color: "var(--success)", fontWeight: 700 }}>Поставка передана в WB</div>
+            : <Btn kind="outlined" block h={64} fs={20} onClick={() => setDeliver(true)}>Передать поставку в WB</Btn>}
+        </div>
+        {deliver ? <DeliveryDialog supplyId={id} onClose={() => setDeliver(false)} /> : null}
+      </Scaffold>
+    );
+  }
+
+  // Предложение по замечанию координатора 09.10 (п. 7): действия закреплены внизу, состав свёрнут, недобор виден.
   return (
     <Scaffold title="Поставка FBS" onExit={s.back} camera={false}>
-      <div className="scroll" style={{ flex: 1, padding: 12, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="scroll" style={{ flex: 1, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8, fontSize: 16 }}>
         <div style={{ fontSize: 22, fontWeight: 700 }}>{sup.name}</div>
-        <div>WB · {sup.delivered ? "В доставке" : "В сборке"}</div>
-        <div>{orders.length} заказов · Подобрано {orders.filter((o) => o.picked).length} · Упаковано {orders.filter((o) => o.packed).length}</div>
-        <div style={{ fontWeight: 700 }}>Состав</div>
-        {[...byProduct.entries()].map(([pid, q]) => {
+        <div>WB · {sellerById(sup.sellerId).name} · {sup.delivered ? "В доставке" : "В сборке"}</div>
+        <div>{ordersLabel(orders.length)} · Подобрано {picked} · Упаковано {packedN}</div>
+        <UnderpickBlock supplyId={id} compact />
+        <button className="comp-toggle" onClick={() => setShowComp(!showComp)} data-testid="composition-toggle">
+          <span style={{ flex: 1, textAlign: "left" }}>Состав · {byProduct.size} {ruPlural(byProduct.size, "товар", "товара", "товаров")}, {orders.length} шт.</span>
+          <Icon name={showComp ? "collapse" : "expand"} />
+        </button>
+        {showComp ? [...byProduct.entries()].map(([pid, q]) => {
           const p = productById(pid);
           return (
-            <div key={pid} style={{ display: "flex", padding: "0 0" }}>
-              <Photo p={p} w={112} h={146} />
-              <div style={{ flex: 1, paddingLeft: 12 }}>
-                <div className="clamp3" style={{ fontSize: 15 }}>{p.name}, {p.size}</div>
-                <div style={{ fontSize: 13 }}>{p.sku}</div>
-                <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>ШК: {p.barcode}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, marginTop: 8 }}>{q} шт.</div>
+            <div key={pid} className="comp-row">
+              <Photo p={p} w={40} h={48} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="ellipsis">{p.name}, {p.size}</div>
+                <div className="ellipsis" style={{ color: "var(--text2)" }}>{p.sku} · ШК {p.barcode}</div>
               </div>
+              <b style={{ whiteSpace: "nowrap" }}>{q} шт.</b>
             </div>
           );
-        })}
-        <Btn kind="filled" block h={72} fs={20} onClick={() => s.push({ name: "pick", supplyIds: [id], single: true })}>Подбор</Btn>
-        <Btn kind="filled" block h={72} fs={20} onClick={() => s.push({ name: "pack", supplyId: id })}>Упаковка и этикетки</Btn>
-        {sup.delivered ? (
-          <>
-            <div style={{ color: "var(--success)", fontWeight: 700 }}>Поставка передана в WB</div>
-            <Btn kind="outlined" block onClick={() => s.snack("Макет: статус WB не обновляется")}>Обновить статус WB</Btn>
-          </>
-        ) : (
-          <Btn kind="outlined" block h={64} fs={20} onClick={() => setDeliver(true)}>Передать поставку в WB</Btn>
-        )}
+        }) : null}
+        {sup.delivered ? <div style={{ color: "var(--success)", fontWeight: 700 }}>Поставка передана в WB</div> : null}
+      </div>
+      <div className="supply-actions">
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn kind="filled" h={56} fs={18} style={{ flex: 1 }} onClick={pickBtn}>Подбор</Btn>
+          <Btn kind="filled" h={56} fs={18} style={{ flex: 1 }} onClick={packBtn}>Упаковка</Btn>
+        </div>
+        {!sup.delivered ? <Btn kind="outlined" block h={48} fs={17} style={{ marginTop: 8 }} onClick={() => setDeliver(true)}>Передать поставку в WB</Btn> : null}
       </div>
       {deliver ? <DeliveryDialog supplyId={id} onClose={() => setDeliver(false)} /> : null}
     </Scaffold>
@@ -327,12 +406,12 @@ export function PackGroupScreen({ supplyIds }: { supplyIds: string[] }) {
           return (
             <div key={id} className="tonal-card tap" style={{ padding: 12, display: "flex", flexDirection: "column", gap: 4 }} onClick={() => s.push({ name: "pack", supplyId: id, groupIds: supplyIds })}>
               <div style={{ fontWeight: 700, fontSize: 18 }}>{sup.name}</div>
-              <div style={{ fontSize: 14 }}>{sellerById(sup.sellerId).name}</div>
+              <div style={{ fontSize: 16 }}>{sellerById(sup.sellerId).name}</div>
               {sup.delivered ? (
                 <div style={{ fontSize: 16, color: "var(--success)", fontWeight: 700 }}>Передана в WB</div>
               ) : (
                 <>
-                  <div style={{ fontSize: 14 }}>Упаковано {packed} из {orders.length}</div>
+                  <div style={{ fontSize: 16 }}>Упаковано {packed} из {orders.length}</div>
                   {under > 0 ? <div style={{ fontSize: 16, color: "#b25b00", fontWeight: 500 }}>Не подобрано {under} шт.</div> : null}
                 </>
               )}

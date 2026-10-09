@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Placement, SORTING, products, productById } from "./data";
+import { Placement, Product, SORTING, products, productById } from "./data";
 import {
   RouteRow, Source, findSourceByCode, locLabel, placementLabel, plannedOf, remainingOf, routePlacements, routeRows,
   sourceMatches, sourceRowKey, supplyOrders, takeAt,
@@ -7,7 +7,23 @@ import {
 import { World, useScan, useStore } from "./store";
 import { Btn, Dialog, Field, Icon, Photo, Scaffold } from "./ui";
 
-/** Подбор FBS на ТСД по WMS-711: маршрут по ячейкам, блок открытого места, экран не уезжает. */
+/** Короткое имя для сообщений: первые слова до ~18 знаков, без висящих предлогов. */
+const short = (p: Product) => {
+  const out: string[] = [];
+  for (const wd of p.name.split(" ")) { if (out.join(" ").length >= 14) break; out.push(wd); }
+  while (out.length > 1 && out[out.length - 1].length <= 2) out.pop();
+  return `${out.join(" ")}, р. ${p.size}`;
+};
+const boxNo = (p: Placement) => {
+  const box = p.path[p.path.length - 1];
+  return box ? box.label.replace("Короб ", "") : "россыпью";
+};
+const placeShort = (p: Placement) => (p.locCode === SORTING ? "без ячейки" : p.locCode);
+const sourceOf = (p: Placement): Source => (p.path.length
+  ? { kind: "container", locCode: p.locCode, container: p.path[p.path.length - 1], path: p.path }
+  : { kind: "location", locCode: p.locCode });
+
+/** Подбор FBS на ТСД: WMS-711 + правила скана и вида из WMS-740 (решения владельца 09.10). */
 export function PickScreen({ supplyIds, single }: { supplyIds: string[]; single: boolean }) {
   const s = useStore();
   const w = s.w;
@@ -24,17 +40,24 @@ export function PickScreen({ supplyIds, single }: { supplyIds: string[]; single:
   const picked = ords.filter((o) => o.picked).length;
   const complete = total > 0 && picked === total;
 
-  // R3: скан короба/ячейки один раз переводит маршрут к этому месту. Скан товара маршрут не двигает (R6).
+  // Скан ячейки/короба один раз ставит маршрут на это место; скан товара маршрут не двигает.
   const sourceKey = source ? (source.kind === "container" ? `c:${source.container.code}` : `l:${source.locCode}`) : null;
   useEffect(() => {
     if (!source || !listRef.current) return;
-    const key = sourceRowKey({ kind: "location", locCode: source.locCode }, rows);
-    const el = key ? listRef.current.querySelector<HTMLElement>(`[data-row="${CSS.escape(key)}"]`) : null;
-    if (el) listRef.current.scrollTo({ top: el.offsetTop, behavior: "smooth" });
+    const find = (k: string | null) => (k ? listRef.current!.querySelector<HTMLElement>(`[data-row="${CSS.escape(k)}"]`) : null);
+    const cell = find(sourceRowKey({ kind: "location", locCode: source.locCode }, rows));
+    const box = source.kind === "container" ? find(sourceRowKey(source, rows)) : null;
+    // Ячейка и короб должны быть видны вместе; если короб глубоко в ячейке — ставим наверх короб.
+    const target = box && cell && box.offsetTop - cell.offsetTop > 140 ? box : cell ?? box;
+    if (target) listRef.current.scrollTo({ top: target.offsetTop, behavior: "smooth" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceKey]);
 
-  const block = source ? route.filter((p) => sourceMatches(source, p)) : [];
+  // Подбор закончен — маршрут целиком сверху, чтобы было видно, что всё собрано.
+  useEffect(() => { if (complete) listRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }, [complete]);
+
+  const inSource = (p: Placement) => !!source && sourceMatches(source, p);
+  const nextHere = source ? route.find((p) => inSource(p) && takeAt(p, w.orders, supplyIds) > 0) ?? null : null;
 
   const doPick = (p: Placement, n = 1) => {
     s.update((x: World) => {
@@ -66,50 +89,52 @@ export function PickScreen({ supplyIds, single }: { supplyIds: string[]; single:
       return;
     }
     const product = products.find((p) => p.barcode === code || p.sku === code);
-    if (!product) { s.flashErr("Товар не найден по штрихкоду."); s.log(`Скан «${code}» → wrong_product`); return; }
-    if (plannedOf(w.orders, supplyIds, product.id) === 0 || remainingOf(w.orders, supplyIds, product.id) === 0) {
-      s.flashErr("Товар не входит в состав поставки или уже подобран."); s.log(`Скан ${product.sku} → product_not_in_supply`); return;
-    }
+    if (!product) { s.flashErr(`Штрихкод ${code} не найден — такого товара нет в этой поставке`); return; }
+    const planned = plannedOf(w.orders, supplyIds, product.id);
+    if (planned === 0) { s.flashErr(`«${short(product)}» нет в этой поставке`); return; }
+    if (remainingOf(w.orders, supplyIds, product.id) === 0) { s.flashErr(`«${short(product)}» уже подобран полностью: ${planned} из ${planned}`); return; }
+    const candidates = route.filter((p) => p.productId === product.id && takeAt(p, w.orders, supplyIds) > 0);
     if (source) {
-      const here = route.find((p) => p.productId === product.id && sourceMatches(source, p));
-      if (!here || takeAt(here, w.orders, supplyIds) === 0) {
-        s.flashErr("Недостаточно неупакованного остатка в ячейке."); s.log(`Скан ${product.sku} в «${source.kind === "container" ? source.container.label : source.locCode}» → insufficient_unpacked`); return;
+      const here = candidates.filter(inSource);
+      if (here.length === 1) { doPick(here[0]); return; }
+      if (here.length > 1) {
+        // Товар лежит в нескольких коробах текущей ячейки: какой именно — знает только кладовщик.
+        s.hint(`${short(product)} в ${here.length === 2 ? "коробах" : "местах"} ${here.map(boxNo).join(", ")} — отсканируйте короб`);
+        return;
       }
-      doPick(here);
+    }
+    if (candidates.length === 1) {
+      // Одно место на складе (в том числе «Без ячейки») — берём оттуда сразу, место переключается само.
+      setSource(sourceOf(candidates[0]));
+      doPick(candidates[0]);
       return;
     }
-    const places = route.filter((p) => p.productId === product.id && takeAt(p, w.orders, supplyIds) > 0);
-    if (places.length === 0) { s.flashErr(`Для ${product.name} нет доступного места подбора`); return; }
-    if (places.length === 1) {
-      const p = places[0];
-      setSource(p.path.length ? { kind: "container", locCode: p.locCode, container: p.path[p.path.length - 1], path: p.path } : { kind: "location", locCode: p.locCode });
-      doPick(p);
-      return;
-    }
-    setChooser({ productId: product.id, choices: places });
+    if (candidates.length === 0) { s.flashErr(`«${short(product)}»: на складе нет свободного остатка для подбора`); return; }
+    setChooser({ productId: product.id, choices: candidates });
   };
 
   const hints = [
-    ...[...new Set(route.map((p) => p.locCode))].filter((c) => c !== "__SORTING__").map((c) => ({ code: c, label: `Ячейка ${c}` })),
+    ...[...new Set(route.map((p) => p.locCode))].filter((c) => c !== SORTING).map((c) => ({ code: c, label: `Ячейка ${c}` })),
     ...route.flatMap((p) => p.path.filter((c) => c.kind === "box").map((c) => ({ code: c.code, label: `${c.label} (${p.locCode})` }))),
     ...[...new Set(route.map((p) => p.productId))].map((id) => { const p = productById(id); return { code: p.barcode, label: `${p.sku} · ${p.name.split(" ").slice(0, 2).join(" ")}` }; }),
-    { code: "4601234567890", label: "Чужой товар (ошибка)" },
+    { code: "4601234567890", label: "Чужой штрихкод" },
   ].filter((h, i, a) => a.findIndex((x) => x.code === h.code) === i);
   useScan(onScan, hints);
 
+  const lastPick = w.lastPicks.filter((lp) => ords.some((o) => o.id === lp.orderId && o.picked)).pop() ?? null;
   const undo = () => {
-    const last = w.lastPicks.filter((lp) => ords.some((o) => o.id === lp.orderId && o.picked)).pop();
-    if (!last) return;
+    if (!lastPick) return;
+    const pl = w.placements.find((q) => q.key === lastPick.placementKey)!;
     s.update((x) => ({
       ...x,
-      lastPicks: x.lastPicks.filter((lp) => lp !== last),
-      orders: x.orders.map((o) => o.id === last.orderId ? { ...o, picked: false, pickedFrom: undefined } : o),
-      placements: x.placements.map((q) => q.key === last.placementKey ? { ...q, qty: q.qty + 1, pickedHere: q.pickedHere - 1 } : q),
+      lastPicks: x.lastPicks.filter((lp) => lp !== lastPick),
+      orders: x.orders.map((o) => o.id === lastPick.orderId ? { ...o, picked: false, pickedFrom: undefined } : o),
+      placements: x.placements.map((q) => q.key === lastPick.placementKey ? { ...q, qty: q.qty + 1, pickedHere: q.pickedHere - 1 } : q),
     }));
     s.log("POST pick/set (−1) → последний подбор отменён, штука вернулась на место");
+    s.snack(`Отменено: ${short(productById(pl.productId))} — 1 шт. вернулась в ${placementLabel(pl)}`);
     s.flashOk();
   };
-  const canUndo = w.lastPicks.some((lp) => ords.some((o) => o.id === lp.orderId && o.picked));
 
   const openManual = (productId: string) => {
     const choices = route.filter((p) => p.productId === productId && takeAt(p, w.orders, supplyIds) > 0);
@@ -120,41 +145,38 @@ export function PickScreen({ supplyIds, single }: { supplyIds: string[]; single:
   const qn = Number(qty);
   const qValid = qty !== "" && qn >= 1 && qn <= manualLimit;
 
-  const srcLabel = source ? (source.kind === "container" ? `Короб: ${source.container.code}` : source.locCode === SORTING ? "Без ячейки" : `Ячейка: ${source.locCode}`) : "Сканируйте ячейку, короб или товар";
+  const srcLabel = source
+    ? (source.kind === "container" ? `Короб ${source.container.code}` : source.locCode === SORTING ? "Без ячейки" : `Ячейка ${source.locCode}`)
+    : "Сканируйте ячейку, короб или товар";
 
   return (
-    <Scaffold title="Подбор FBS" onExit={s.back} progress={[picked, total]}>
+    <Scaffold
+      title="Подбор FBS"
+      onExit={s.back}
+      progress={[picked, total]}
+      actions={<button className="icon-btn" aria-label="Отменить последний" title="Отменить последний" disabled={!lastPick} onClick={undo} style={{ opacity: lastPick ? 1 : 0.35, margin: 0 }} data-testid="undo"><Icon name="undo" color="var(--primary)" /></button>}
+    >
       <div className="cellbar" style={{ background: source ? "var(--success)" : "var(--text2)" }}>
-        <span className="lbl">{srcLabel}</span>
-        {source ? <Btn kind="text" onClick={() => setSource(null)}>Сменить место</Btn> : null}
+        <span className="lbl ellipsis">{srcLabel}</span>
+        {source ? <Btn kind="text" h={48} fs={16} onClick={() => setSource(null)}>Сменить место</Btn> : null}
       </div>
-      {block.length ? (
-        <div className="placeblock" data-testid="place-block">
-          {block.map((p) => {
-            const pr = productById(p.productId);
-            const take = takeAt(p, w.orders, supplyIds);
-            return (
-              <div className="placerow" key={p.key}>
-                <Photo p={pr} w={48} h={56} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="ellipsis" style={{ fontSize: 16, fontWeight: 500, lineHeight: "20px" }}>{pr.name}, {pr.size}</div>
-                  <div className="ellipsis" style={{ fontSize: 15, color: "var(--text2)", lineHeight: "18px" }}>ШК {pr.barcode}</div>
-                  <div className="nums">
-                    <div className="n"><small>Остаток</small><b>{p.qty}</b></div>
-                    <div className={`n take${take === 0 ? " zero" : ""}`}><small>Взять</small><b>{take}</b></div>
-                    <div className="n"><small>Собрано</small><b style={{ color: p.pickedHere ? "var(--success)" : undefined }}>{p.pickedHere}</b></div>
-                  </div>
-                </div>
+      {source && !complete ? (
+        nextHere ? (() => {
+          const pr = productById(nextHere.productId);
+          const take = takeAt(nextHere, w.orders, supplyIds);
+          return (
+            <div className="next-row" data-testid="place-block">
+              <Photo p={pr} w={40} h={48} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="ellipsis" style={{ fontSize: 16, fontWeight: 600 }}>р. {pr.size} · {pr.name}</div>
+                <div className="ellipsis" style={{ fontSize: 16 }}>Остаток <b>{nextHere.qty}</b> · Взять <b style={{ color: "var(--error)" }}>{take}</b> · Собрано <b>{nextHere.pickedHere}</b></div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })() : (
+          <div className="next-row" data-testid="place-block" style={{ color: "var(--text2)", fontSize: 16 }}>Отсюда больше ничего брать не нужно</div>
+        )
       ) : null}
-      {/* Предложение макета: «Отменить последний» в строке «Маршрут», чтобы маршруту осталось место на 360×640. */}
-      <div className="sectionbar" style={{ display: "flex", alignItems: "center", padding: "4px 8px 4px 14px", minHeight: 52 }}>
-        <span style={{ flex: 1 }}>Маршрут</span>
-        <Btn kind="outlined" h={44} disabled={!canUndo} onClick={undo}>Отменить последний</Btn>
-      </div>
       <div className="scroll" ref={listRef} style={{ flex: 1, position: "relative", background: "var(--surface)" }} data-testid="route">
         {rows.map((r: RouteRow) => {
           if (r.type === "loc") {
@@ -164,59 +186,69 @@ export function PickScreen({ supplyIds, single }: { supplyIds: string[]; single:
           if (r.type === "cont") {
             const cur = source?.kind === "container" && source.locCode === r.locCode && source.path.some((c) => c.code === r.container.code);
             return (
-              <div key={r.key} data-row={r.key} className={`route-cont${cur ? " cur" : ""}`} style={{ paddingLeft: 12 + r.depth * 14 }}>
-                <Icon name={r.container.kind === "pallet" ? "pallet" : "box"} size={16} />{r.container.label} · {r.container.code}
+              <div key={r.key} data-row={r.key} className={`route-cont${cur ? " cur" : ""}`} style={{ paddingLeft: 10 + r.depth * 12 }}>
+                <Icon name={r.container.kind === "pallet" ? "pallet" : "box"} size={18} />{r.container.label} · {r.container.code}
               </div>
             );
           }
           const p = r.placement;
           const pr = productById(p.productId);
           const remaining = remainingOf(w.orders, supplyIds, p.productId);
-          const done = remaining === 0;
           const take = takeAt(p, w.orders, supplyIds);
-          const cur = source ? sourceMatches(source, p) : false;
+          const cur = inSource(p);
+          const takenFrom = [...new Set(w.placements.filter((q) => q.productId === p.productId && q.pickedHere > 0 && q.key !== p.key).map(placeShort))];
+          const state = take > 0 ? "take" : p.pickedHere > 0 ? "done" : remaining === 0 ? "notneeded" : "empty";
+          const badge = state === "take" ? <b style={{ color: "var(--error)" }}>{take} шт.</b>
+            : state === "done" ? <b style={{ color: "var(--success)" }}>Собрано {p.pickedHere}</b>
+              : state === "notneeded" ? <b style={{ color: "var(--text2)" }}>Не нужно</b>
+                : <b style={{ color: "var(--text2)" }}>Здесь нет</b>;
           return (
-            <div key={r.key} data-row={r.key} className={`route-prod tap${done ? " done" : ""}${cur ? " cur" : ""}`} style={{ paddingLeft: 12 + p.path.length * 14 }} onClick={() => openManual(p.productId)}>
-              <Photo p={pr} w={44} h={52} />
+            <div key={r.key} data-row={r.key} className={`route-prod tap${state === "done" ? " done" : ""}${state === "notneeded" || state === "empty" ? " muted" : ""}${cur ? " cur" : ""}`} style={{ paddingLeft: 10 + p.path.length * 12 }} onClick={() => openManual(p.productId)}>
+              <Photo p={pr} w={40} h={48} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                  <span className="ellipsis" style={{ fontSize: 16, flex: 1 }}>{pr.name}, {pr.size}</span>
-                  <b style={{ fontSize: 16, color: done ? "var(--success)" : "var(--error)", whiteSpace: "nowrap" }}>{done ? "Собрано" : `${remaining} шт.`}</b>
+                  <span className="ellipsis" style={{ fontSize: 16, flex: 1 }}>{pr.name}</span>
+                  <span style={{ fontSize: 16, whiteSpace: "nowrap" }}>{badge}</span>
                 </div>
-                <div className="ellipsis" style={{ fontSize: 15, color: "var(--text2)" }}>ШК {pr.barcode}</div>
-                <div className="ellipsis" style={{ fontSize: 15, color: "var(--text2)" }}>Остаток <b style={{ color: "var(--text)" }}>{p.qty}</b> · Взять <b style={{ color: take ? "var(--error)" : "var(--text)" }}>{take}</b> · Собрано <b style={{ color: "var(--text)" }}>{p.pickedHere}</b></div>
+                <div className="ellipsis" style={{ fontSize: 16, color: "var(--text2)" }}>ШК {pr.barcode} · <b style={{ color: "var(--text)" }}>р. {pr.size}</b></div>
+                {state === "notneeded" ? (
+                  <div className="ellipsis" style={{ fontSize: 16, color: "var(--text2)" }}>Не нужно — взято из {takenFrom.join(", ") || "другого места"}</div>
+                ) : (
+                  <div className="ellipsis" style={{ fontSize: 16, color: "var(--text2)" }}>Остаток <b style={{ color: "var(--text)" }}>{p.qty}</b> · Взять <b style={{ color: take ? "var(--error)" : "var(--text)" }}>{take}</b> · Собрано <b style={{ color: "var(--text)" }}>{p.pickedHere}</b></div>
+                )}
               </div>
             </div>
           );
         })}
-        <div style={{ height: 24 }} />
+        {/* Запас внизу: любое место можно поставить к верху списка, без полуобрезанной строки над ним. */}
+        <div style={{ height: "calc(100% - 96px)" }} />
       </div>
       {complete ? (
-        <div style={{ display: "flex", gap: 8, padding: 8, background: "var(--surface)", flex: "none" }}>
-          <Btn kind="filled" h={64} fs={18} style={{ flex: 1 }} onClick={() => single ? s.replace({ name: "pack", supplyId: supplyIds[0] }) : s.push({ name: "pack-group", supplyIds })}>К упаковке</Btn>
-          <Btn kind="success" h={64} fs={18} style={{ flex: 1 }} onClick={() => { s.update((x) => ({ ...x, fbsTab: "work" })); s.resetTo([{ name: "home" }, { name: "fbs" }]); }}>Завершить подбор</Btn>
+        <div style={{ display: "flex", gap: 8, padding: "8px 12px 10px", background: "var(--surface)", flex: "none", boxShadow: "0 -1px 3px rgba(0,0,0,.12)" }}>
+          <Btn kind="filled" h={56} fs={19} style={{ flex: 3 }} onClick={() => single ? s.replace({ name: "pack", supplyId: supplyIds[0] }) : s.push({ name: "pack-group", supplyIds })}>К упаковке</Btn>
+          <Btn kind="outlined" h={56} fs={16} style={{ flex: 2, padding: "0 8px" }} onClick={() => { s.update((x) => ({ ...x, fbsTab: "work" })); s.resetTo([{ name: "home" }, { name: "fbs" }]); }}>Завершить подбор</Btn>
         </div>
       ) : null}
 
       {chooser ? (
-        <Dialog title="Откуда подобрать товар" onDismiss={() => setChooser(null)} actions={<Btn kind="text" onClick={() => setChooser(null)}>Отмена</Btn>}>
+        <Dialog title="Откуда подобрать товар" onDismiss={() => setChooser(null)} actions={<Btn kind="text" h={48} fs={16} onClick={() => setChooser(null)}>Отмена</Btn>}>
           <div style={{ marginBottom: 6 }}>{productById(chooser.productId).name}</div>
           {chooser.choices.map((p) => (
-            <Btn key={p.key} kind="text" block onClick={() => { setChooser(null); setSource(p.path.length ? { kind: "container", locCode: p.locCode, container: p.path[p.path.length - 1], path: p.path } : { kind: "location", locCode: p.locCode }); doPick(p); }}>
+            <Btn key={p.key} kind="text" block h={48} fs={16} onClick={() => { setChooser(null); setSource(sourceOf(p)); doPick(p); }}>
               {placementLabel(p)} · доступно {takeAt(p, w.orders, supplyIds)}
             </Btn>
           ))}
         </Dialog>
       ) : null}
       {manual && !manual.chosen && manual.choices.length > 0 ? (
-        <Dialog title="Выберите ячейку" onDismiss={() => setManual(null)} actions={<Btn kind="text" onClick={() => setManual(null)}>Отмена</Btn>}>
+        <Dialog title="Выберите место" onDismiss={() => setManual(null)} actions={<Btn kind="text" h={48} fs={16} onClick={() => setManual(null)}>Отмена</Btn>}>
           <div style={{ marginBottom: 8 }}>{productById(manual.productId).name}</div>
-          {manual.choices.map((p) => <Btn key={p.key} kind="text" block onClick={() => setManual({ ...manual, chosen: p })}>{placementLabel(p)} · доступно {takeAt(p, w.orders, supplyIds)}</Btn>)}
+          {manual.choices.map((p) => <Btn key={p.key} kind="text" block h={48} fs={16} onClick={() => setManual({ ...manual, chosen: p })}>{placementLabel(p)} · доступно {takeAt(p, w.orders, supplyIds)}</Btn>)}
         </Dialog>
       ) : null}
       {manual && manual.choices.length === 0 ? (
-        <Dialog title="Ручной подбор" onDismiss={() => setManual(null)} actions={<Btn kind="text" onClick={() => setManual(null)}>Закрыть</Btn>}>
-          Для товара нет ячейки с доступным количеством.
+        <Dialog title="Ручной подбор" onDismiss={() => setManual(null)} actions={<Btn kind="text" h={48} fs={16} onClick={() => setManual(null)}>Закрыть</Btn>}>
+          {remainingOf(w.orders, supplyIds, manual.productId) === 0 ? "Этот товар уже подобран полностью." : "Для товара нет места с доступным количеством."}
         </Dialog>
       ) : null}
       {manual && manual.chosen ? (
@@ -224,8 +256,8 @@ export function PickScreen({ supplyIds, single }: { supplyIds: string[]; single:
           title="Ручной подбор"
           onDismiss={() => setManual(null)}
           actions={<>
-            <Btn kind="text" onClick={() => setManual(null)}>Отмена</Btn>
-            <Btn kind="filled" disabled={!qValid} onClick={() => { const c = manual.chosen!; setManual(null); doPick(c, qn); }}>Сохранить</Btn>
+            <Btn kind="text" h={48} fs={16} onClick={() => setManual(null)}>Отмена</Btn>
+            <Btn kind="filled" h={48} fs={16} disabled={!qValid} onClick={() => { const c = manual.chosen!; setManual(null); doPick(c, qn); }}>Сохранить</Btn>
           </>}
         >
           <div>{productById(manual.productId).name}</div>

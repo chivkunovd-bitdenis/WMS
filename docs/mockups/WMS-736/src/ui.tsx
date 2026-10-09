@@ -22,6 +22,11 @@ const P: Record<string, string> = {
   box: "M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4l16-.02V7z",
   pallet: "M2 18h20v2H2zM4 14h4v3H4zm6 0h4v3h-4zm6 0h4v3h-4zM3 4h18v9H3z",
   delete: "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+  undo: "M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z",
+  chevron: "M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",
+  expand: "M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z",
+  collapse: "M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z",
+  print: "M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z",
 };
 export function Icon({ name, size = 24, color = "currentColor" }: { name: keyof typeof P | string; size?: number; color?: string }) {
   return (
@@ -74,11 +79,11 @@ export function Chip({ sel, children, onClick, disabled, style }: { sel?: boolea
 
 // ---------- каркас рабочего экрана (ScanScaffold) ----------
 export function Scaffold(props: {
-  title: string; subtitle?: string; onExit: () => void; progress?: [number, number]; camera?: boolean;
+  title: string; subtitle?: string; onExit: () => void; progress?: [number, number]; camera?: boolean; actions?: ReactNode;
   primary?: { label: string; onClick: () => void; disabled?: boolean; kind?: "filled" | "success" } | null;
   children: ReactNode;
 }) {
-  const { title, subtitle, onExit, progress, camera = true, primary, children } = props;
+  const { title, subtitle, onExit, progress, camera = true, primary, children, actions } = props;
   return (
     <div className="scaffold">
       <div className="topbar">
@@ -89,6 +94,7 @@ export function Scaffold(props: {
             {subtitle ? <div className="s">{subtitle}</div> : null}
           </div>
           {progress ? <div className="topbar-progress">{progress[0]} из {progress[1]}</div> : null}
+          {actions}
           {camera ? <button className="icon-btn" aria-label="Сканировать камерой" style={{ marginLeft: 0 }}><Icon name="qr" color="var(--primary)" /></button> : <div style={{ width: 8 }} />}
         </div>
         {progress && progress[1] > 0 ? (
@@ -97,8 +103,8 @@ export function Scaffold(props: {
       </div>
       <div className="content">{children}</div>
       {primary ? (
-        <div className="primary-action">
-          <Btn kind={primary.kind ?? "filled"} block h={64} fs={20} onClick={primary.onClick} disabled={primary.disabled}>{primary.label}</Btn>
+        <div className="primary-action" style={{ padding: "8px 12px 10px" }}>
+          <Btn kind={primary.kind ?? "filled"} block h={56} fs={19} onClick={primary.onClick} disabled={primary.disabled}>{primary.label}</Btn>
         </div>
       ) : null}
     </div>

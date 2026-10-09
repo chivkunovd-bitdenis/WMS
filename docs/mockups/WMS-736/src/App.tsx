@@ -43,7 +43,7 @@ type Scenario = { id: string; title: string; tasks: string; steps: string[]; sta
 const scenarios: Scenario[] = [
   {
     id: "all", title: "Весь путь FBS с начала", tasks: "713 · 711 · 737 · 738 · 739",
-    steps: ["FBS → «Выбрать все» → «Создать поставки (10)»", "Группа «Мода Плюс» несовместима: видно, какой заказ мешает (WMS-713)", "«Создать» → поставка Беловой; «Открыть общий подбор» или «Закрыть», снять галку с WB 5911384333 и создать вторую", "Подбор по маршруту → «К упаковке» → поставка → короба → упаковать → «Передать поставку в WB»"],
+    steps: ["FBS → «Выбрать все» → «Создать поставки (10)»", "«Создать» → Белова создана; у «Мода Плюс» — «Создать без WB 5911384333» → создана → «Готово»", "Общий подбор двух поставок по маршруту → «К упаковке»", "Поставка → «Открыть» короб / «+ Создать короб» → сканы → «Упаковать» → «Передать поставку в WB»"],
     start: () => ({ w: freshWorld(), stack: [{ name: "home" }] }),
   },
   {
@@ -53,22 +53,22 @@ const scenarios: Scenario[] = [
   },
   {
     id: "create", title: "Создание поставок: отказ группы", tasks: "WMS-713 · расследование 741",
-    steps: ["«Выбрать все» → «Создать поставки (10)»", "Группы проверяются по одной, окно занято (так сейчас — WMS-741)", "У «Мода Плюс»: «Заказ WB 5911384333: Заказ отменён или брак.»", "«Создать» — создаётся только Белова; повторное «Создать» — звук успеха без действия (находка WMS-741)", "«Закрыть», снять галку с WB 5911384333, «Создать поставки (3)» → создано → общий подбор"],
+    steps: ["«Выбрать все» → «Создать поставки (10)»", "Группы проверяются по одной (так сейчас, замер — WMS-741)", "У «Мода Плюс»: причина с номером заказа и кнопка «Создать без WB 5911384333»", "«Создать» — создана Белова, кнопка «Создать» не стала немой: у «Мода Плюс» своя кнопка", "«Создать без WB 5911384333» → создано → главная кнопка «Готово» → общий подбор двух поставок"],
     start: () => ({ w: freshWorld(), stack: [{ name: "home" }, { name: "fbs" }] }),
   },
   {
     id: "pick", title: "Подбор по ячейкам", tasks: "WMS-711 (в работе) · 740",
-    steps: ["Скан ячейки «Д-1-9» → полоса «Ячейка», блок юбки, маршрут встал на ячейку", "Скан ШК юбки → числа меняются, экран не двигается", "Скан короба «INB-000398» → «Короб», блок платья и бархата; скан ШК платья 46", "Скан короба «INB-000431» (Ж-1-14) → у платья «Взять 0»; скан ШК платья → «уже подобран» (случай 08.10, WMS-740)", "Тап по строке → ручной подбор; «Отменить последний»", "Лонгслив — «Без ячейки» внизу маршрута; после всего — «К упаковке» / «Завершить подбор»"],
+    steps: ["Скан «Д-1-9» → одна строка места и одна строка товара, маршрут встал на ячейку", "Скан ШК юбки → числа меняются, экран не двигается", "Скан «Ж-1-18» → скан ШК брюк: короб в ячейке один (№ 30) — взято из него", "Скан «Ж-1-7» → скан ШК платья 46: «в коробах № 8, № 9 — отсканируйте короб» → скан «INB-000398» → скан ШК платья", "Ж-1-14: «Не нужно — взято из Ж-1-7»; ещё раз ШК платья → «уже подобран полностью» (держится до следующего действия)", "ШК лонгслива при любом месте → взят «Без ячейки» сразу; ↶ вверху — отменить последний; в конце «К упаковке»"],
     start: () => { const w = withSupplies(freshWorld()); return { w, stack: [{ name: "home" }, { name: "fbs" }, { name: "pick", supplyIds: [SUP_A, SUP_B], single: false }] }; },
   },
   {
     id: "under", title: "Недобор на упаковке", tasks: "WMS-737",
-    steps: ["«В работе» → карточка поставки «ИП Белова» → «Упаковка и этикетки»", "Сверху жёлтое: «Не подобрана 1 штука: Лонгслив…» — всё остальное доступно", "Назад → «Подбор» → скан ШК лонгслива (место одно — «Без ячейки»)", "«К упаковке» → предупреждения нет; «Назад» ведёт на поставку, а не в подбор (WMS-739)"],
+    steps: ["«В работе» → поставка «ИП Белова»: недобор виден уже на экране поставки", "«Упаковка» → жёлтая строка «Не подобрана 1 штука: Лонгслив…», у заказа пометка «Не подобран» — всё доступно", "Назад → «Подбор» → скан ШК лонгслива (взят «Без ячейки» сразу)", "«К упаковке» → предупреждения нет; «Назад» ведёт на поставку, а не в подбор"],
     start: () => { const w = pickAllExcept(withSupplies(freshWorld()), ["o2"]); return { w, stack: [{ name: "home" }, { name: "fbs" }] }; },
   },
   {
     id: "boxes", title: "Отменить короб", tasks: "WMS-738",
-    steps: ["Тап по строке «Короб №1 · 2 шт» → короб открыт → «Очистить короб» → подтвердить", "Короб пуст — кнопка стала «Удалить короб» → подтвердить → короба нет", "Открыть «Короб №2» (пустой) → «Удалить короб» или «Отмена»", "«Создать короб» → сканировать ШК блузки / QR заказа — кладётся в открытый короб"],
+    steps: ["«Короб №1 · 2 шт» → «Открыть» → «Очистить короб» → подтвердить", "Короб пуст — кнопка стала «Удалить короб» → подтвердить → короба нет", "«Короб №2» (пустой) → «Открыть» → «Удалить короб» или «Отмена»", "«+ Создать короб» → скан ШК блузки / QR заказа — кладётся в открытый короб"],
     start: () => {
       const w0 = pickAllExcept(withSupplies(freshWorld()), []);
       const w: World = { ...w0, boxes: [
@@ -80,7 +80,7 @@ const scenarios: Scenario[] = [
   },
   {
     id: "deliver", title: "Передача без кругов", tasks: "WMS-739",
-    steps: ["Упакованы 5 из 6 — внизу кнопки передачи ещё нет", "Последний заказ (внизу) → «Отметить упакованным» → внизу «Передать поставку в WB»", "Подтверждение → «Передать в WB» → «Поставка передана в WB»", "Назад → в списке задания у Беловой «Передана в WB»"],
+    steps: ["Упакованы 5 из 6 — «Передать поставку в WB» внизу уже есть", "Нажать: в подтверждении предупреждение «Не упаковано: 1 заказ — WB …», передать можно", "Или сначала «Упаковать» у последнего заказа — предупреждения нет", "«Передать в WB» → «Поставка передана в WB»; назад — в списке задания «Передана в WB»"],
     start: () => {
       const w0 = pickAllExcept(withSupplies(freshWorld()), []);
       const w: World = { ...w0, orders: w0.orders.map((o) => o.supplyId === SUP_A && o.id !== "o6" ? { ...o, packed: true } : o) };
@@ -110,10 +110,12 @@ export default function App() {
   const [stack, setStack] = useState<Route[]>([{ name: "home" }]);
   const [flash, setFlash] = useState<null | { ok: boolean; msg?: string; stamp: number }>(null);
   const [snackMsg, setSnack] = useState<string | null>(null);
+  const [banner, setBanner] = useState<null | { kind: "error" | "hint"; text: string }>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [hints, setHints] = useState<ScanHint[]>([]);
   const [scenario, setScenario] = useState<string>("all");
   const [sound, setSound] = useState(true);
+  const [supplyLayout, setSupplyLayout] = useState<"variant" | "r8">("variant");
   const [scale, setScale] = useState<number | "auto">("auto");
   const [vh, setVh] = useState(window.innerHeight);
   const [scanText, setScanText] = useState("");
@@ -132,7 +134,7 @@ export default function App() {
     clearTimeout(timers.current.f);
     setFlash({ ok, msg, stamp: Date.now() });
     beep(ok, soundRef.current);
-    timers.current.f = window.setTimeout(() => setFlash(null), ok ? 700 : 3500);
+    timers.current.f = window.setTimeout(() => setFlash(null), ok ? 700 : 900);
   }, []);
   const snack = useCallback((m: string) => {
     clearTimeout(timers.current.s);
@@ -150,24 +152,29 @@ export default function App() {
     back: () => setStack((st) => (st.length > 1 ? st.slice(0, -1) : st)),
     resetTo: (rs) => setStack(rs),
     flashOk: () => showFlash(true),
-    flashErr: (m) => { showFlash(false, m); log(`Ошибка на экране: «${m}»`); },
+    flashErr: (m) => { showFlash(false); setBanner({ kind: "error", text: m }); log(`Ошибка на экране: «${m}»`); },
+    hint: (m) => { beep(false, soundRef.current); setBanner({ kind: "hint", text: m }); log(`Подсказка на экране: «${m}»`); },
     snack,
     log,
     setHints,
+    supplyLayout,
     scanHandler,
     backHandler,
-  }), [w, stack, showFlash, snack, log]);
+  }), [w, stack, showFlash, snack, log, supplyLayout]);
+  // Плашка ошибки относится к экрану, на котором случилась: переход на другой экран её убирает.
+  useEffect(() => { setBanner(null); }, [stack.length, stack[stack.length - 1]?.name]);
 
   const doScan = (code: string) => {
     if (!code.trim()) return;
     log(`СКАН «${code.trim()}»`);
+    setBanner(null);
     if (scanHandler.current) scanHandler.current(code.trim());
   };
   const systemBack = () => { if (backHandler.current?.()) return; store.back(); };
 
   const startScenario = (sc: Scenario) => {
     const { w: nw, stack: ns } = sc.start();
-    setW(nw); setStack(ns); setScenario(sc.id); setFlash(null); setSnack(null);
+    setW(nw); setStack(ns); setScenario(sc.id); setFlash(null); setSnack(null); setBanner(null);
     setLogs([]); log(`Сценарий «${sc.title}»: исходное состояние загружено`);
   };
 
@@ -195,13 +202,13 @@ export default function App() {
           <div className="device">
             <div className="screen" data-testid="tsd-screen">
               <div className="statusbar"><span>21:00</span><span>Wi-Fi ▾ 87%</span></div>
-              <div className="app">
+              <div className="app" onPointerDownCapture={() => banner && setBanner(null)}>
                 {screen}
                 {flash ? (
                   <div key={flash.stamp} className={`flash ${flash.ok ? "ok" : "err"}`}>
-                    {!flash.ok && flash.msg ? <div className="msg" data-testid="scan-error">{flash.msg}</div> : null}
                   </div>
                 ) : null}
+                {banner ? <div className={`banner ${banner.kind}`} data-testid={banner.kind === "error" ? "scan-error" : "scan-hint"}>{banner.text}</div> : null}
                 <div id="app-overlay" />
                 {snackMsg ? <div className="snackbar">{snackMsg}</div> : null}
               </div>
@@ -247,6 +254,11 @@ export default function App() {
           <div className="log" data-testid="log">{logs.length ? logs.map((l, i) => <div key={i}>{l}</div>) : <span className="muted">пока пусто</span>}</div>
 
           <h2>Настройки макета</h2>
+          <div className="row-gap" style={{ marginBottom: 8 }}>
+            <span className="muted">Экран поставки:</span>
+            <button className={`pbtn${supplyLayout === "variant" ? " primary" : ""}`} onClick={() => setSupplyLayout("variant")}>действия внизу (предложение)</button>
+            <button className={`pbtn${supplyLayout === "r8" ? " primary" : ""}`} onClick={() => setSupplyLayout("r8")}>как утверждено (WMS-584 R8)</button>
+          </div>
           <div className="row-gap">
             <label><input type="checkbox" checked={sound} onChange={(e) => setSound(e.target.checked)} /> звук сканера</label>
             <span className="muted">масштаб:</span>

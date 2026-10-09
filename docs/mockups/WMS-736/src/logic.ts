@@ -88,9 +88,10 @@ export function routeRows(route: Placement[]): RouteRow[] {
 
 export type Source = { kind: "location"; locCode: string } | { kind: "container"; locCode: string; container: Container; path: Container[] };
 
+/** Место-источник: ячейка включает всё, что в ней лежит (россыпь и тару); короб — только своё содержимое. */
 export const sourceMatches = (src: Source, p: Placement) => {
   if (p.locCode !== src.locCode) return false;
-  if (src.kind === "location") return p.path.length === 0;
+  if (src.kind === "location") return true;
   return p.path.some((c) => c.code === src.container.code);
 };
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { InboundDoc, InboundStatus, productById, sellerById, sellers } from "./data";
 import {
-  InboundFilters, activeFilterCount, filterInbound, inboundOpenMode, inboundStatusColor, inboundStatusRu, noFilters,
+  InboundFilters, activeFilterCount, filterInbound, inboundOpenMode, inboundStatusColor, inboundStatusRu, noFilters, ruPlural,
 } from "./logic";
 import { useScan, useStore } from "./store";
 import { Btn, Field, Icon, Photo, Scaffold, Sheet } from "./ui";
@@ -17,7 +17,7 @@ export function HomeScreen() {
   const tiles: { label: string; icon: string; count: number | null; go: () => void }[] = [
     { label: "Приёмка", icon: "input", count: inboundCount, go: () => s.push({ name: "inbound" }) },
     { label: "Сортировка", icon: "inbox", count: sortingCount, go: () => s.snack("Макет: «Сортировка» в этом пакете не меняется") },
-    { label: "Отгрузка", icon: "truck", count: 2, go: () => s.snack("Макет: «Отгрузка» (FBO) в этом пакете не меняется") },
+    { label: "Отгрузка FBO", icon: "truck", count: 2, go: () => s.snack("Макет: экран отгрузки FBO в этом пакете не меняется") },
     { label: "FBS", icon: "truck", count: null, go: () => s.push({ name: "fbs" }) },
   ];
   return (
@@ -46,20 +46,25 @@ export function HomeScreen() {
 // ---------------- WMS-736: список «Приёмка» с фильтрами ----------------
 function TaskCard({ d, onClick }: { d: InboundDoc; onClick: () => void }) {
   const seller = sellerById(d.sellerId).name;
-  const sub = [
-    d.plannedDate ? `Привоз: ${d.plannedDate}` : null,
-    `${d.lines.length} позиций`,
+  const date = d.plannedDate ? `привоз ${d.plannedDate.slice(8, 10)}.${d.plannedDate.slice(5, 7)}` : null;
+  const counts = [
+    `${d.lines.length} ${ruPlural(d.lines.length, "позиция", "позиции", "позиций")}`,
     d.plannedBoxes != null ? `коробов: ${d.boxes} из ${d.plannedBoxes}` : null,
   ].filter(Boolean).join(" · ");
   const color = inboundStatusColor(d.status);
+  // WMS-736 R10: селлер — отдельной строкой целиком; номер, статус и счётчики не обрезаются.
   return (
-    <div className="card tap" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 6 }} onClick={onClick}>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <div className="ellipsis" style={{ fontSize: 18, fontWeight: 600, flex: 1 }}>Поставка {d.displayNumber} · {seller}</div>
-        {d.discrepancy ? <span style={{ marginLeft: 8 }}><Icon name="warning" color="var(--warning)" /></span> : null}
+    <div className="card tap" style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 4, fontSize: 16, lineHeight: "22px" }} onClick={onClick}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ fontSize: 18, fontWeight: 600, flex: 1 }}>Поставка {d.displayNumber}</div>
+        {d.discrepancy ? <Icon name="warning" color="var(--warning)" /> : null}
       </div>
-      <div className="ellipsis" style={{ fontSize: 14, color: "var(--text2)" }}>{sub}</div>
-      <div><span style={{ fontSize: 14, fontWeight: 500, color, background: `color-mix(in srgb, ${color} 12%, transparent)`, borderRadius: 8, padding: "4px 10px" }}>{inboundStatusRu(d.status)}</span></div>
+      <div className="clamp2" style={{ fontWeight: 500 }}>{seller}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ fontWeight: 500, color, background: `color-mix(in srgb, ${color} 12%, transparent)`, borderRadius: 8, padding: "2px 10px" }}>{inboundStatusRu(d.status)}</span>
+        {date ? <span style={{ color: "var(--text2)" }}>{date}</span> : null}
+      </div>
+      <div style={{ color: "var(--text2)" }}>{counts}</div>
     </div>
   );
 }
@@ -80,19 +85,19 @@ function FilterSheet({ value, onChange, docs, onClose }: { value: InboundFilters
     >
       <div style={{ fontSize: 22, fontWeight: 600, margin: "2px 0 4px" }}>Фильтры</div>
       <Field label="Поиск: документ, селлер, товар" value={value.search} onChange={(v) => onChange({ ...value, search: v })} clearable />
-      <div style={{ fontSize: 14, color: "var(--text2)", margin: "14px 0 6px" }}>Статус</div>
+      <div style={{ fontSize: 16, color: "var(--text2)", margin: "14px 0 6px" }}>Статус</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {STATUS_OPTIONS.map((st) => {
           const sel = value.status === st;
           return (
-            <button key={st} className={`chip${sel ? " sel" : ""}`} style={{ height: 48, justifyContent: "flex-start", fontSize: 15, padding: "0 10px" }} onClick={() => onChange({ ...value, status: st })}>
+            <button key={st} className={`chip${sel ? " sel" : ""}`} style={{ height: 48, justifyContent: "flex-start", fontSize: 16, padding: "0 10px" }} onClick={() => onChange({ ...value, status: st })}>
               {sel ? <Icon name="check" size={18} /> : null}
               <span className="ellipsis">{st === "all" ? "Все статусы" : inboundStatusRu(st)}</span>
             </button>
           );
         })}
       </div>
-      <div style={{ fontSize: 14, color: "var(--text2)", margin: "14px 0 2px" }}>Селлер</div>
+      <div style={{ fontSize: 16, color: "var(--text2)", margin: "14px 0 2px" }}>Селлер</div>
       {[{ id: "all", name: "Все селлеры" }, ...sellerOptions].map((x) => (
         <div key={x.id} className={`radio${value.sellerId === x.id ? " on" : ""}`} onClick={() => onChange({ ...value, sellerId: x.id })}>
           <span className="dot" /><span className="ellipsis" style={{ flex: 1 }}>{x.name}</span>
@@ -122,16 +127,16 @@ export function InboundListScreen() {
   return (
     <Scaffold title="Приёмка" onExit={s.back} camera={false} primary={{ label: "Создать приёмку", onClick: () => s.snack("Макет: создание приёмки не меняется") }}>
       <div style={{ background: "var(--bg)", padding: "4px 4px 0 8px", flex: "none" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", minHeight: 44 }}>
-          {chips.length ? <Btn kind="text" h={44} fs={15} onClick={() => setF(noFilters)} testId="inbound-reset">Сбросить</Btn> : null}
-          <Btn kind="text" h={44} fs={15} onClick={() => setSheet(true)} testId="inbound-filters">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", minHeight: 48 }}>
+          {chips.length ? <Btn kind="text" h={48} fs={16} onClick={() => setF(noFilters)} testId="inbound-reset">Сбросить</Btn> : null}
+          <Btn kind="text" h={48} fs={16} onClick={() => setSheet(true)} testId="inbound-filters">
             <Icon name="filter" size={20} />{n ? `Фильтры · ${n}` : "Фильтры"}
           </Btn>
         </div>
         {chips.length ? (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 4px 4px 0" }}>
             {chips.map((c) => (
-              <button key={c.label} className="chip sel" style={{ height: 36, maxWidth: "100%" }} onClick={c.clear} title="Снять фильтр">
+              <button key={c.label} className="chip sel" style={{ height: 40, maxWidth: "100%", fontSize: 16 }} onClick={c.clear} title="Снять фильтр">
                 <span className="ellipsis">{c.label}</span><Icon name="close" size={16} />
               </button>
             ))}
@@ -175,7 +180,7 @@ export function InboundDocScreen({ id, mode }: { id: string; mode: "draft" | "re
             <Photo p={p} w={44} h={52} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="ellipsis" style={{ fontSize: 18, fontWeight: 600 }}>{p.sku}</div>
-              <div className="ellipsis" style={{ fontSize: 14, color: "var(--text2)" }}>{p.name}</div>
+              <div className="ellipsis" style={{ fontSize: 16, color: "var(--text2)" }}>{p.name}</div>
               <div style={{ height: 4, background: "#e3e3e3", borderRadius: 2, marginTop: 6 }}><div style={{ height: 4, width: `${Math.min(100, (100 * l.accepted) / l.planned)}%`, background: done ? "var(--success)" : "var(--primary)", borderRadius: 2 }} /></div>
             </div>
             <div style={{ fontSize: 18, fontWeight: 700, whiteSpace: "nowrap" }}>{l.accepted} / {l.planned}</div>
@@ -188,8 +193,8 @@ export function InboundDocScreen({ id, mode }: { id: string; mode: "draft" | "re
     return (
       <Scaffold title={`Приёмка ${d.displayNumber}`} subtitle={seller} onExit={s.back} progress={[accepted, planned]}>
         <div style={{ padding: "10px 16px 2px", display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
-          <span style={{ fontSize: 14, fontWeight: 500, color: inboundStatusColor(d.status), background: `color-mix(in srgb, ${inboundStatusColor(d.status)} 12%, transparent)`, borderRadius: 8, padding: "4px 10px" }}>{inboundStatusRu(d.status)}{d.createdBySeller && d.status === "draft" ? " селлера" : ""}</span>
-          <span style={{ fontSize: 14, color: "var(--text2)" }}>коробов: {d.boxes}</span>
+          <span style={{ fontSize: 16, fontWeight: 500, color: inboundStatusColor(d.status), background: `color-mix(in srgb, ${inboundStatusColor(d.status)} 12%, transparent)`, borderRadius: 8, padding: "4px 10px" }}>{inboundStatusRu(d.status)}{d.createdBySeller && d.status === "draft" ? " селлера" : ""}</span>
+          <span style={{ fontSize: 16, color: "var(--text2)" }}>коробов: {d.boxes}</span>
         </div>
         {lines}
       </Scaffold>

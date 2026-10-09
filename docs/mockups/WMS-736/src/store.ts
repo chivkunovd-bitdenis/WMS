@@ -61,10 +61,15 @@ export type Store = {
   back: () => void;
   resetTo: (rs: Route[]) => void;
   flashOk: () => void;
+  /** Ошибка скана: красная вспышка + звук + текст держится до следующего действия. */
   flashErr: (msg: string) => void;
+  /** Подсказка, что сделать (например, какой короб сканировать): жёлтая плашка до следующего действия. */
+  hint: (msg: string) => void;
   snack: (msg: string) => void;
   log: (msg: string) => void;
   setHints: (h: ScanHint[]) => void;
+  /** Экран поставки: «variant» — действия закреплены внизу, состав свёрнут; «r8» — вид WMS-584 R8. */
+  supplyLayout: "variant" | "r8";
   scanHandler: React.MutableRefObject<((code: string) => void) | null>;
   backHandler: React.MutableRefObject<(() => boolean) | null>;
 };

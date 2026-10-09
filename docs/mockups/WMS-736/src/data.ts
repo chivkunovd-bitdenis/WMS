@@ -124,6 +124,7 @@ export function initialPlacements(): Placement[] {
     { key: "pl-d19-blouse", productId: "p-blouse44", locCode: "Д-1-9", path: [box("INB-000412", 12)], qty: 5, pickedHere: 0 },
     { key: "pl-zh17-dress", productId: "p-dress46", locCode: "Ж-1-7", path: [box("INB-000398", 8)], qty: 12, pickedHere: 0 },
     { key: "pl-zh17-velvet", productId: "p-velvet54", locCode: "Ж-1-7", path: [box("INB-000398", 8)], qty: 4, pickedHere: 0 },
+    { key: "pl-zh17-dress-b9", productId: "p-dress46", locCode: "Ж-1-7", path: [box("INB-000399", 9)], qty: 3, pickedHere: 0 },
     { key: "pl-zh114-dress", productId: "p-dress46", locCode: "Ж-1-14", path: [box("INB-000431", 21)], qty: 1, pickedHere: 0 },
     { key: "pl-zh118-turtle", productId: "p-turtle54", locCode: "Ж-1-18", path: [], qty: 2, pickedHere: 0 },
     { key: "pl-zh118-palazzo", productId: "p-palazzo48", locCode: "Ж-1-18", path: [pallet, box("INB-000440", 30)], qty: 6, pickedHere: 0 },
