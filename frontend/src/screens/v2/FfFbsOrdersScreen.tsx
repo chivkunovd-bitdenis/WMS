@@ -1704,7 +1704,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                 <TableCell sx={[stickyHeaderSx, { minWidth: 95 }]}>Заказы / единицы</TableCell>
                 <TableCell sx={[stickyHeaderSx, { minWidth: 64 }]}>Короба</TableCell>
                 <TableCell sx={[stickyHeaderSx, { minWidth: 115 }]}>Статус</TableCell>
-                <TableCell sx={[stickyHeaderSx, { minWidth: 135 }]}>Дата отгрузки</TableCell>
                 <TableCell align="right" sx={[stickyHeaderSx, { minWidth: 105 }]}>Печать</TableCell>
               </TableRow>
             </TableHead>
@@ -1719,7 +1718,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
               />
               {!busy && activeSupplies.length === 0 && isFbsSupplyGroup(statusGroup) ? (
                 <TableRow>
-                  <TableCell colSpan={8}>
+                  <TableCell colSpan={7}>
                     <Box sx={{ py: 8, textAlign: 'center' }}>
                       <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
                       <Typography variant="subtitle1" sx={{ mt: 1 }}>

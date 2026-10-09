@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { boxReceiptLabels, usesTabOrderPickList } from '../../v2/imperiyaPickListOrder'
 import type { FbsPickingContext } from '../../v2/fbsApi'
 import { Box } from '@mui/material'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useInRouterContext, useNavigate, useParams } from 'react-router-dom'
 import { apiUrl } from '../../../api'
 import { useMarketplaceProductCatalog } from '../../../hooks/useWbProductCatalog'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
@@ -175,14 +175,32 @@ type Props = {
   onChanged?: () => void
 }
 
-export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hideHeader = false, onFinished, onPaused, onChanged }: Props) {
+type NavigateTo = (to: string) => void
+
+/**
+ * Экран подбора встроен в карточку поставки FBS, которая открывается и там,
+ * где маршрутизатора нет. Переход нужен только когда родитель не передал
+ * onPaused/onFinished, поэтому без маршрутизатора рендер не должен падать.
+ * Хук навигации вызывается только внутри маршрутизатора — без условных хуков.
+ */
+export function FfUnloadPickPage(props: Props) {
+  return useInRouterContext() ? <FfUnloadPickPageRouted {...props} /> : <FfUnloadPickPageBody {...props} navigate={noNavigation} />
+}
+
+const noNavigation: NavigateTo = () => undefined
+
+function FfUnloadPickPageRouted(props: Props) {
+  const navigate = useNavigate()
+  return <FfUnloadPickPageBody {...props} navigate={navigate} />
+}
+
+function FfUnloadPickPageBody({ token, requestId: requestIdProp, source, hideHeader = false, onFinished, onPaused, onChanged, navigate }: Props & { navigate: NavigateTo }) {
   const BASE = source === 'fbs' ? FBS_BASE : UNLOAD_BASE
   // Подбор отгрузки FBO — всё, что не поставка FBS (WMS-686): вид «По ячейкам / По товарам»,
   // КИЗ, двойной скан короба. Поставка FBS остаётся такой, как была.
   const isFbo = source !== 'fbs'
   const params = useParams<{ requestId: string }>()
   const requestId = requestIdProp ?? params.requestId
-  const navigate = useNavigate()
   const [detail, setDetail] = useState<ApiDetail | null>(null)
   const [pickOptions, setPickOptions] = useState<ApiPickProduct[]>([])
   const [loading, setLoading] = useState(true)

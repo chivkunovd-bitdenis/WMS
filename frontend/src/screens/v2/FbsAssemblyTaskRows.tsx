@@ -153,7 +153,6 @@ function SupplyRow({
           />
         </Stack>
       </TableCell>
-      <TableCell>{supply.planned_shipment_date ? formatDateTime(supply.planned_shipment_date) : '—'}</TableCell>
       <TableCell align="right" onClick={(event) => event.stopPropagation()}>
         <Button
           size="small"
@@ -215,7 +214,7 @@ export function FbsAssemblyTaskRows({
               })}
               data-testid={`fbs-assembly-task-${task.id}`}
             >
-              <TableCell colSpan={8}>
+              <TableCell colSpan={7}>
                 <Stack
                   direction={{ xs: 'column', md: 'row' }}
                   spacing={{ xs: 0.5, md: 3 }}
