@@ -131,7 +131,7 @@ for (const operation of ['inbound','return']) {
   const f=await fixture(3,operation,{unknown:true});
   try {
    await confirm(f); await f.page.getByRole('alert').waitFor();
-   const old=await attempt(f.page); assert.equal(old.state,'unknown'); assert.ok(old.html.includes('INB-000000000003'));
+   const old=await attempt(f.page); assert.equal(old.state,'unknown'); assert.equal(old.html, undefined, 'WMS-743: no label HTML in storage'); assert.equal(old.paths.length, 3, 'the attempt still identifies its boxes');
    assert.equal(f.marks(),0); assert.equal(await f.page.evaluate(()=>window.__wms672Transfers.length),1);
    await capture(f,operation+'-unknown');
    await f.page.reload(); await install(f.page,{});
