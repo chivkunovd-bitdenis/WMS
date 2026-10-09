@@ -223,6 +223,7 @@ async def _shipment_service_entries(
     *, tenant_id: uuid.UUID, host: dict[str, Any], service_code: str,
     charges: list[BillingLedgerEntry], include_finance: bool,
     product_id: uuid.UUID | None = None,
+    history_charges: list[BillingLedgerEntry] | None = None,
     allow_live_price: bool = True,
 ) -> list[dict[str, Any]]:
     """Shipment units are counted once; existing charges retain their money and invoice IDs."""
@@ -245,6 +246,18 @@ async def _shipment_service_entries(
                 row.update(rate_kopecks=entry.rate, amount_kopecks=entry.amount, unit=entry.unit, billing_ledger_entry_id=str(entry.id))
             rows.append(row)
         return rows
+    historical = sorted(
+        (
+            entry for entry in history_charges or []
+            if entry.service_code in codes and entry.entry_type == "charge"
+        ),
+        key=lambda entry: (_as_moscow(entry.occurred_at), str(entry.id)),
+    )
+    if include_finance and historical and not reversed_operation:
+        # Сохраняем ссылку на счёт в строке передачи, но не переносим сюда
+        # сумму начисления, относящуюся к предыдущему периоду.
+        base.update(result="completed", billing_ledger_entry_id=str(historical[0].id))
+        return [base]
     if include_finance and allow_live_price and not reversed_operation:
         tariff = await _resolve_v2_tariff(
             session, tenant_id=tenant_id, seller_id=uuid.UUID(host["seller_id"]),
@@ -334,16 +347,30 @@ async def _operation_entries(
     result: list[dict[str, Any]] = []
     covered: set[tuple[str, uuid.UUID]] = set()
     consumed: set[uuid.UUID] = set()
+    ozon_fbs_documents = {
+        (fact.document_type, fact.document_id)
+        for fact in facts
+        if fact.document_type == FBS_ORDER_DOCUMENT_TYPE and fact.marketplace == "ozon"
+    }
     by_document: dict[tuple[str, uuid.UUID], dict[str, Any]] = {}
     for fact in facts:
         document = (fact.document_type, fact.document_id)
+        all_document_charges = charges[document]
+        is_ozon_fbs = fact.document_type == FBS_ORDER_DOCUMENT_TYPE and fact.marketplace == "ozon"
+        document_charges = (
+            [
+                entry for entry in all_document_charges
+                if start <= _as_moscow(entry.occurred_at) < end
+            ]
+            if is_ozon_fbs else all_document_charges
+        )
         covered.add(document)
         # Сторно берёт себе строку сторно, обычный факт — строку начисления:
         # у отменённого документа в журнале лежат обе, и без разбора по типу
         # запись сторно приписалась бы исходной операции.
         wanted_entry_type = "reversal" if fact.reversal_of_id else "charge"
         priced = [
-            entry for entry in charges[document]
+            entry for entry in document_charges
             if entry.service_code == fact.billable_service_code
             and entry.entry_type == wanted_entry_type
         ]
@@ -380,7 +407,26 @@ async def _operation_entries(
                 # Id начисления — это то, чем операцию кладут в счёт. Без него
                 # галочка выбора остаётся выключенной, даже когда деньги есть.
                 row["billing_ledger_entry_id"] = str(priced[0].id)
-            if not priced and not fact.reversal_of_id:
+            matching_document_charges = [
+                entry for entry in all_document_charges
+                if entry.service_code == fact.billable_service_code
+                and entry.entry_type == wanted_entry_type
+            ]
+            historical_charges = sorted(
+                (
+                    entry for entry in all_document_charges
+                    if entry.service_code == fact.billable_service_code
+                    and entry.entry_type == "charge"
+                    and _as_moscow(entry.occurred_at) < start
+                ),
+                key=lambda entry: (_as_moscow(entry.occurred_at), str(entry.id)),
+            )
+            if not priced and historical_charges and not fact.reversal_of_id:
+                # Начисление уже существует, но относится к прошлому периоду.
+                # Сохраняем ссылку и историю счёта без старой суммы.
+                row["billing_ledger_entry_id"] = str(historical_charges[0].id)
+                row["result"] = "completed"
+            if not priced and not matching_document_charges and not fact.reversal_of_id:
                 single_product = (
                     product_lines[0].product_id if len(product_lines) == 1 else None
                 )
@@ -397,12 +443,37 @@ async def _operation_entries(
                     row["priced_live"] = True
         result.append(row)
         if fact.operation_code in {"marketplace_outbound_completed", "marketplace_outbound_reversal", "fbs_order"}:
+            packing_charges = document_charges if is_ozon_fbs else all_document_charges
+            has_packing_charge = any(
+                entry.service_code in {"packing", "packaging"}
+                and entry.entry_type == wanted_entry_type
+                for entry in all_document_charges
+            )
             result.extend(await _shipment_service_entries(
                 session, tenant_id=tenant_id, host=row, service_code="packing",
-                charges=charges[document], include_finance=include_finance,
+                charges=packing_charges, include_finance=include_finance,
                 product_id=product_lines[0].product_id if len(product_lines) == 1 else None,
+                history_charges=[
+                    entry for entry in all_document_charges
+                    if entry.entry_type == "charge" and _as_moscow(entry.occurred_at) < start
+                ] if is_ozon_fbs else None,
+                allow_live_price=not (is_ozon_fbs and has_packing_charge),
             ))
-            consumed.update(entry.id for entry in charges[document] if entry.service_code in {"packing", "packaging"})
+            if is_ozon_fbs:
+                consumed.update(
+                    entry.id for entry in all_document_charges
+                    if entry.service_code in {"packing", "packaging"}
+                )
+            else:
+                consumed.update(entry.id for entry in all_document_charges if entry.service_code in {"packing", "packaging"})
+        if is_ozon_fbs:
+            # The Ozon fact and its charge can have different dates. The report
+            # renders the charge in its own period (legacy before the fact or
+            # beside it when both dates are selected), never as a second line.
+            consumed.update(
+                entry.id for entry in all_document_charges
+                if entry.service_code == fact.billable_service_code and entry.entry_type == "charge"
+            )
         by_document[document] = row
 
     # Other document charges retain their existing financial rows. Packing
@@ -413,6 +484,12 @@ async def _operation_entries(
             continue
         for entry in document_charges:
             if entry.id in consumed or entry.seller_id is None or entry.service_code in {"packing", "packaging"}:
+                continue
+            if (
+                document in ozon_fbs_documents
+                and entry.entry_type == "reversal"
+                and not start <= _as_moscow(entry.occurred_at) < end
+            ):
                 continue
             consumed.add(entry.id)
             covered.add((entry.source_type, entry.source_id))
@@ -655,14 +732,45 @@ async def _legacy_entries(
         # Хранение показывается отдельной строкой раскрывашки и отдельной
         # суммой в сводке. Строкой операции оно приезжало вторым разом и
         # удваивало деньги там, где точка отсечки не проставлена.
-        BillingLedgerEntry.service_code.not_in(("storage_liter_day", "storage", "packing", "packaging")),
+        (
+            BillingLedgerEntry.service_code.not_in(("storage_liter_day", "storage", "packing", "packaging"))
+            | (
+                (BillingLedgerEntry.source_type == FBS_ORDER_DOCUMENT_TYPE)
+                & BillingLedgerEntry.source_id.in_(ozon_order_ids)
+                & BillingLedgerEntry.service_code.in_(("packing", "packaging"))
+                & (BillingLedgerEntry.entry_type == "charge")
+            )
+        ),
         BillingLedgerEntry.source_type.not_in(("fbs_supply", "packaging_task")),
         (BillingLedgerEntry.source_type != "fbs_order") | (BillingLedgerEntry.source_id.in_(ozon_order_ids)),
         BillingLedgerEntry.occurred_at >= start,
         BillingLedgerEntry.occurred_at < end,
     )
     if cutover is not None:
-        query = query.where(BillingLedgerEntry.occurred_at < cutover)
+        # Ozon FBS charges keep their work date even when the handover fact is
+        # after cutover. Keep the charge reportable in its own period; the
+        # caller excludes it when that document's fact is in the selected range.
+        query = query.where(
+            (BillingLedgerEntry.occurred_at < cutover)
+            | (
+                (BillingLedgerEntry.source_type == FBS_ORDER_DOCUMENT_TYPE)
+                & BillingLedgerEntry.source_id.in_(ozon_order_ids)
+            )
+            | (
+                (BillingLedgerEntry.source_type == "billing_reversal")
+                & (BillingLedgerEntry.entry_type == "reversal")
+                & (BillingLedgerEntry.service_code == FBS_ORDER_DOCUMENT_TYPE)
+                & BillingLedgerEntry.reversal_of_id.in_(
+                    select(BillingLedgerEntry.id).where(
+                        BillingLedgerEntry.tenant_id == tenant_id,
+                        BillingLedgerEntry.source_type == FBS_ORDER_DOCUMENT_TYPE,
+                        BillingLedgerEntry.source_id.in_(ozon_order_ids),
+                        BillingLedgerEntry.service_code == FBS_ORDER_DOCUMENT_TYPE,
+                        BillingLedgerEntry.entry_type == "charge",
+                    )
+                )
+            )
+        )
     if seller_id is not None:
         query = query.where(BillingLedgerEntry.seller_id == seller_id)
     rows = (await session.execute(query.order_by(BillingLedgerEntry.occurred_at.desc(), BillingLedgerEntry.id.desc()))).all()
@@ -731,7 +839,20 @@ async def _legacy_entries(
         if include_finance:
             row.update({"unit": entry.unit, "rate_kopecks": entry.rate, "amount_kopecks": entry.amount, "billing_ledger_entry_id": str(entry.id)})
         result.append(row)
-        if entry.service_code in {"marketplace_outbound", "fbs_order"}:
+        is_ozon_assembly_ledger_entry = (
+            entry.service_code == FBS_ORDER_DOCUMENT_TYPE
+            and original.source_type == FBS_ORDER_DOCUMENT_TYPE
+            and original.source_id in ozon_order_ids
+            and (
+                entry.entry_type == "charge"
+                or (
+                    entry.entry_type == "reversal"
+                    and cutover is not None
+                    and _as_moscow(entry.occurred_at) >= _as_moscow(cutover)
+                )
+            )
+        )
+        if entry.service_code in {"marketplace_outbound", "fbs_order"} and not is_ozon_assembly_ledger_entry:
             key = (original.source_id, entry.entry_type)
             if original.source_type in {"marketplace_unload", "fbs_order"} and key not in packed_documents:
                 packed_documents.add(key)
