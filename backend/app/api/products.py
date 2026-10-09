@@ -887,6 +887,7 @@ async def get_ff_catalog_page(
     seller_id: uuid.UUID | None = _seller_id_query,
     search: Annotated[str | None, Query(max_length=255)] = None,
     category: Annotated[str | None, Query(max_length=255)] = None,
+    categories: Annotated[list[str] | None, Query()] = None,
     marketplace: Annotated[str | None, Query(max_length=32)] = None,
     stock_publication: Annotated[
         Literal["wb", "ozon", "both", "any", "none"] | None, Query()
@@ -901,6 +902,7 @@ async def get_ff_catalog_page(
         seller_id=seller_id,
         search=search,
         category=category,
+        categories=categories,
         marketplace=marketplace,
         stock_publication=stock_publication,
         has_stock=has_stock,

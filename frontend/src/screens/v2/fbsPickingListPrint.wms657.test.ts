@@ -213,8 +213,8 @@ function parsePdfTextReport(xml: string): PdfTextReport {
 // Coordinates keep every fragment tied to its actual PDF column and row.
 function pdfTable(report: PdfTextReport, geometry: GeometryReport): PdfTable {
   const geometryWidth = geometry.tableBounds.right - geometry.tableBounds.left
-  if (geometryWidth <= 0 || geometry.columnBounds.length !== 12) {
-    throw new Error('Браузер не вернул границы двенадцати колонок таблицы после R8 WMS-680')
+  if (geometryWidth <= 0 || geometry.columnBounds.length !== 11) {
+    throw new Error('Браузер не вернул границы одиннадцати колонок таблицы после WMS-725')
   }
   const marginPoints = 10 * 72 / 25.4
   return {
@@ -228,9 +228,19 @@ function pdfTable(report: PdfTextReport, geometry: GeometryReport): PdfTable {
       const header = page.words.find((word) => word.text === 'РАЗМЕР')
       if (!header) throw new Error(`На странице ${(page.words[0]?.pageIndex ?? 0) + 1} PDF нет заголовка «РАЗМЕР»`)
       const footerTop = page.words.find((word) => word.text === 'Сформировано')?.yMin ?? Number.POSITIVE_INFINITY
+      // The WMS-725 total is below the table, outside its column boundaries.
+      // Match its label at the left page margin, retaining identically named
+      // product text inside the table for the existing bounds checks.
+      const totalTop = page.words.find((word) => word.text === 'Общее'
+        && Math.abs(word.xMin - marginPoints) < 2
+        && word.yMin > header.yMax && word.yMax < footerTop
+        && page.words.some((next) => next.text === 'количество:'
+          && next.xMin > word.xMax && Math.abs(next.yMin - word.yMin) < 1))?.yMin
+        ?? Number.POSITIVE_INFINITY
+      const tableEnd = Math.min(footerTop, totalTop)
       for (const word of page.words) {
         const centerX = (word.xMin + word.xMax) / 2
-        if (word.yMin <= header.yMax + 1 || word.yMax >= footerTop - 1) continue
+        if (word.yMin <= header.yMax + 1 || word.yMax >= tableEnd - 1) continue
         const column = columns.find((bounds) => centerX >= bounds.left - 0.5 && centerX <= bounds.right + 0.5)
         if (column) column.words.push(word)
       }
@@ -386,7 +396,7 @@ describe('WMS-657 · перенос размера в листе подбора 
     const generalCellRule = cssRule(css, 'th, td')
     expect(`${sizeRule};${sizeCellRule}`).not.toMatch(/white-space\s*:\s*nowrap/)
     expect(`${sizeCellRule};${generalCellRule}`).toMatch(/(?:overflow-wrap\s*:\s*(?:anywhere|break-word)|word-break\s*:\s*(?:break-all|break-word)|white-space\s*:\s*(?:normal|pre-wrap|break-spaces))/)
-    expect(tableHeaders(html)).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
+    expect(tableHeaders(html)).toEqual(['Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
   })
 
   it('C2: двенадцать колонок, контрольные данные и вход не меняются при повторной генерации', () => {
@@ -402,13 +412,18 @@ describe('WMS-657 · перенос размера в листе подбора 
     const second = buildFbsPickingListPrintHtml(input)
     expect(second).toBe(first)
     expect(JSON.stringify(input)).toBe(before)
-    expect(tableHeaders(first)).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
+    expect(tableHeaders(first)).toEqual(['Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
     const bodyRow = onlyTableBodyRow(first)
-    expect(tableCells(bodyRow)).toHaveLength(12)
-    for (const value of ['PRODUCT-CONTROL', 'SIZE-CONTROL', 'COLOR-CONTROL', 'IDENTIFIER-A', 'IDENTIFIER-B', 'LOCATION-CONTROL', '3', '2', 'ORDER-CONTROL', 'S-1', 'MARKING-CONTROL']) {
+    expect(tableCells(bodyRow)).toHaveLength(11)
+    for (const value of ['PRODUCT-CONTROL', 'SIZE-CONTROL', 'COLOR-CONTROL', 'IDENTIFIER-A', 'IDENTIFIER-B', 'LOCATION-CONTROL', '3', 'ORDER-CONTROL', 'S-1', 'MARKING-CONTROL']) {
       expect(bodyRow).toContain(value)
     }
     expect(bodyRow).toContain('src="data:image/png;base64,AA=="')
+    // WMS-725 removes numbering and leaves the fact blank for handwriting;
+    // the plan and the input picked=2 remain protected by the checks above.
+    expect(bodyRow).not.toContain('class="number"')
+    expect(tableCells(bodyRow)[8]).toBe('<td class="quantity">3</td>')
+    expect(tableCells(bodyRow)[9]).toBe('<td class="quantity"></td>')
 
     const match = (yMin: number, yMax: number): PdfTextMatch => ({
       pageIndex: 0,
@@ -424,8 +439,8 @@ describe('WMS-657 · перенос размера в листе подбора 
     expect(() => assertSamePdfRow([productName, preservedIdentifier], [{ label: 'реально смещённая ячейка', match: match(140, 148) }])).toThrow(/смещено в другую строку/)
     expect(() => pdfTable({ pages: [] }, {
       tableBounds: { left: 0, right: 100 },
-      columnBounds: Array.from({ length: 11 }, (_, index) => ({ left: index, right: index + 1 })),
-    } as GeometryReport)).toThrow(/двенадцати колонок/)
+      columnBounds: Array.from({ length: 12 }, (_, index) => ({ left: index, right: index + 1 })),
+    } as GeometryReport)).toThrow(/одиннадцати колонок/)
   })
 
   it('C3: короткий размер остаётся одной строкой, отсутствие размера — прочерком', () => {
@@ -436,7 +451,7 @@ describe('WMS-657 · перенос размера в листе подбора 
     const body = html.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] ?? ''
     const rows = [...body.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((match) => match[1])
     expect(rows).toHaveLength(2)
-    expect(rows.map((item) => tableCells(item!).length)).toEqual([12, 12])
+    expect(rows.map((item) => tableCells(item!).length)).toEqual([11, 11])
   })
 
   it('C4: Chromium держит длинный размер и соседние данные в границах колонок', () => {
@@ -450,7 +465,7 @@ describe('WMS-657 · перенос размера в листе подбора 
     })])
     const report = renderGeometry(html)
     expect(report.tableWithinPage).toBe(true)
-    expect(report.rowCellCounts).toEqual([12])
+    expect(report.rowCellCounts).toEqual([11])
     expect(report.allCellContentFits).toBe(true)
     expect(report.neighboringCellsDoNotOverlap).toBe(true)
     expect(report.headersAligned).toBe(true)
@@ -482,35 +497,34 @@ describe('WMS-657 · перенос размера в листе подбора 
     expect(height).toBeCloseTo(595.28, 0)
     const table = pdfTable(textReport, geometry)
     assertPdfTableWithinColumns(table)
-    const name = pdfText(table, 2, 'PDF-PRODUCT-LONG-WMS-657')
-    const article = pdfText(table, 3, 'PDF-ARTICLE-WMS-657')
-    const color = pdfText(table, 4, 'PDF-COLOR-WMS-657')
-    const size = pdfText(table, 5, 'Универсальный')
+    expect(table.pages.every((page) => page.columns[9].words.length === 0), 'Подобрано остаётся пустым на всех страницах').toBe(true)
+    const name = pdfText(table, 1, 'PDF-PRODUCT-LONG-WMS-657')
+    const article = pdfText(table, 2, 'PDF-ARTICLE-WMS-657')
+    const color = pdfText(table, 3, 'PDF-COLOR-WMS-657')
+    const size = pdfText(table, 4, 'Универсальный')
     const cells = [
-      { label: 'номер позиции', match: pdfWord(table, 0, '1') },
-      { label: 'фото', match: pdfText(table, 1, '—') },
+      { label: 'фото', match: pdfText(table, 0, '—') },
       { label: 'артикул', match: article },
       { label: 'цвет', match: color },
       { label: 'размер', match: size },
-      { label: 'ячейка / тара', match: pdfText(table, 6, 'PDF-LOCATION-LONG-WMS-657') },
-      { label: 'заказ', match: pdfText(table, 7, '№5524537174') },
-      { label: 'стикер', match: pdfText(table, 8, 'S657') },
-      { label: 'взять', match: pdfText(table, 9, '1') },
-      { label: 'подобрано', match: pdfText(table, 10, '0/1') },
-      { label: 'маркировка', match: pdfText(table, 11, 'PDF-MARKING-WMS-657') },
+      { label: 'ячейка / тара', match: pdfText(table, 5, 'PDF-LOCATION-LONG-WMS-657') },
+      { label: 'заказ', match: pdfText(table, 6, '№5524537174') },
+      { label: 'стикер', match: pdfText(table, 7, 'S657') },
+      { label: 'взять', match: pdfWord(table, 8, '1') },
+      { label: 'маркировка', match: pdfText(table, 10, 'PDF-MARKING-WMS-657') },
     ]
     // Identifier remains in the Product cell after R8 moves only the article.
     // Its wrapped block is part of the row anchor, as it was before R8.
-    const identifier = pdfText(table, 2, 'PDF-IDENTIFIER-WMS-657')
+    const identifier = pdfText(table, 1, 'PDF-IDENTIFIER-WMS-657')
     assertSamePdfRow([name, identifier], cells)
 
     const lostFragment = size.words.at(-1)!
     const textLossCopy: PdfTextReport = {
       pages: textReport.pages.map((page) => ({ ...page, words: page.words.filter((word) => word !== lostFragment) })),
     }
-    expect(() => pdfText(pdfTable(textLossCopy, geometry), 5, 'Универсальный'), 'координатная проверка должна ловить потерю части размера').toThrow(/PDF потерял/)
+    expect(() => pdfText(pdfTable(textLossCopy, geometry), 4, 'Универсальный'), 'координатная проверка должна ловить потерю части размера').toThrow(/PDF потерял/)
 
-    const sizeColumn = table.pages[size.pageIndex]!.columns[5]!
+    const sizeColumn = table.pages[size.pageIndex]!.columns[4]!
     const overflowingWord = size.words[0]!
     const overflowCopy: PdfTextReport = {
       pages: textReport.pages.map((page) => ({
@@ -536,7 +550,7 @@ describe('WMS-657 · перенос размера в листе подбора 
     }))
     const html = documentFor(rows)
     const report = renderGeometry(html)
-    expect(report.rowCellCounts).toEqual(Array(34).fill(12))
+    expect(report.rowCellCounts).toEqual(Array(34).fill(11))
     expect(report.tableWithinPage).toBe(true)
     expect(report.allCellContentFits).toBe(true)
     expect(report.rowsDoNotOverlap).toBe(true)
@@ -561,34 +575,33 @@ describe('WMS-657 · перенос размера в листе подбора 
     }
     const table = pdfTable(textReport, report)
     assertPdfTableWithinColumns(table)
-    expect(pdfTextMatches(table, 5, 'Универсальный')).toHaveLength(3)
+    expect(table.pages.every((page) => page.columns[9].words.length === 0), 'Подобрано остаётся пустым на всех страницах').toBe(true)
+    expect(pdfTextMatches(table, 4, 'Универсальный')).toHaveLength(3)
     let longSizeOccurrence = 0
     for (const [index] of rows.entries()) {
       const rowNumber = index + 1
-      const name = pdfText(table, 2, `ROW-${String(rowNumber).padStart(3, '0')}`)
+      const name = pdfText(table, 1, `ROW-${String(rowNumber).padStart(3, '0')}`)
       const identifierValue = index === 16
         ? 'ДЛИННЫЙ-ИДЕНТИФИКАТОР-СОСЕДНЕЙ-КОЛОНКИ-WMS-657-123456789'
         : `ID-${rowNumber}`
-      const identifier = pdfText(table, 2, identifierValue)
-      const article = pdfText(table, 3, `ARTICLE-${rowNumber}`)
-      const color = pdfText(table, 4, `COLOR-${String(rowNumber).padStart(3, '0')}`)
+      const identifier = pdfText(table, 1, identifierValue)
+      const article = pdfText(table, 2, `ARTICLE-${rowNumber}`)
+      const color = pdfText(table, 3, `COLOR-${String(rowNumber).padStart(3, '0')}`)
       const expectedSize = index === 1 ? '46' : index === 2 ? '—' : index === 0 || index === 16 || index === 33 ? 'Универсальный' : `S${String(rowNumber).padStart(2, '0')}`
       const sizeOccurrence = expectedSize === 'Универсальный' ? longSizeOccurrence++ : 0
       const location = index === 16
         ? 'ДЛИННЫЙ-ПУТЬ-ЯЧЕЙКИ-И-ТАРЫ-WMS-657-123456789: 1'
         : `A-${rowNumber}: 1`
       assertSamePdfRow([name, identifier], [
-        { label: `номер позиции строки ${rowNumber}`, match: pdfWord(table, 0, String(rowNumber)) },
-        { label: `фото строки ${rowNumber}`, match: pdfText(table, 1, '—', index) },
+        { label: `фото строки ${rowNumber}`, match: pdfText(table, 0, '—', index) },
         { label: `артикул строки ${rowNumber}`, match: article },
         { label: `цвет строки ${rowNumber}`, match: color },
-        { label: `размер строки ${rowNumber}`, match: pdfText(table, 5, expectedSize, sizeOccurrence) },
-        { label: `ячейка строки ${rowNumber}`, match: pdfText(table, 6, location) },
-        { label: `заказ строки ${rowNumber}`, match: pdfText(table, 7, `№${657000 + index}`) },
-        { label: `стикер строки ${rowNumber}`, match: pdfText(table, 8, `S${String(index).padStart(3, '0')}`) },
-        { label: `взять строки ${rowNumber}`, match: pdfText(table, 9, '1', index) },
-        { label: `подобрано строки ${rowNumber}`, match: pdfText(table, 10, '0/1', index) },
-        { label: `маркировка строки ${rowNumber}`, match: pdfText(table, 11, `MARK-${String(rowNumber).padStart(3, '0')}`) },
+        { label: `размер строки ${rowNumber}`, match: pdfText(table, 4, expectedSize, sizeOccurrence) },
+        { label: `ячейка строки ${rowNumber}`, match: pdfText(table, 5, location) },
+        { label: `заказ строки ${rowNumber}`, match: pdfText(table, 6, `№${657000 + index}`) },
+        { label: `стикер строки ${rowNumber}`, match: pdfText(table, 7, `S${String(index).padStart(3, '0')}`) },
+        { label: `взять строки ${rowNumber}`, match: pdfWord(table, 8, '1', index) },
+        { label: `маркировка строки ${rowNumber}`, match: pdfText(table, 10, `MARK-${String(rowNumber).padStart(3, '0')}`) },
       ])
     }
   }, 60_000)

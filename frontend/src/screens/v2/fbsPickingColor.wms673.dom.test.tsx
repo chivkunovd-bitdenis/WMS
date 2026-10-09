@@ -8,6 +8,7 @@ import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import { FfFbsSupplyAssembly } from './FfFbsSupplyAssembly'
 import type { FbsWorkspace } from './fbsApi'
 import { fbsBuildPickingRows, buildFbsPickingListPrintHtml } from './fbsUx'
+import * as fbsUx from './fbsUx'
 import { fbsAssemblyPickingRows } from './fbsSupplyAssembly'
 import { wms673Auth, wms673Order, wms673OzonOrder, wms673Workspace, wms673PrintMeta } from './wms673PrintFixtures'
 
@@ -110,22 +111,22 @@ function doc(html = printed.at(-1)) {
 function colorCells(document: Document, marketplaceLabel: 'WB' | 'Ozon' | 'маркетплейса' = 'WB') {
   const headers = [...document.querySelectorAll('thead th')].map((th) => th.textContent)
   const index = headers.indexOf('Цвет')
-  expect(index, 'missing business column Цвет').toBe(4)
+  expect(index, 'missing business column Цвет').toBe(3)
   expect(headers).toEqual([
-    '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб',
+    'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб',
     `Заказы ${marketplaceLabel}`, 'Стикер', 'Взять', 'Подобрано', 'Маркировка',
   ])
   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.children[index].textContent)
 }
 function expectCompactPrintColumns(document: Document) {
   const widths = [...document.querySelectorAll('col')].map((col) => Number.parseFloat(col.getAttribute('style')?.match(/[\d.]+/)?.[0] ?? 'NaN'))
-  expect(widths).toHaveLength(12)
+  expect(widths).toHaveLength(11)
   expect(widths.every((width) => Number.isFinite(width) && width > 0)).toBe(true)
   expect(widths.reduce((total, width) => total + width, 0)).toBeCloseTo(100, 2)
   // R9 keeps the three characteristics and numeric columns compact, leaving
   // the two existing prose columns the larger share of the printable width.
-  for (const index of [3, 4, 5, 7, 9, 10, 11]) expect(widths[index]).toBeLessThan(widths[2])
-  for (const index of [3, 4, 5, 9, 10, 11]) expect(widths[index]).toBeLessThan(widths[6])
+  for (const index of [2, 3, 4, 6, 8, 9, 10]) expect(widths[index]).toBeLessThan(widths[1])
+  for (const index of [2, 3, 4, 8, 9, 10]) expect(widths[index]).toBeLessThan(widths[5])
 }
 function cellsWithoutColor(document: Document) {
   const index = [...document.querySelectorAll('thead th')].findIndex((th) => th.textContent === 'Цвет')
@@ -148,18 +149,25 @@ describe('WMS-673 business RED contract through real buttons and API fixtures', 
     await open('single'); await print(); const document = doc()
     expect(colorCells(document, 'Ozon')).toEqual(['Красный', 'Синий'])
     const rows = cellsWithoutColor(document)
-    expect(rows.map((row) => row[2])).toEqual([expect.stringContaining('OZ-RED'), expect.stringContaining('OZ-BLUE')])
-    expect(rows.map((row) => row[6])).toEqual(['№OZ-673-POSTING', '№OZ-673-POSTING'])
+    expect(rows.map((row) => row[1])).toEqual([expect.stringContaining('OZ-RED'), expect.stringContaining('OZ-BLUE')])
+    expect(rows.map((row) => row[5])).toEqual(['№OZ-673-POSTING', '№OZ-673-POSTING'])
     expect(document.body.textContent).not.toContain('WB 1673')
   })
   it('C3 mixed assembly: repeat ID aggregates; same names at distinct seller IDs stay separate', async () => {
+    const buildPrint = vi.spyOn(fbsUx, 'buildFbsPickingListPrintHtml')
     const repeated = wms673Order('repeat', 'red', 'Красный', 2)
     const other = wms673Order('other-seller', 'other-id', 'Зелёный', 0); other.product.name = 'Товар red'
     fixtures.push(wms673Workspace('supply-b', [repeated, other]), wms673Workspace('supply-oz', [wms673OzonOrder()], 'ozon'))
     await open('group'); await print(); const document = doc()
     expect(colorCells(document, 'маркетплейса')).toEqual(['Красный', 'Синий', 'Зелёный', 'Красный', 'Синий'])
-    expect(cellsWithoutColor(document).map((r) => [r[0], r[8], r[9]])).toEqual([
-      ['1–2', '2', '0 / 2'], ['3', '1', '0 / 1'], ['4', '1', '0 / 1'], ['5–7', '3', '1 / 3'], ['8–9', '2', '2 / 2'],
+    // WMS-725 removes printed position ranges/facts, preserving the grouped
+    // plan and the underlying picked quantities for each exact product ID.
+    expect(cellsWithoutColor(document).map((r) => [r[7], r[8]])).toEqual([
+      ['2', ''], ['1', ''], ['1', ''], ['3', ''], ['2', ''],
+    ])
+    expect(buildPrint).toHaveBeenCalledTimes(1)
+    expect(buildPrint.mock.calls[0][0].rows.map((r) => [r.required, r.picked])).toEqual([
+      [2, 0], [1, 0], [1, 0], [3, 1], [2, 2],
     ])
   })
   it.each(['single', 'group'] as const)('C4 %s: group filled color survives partial empty and input reversal', async (kind) => {
@@ -182,22 +190,22 @@ describe('WMS-673 business RED contract through real buttons and API fixtures', 
     fixtures = [wms673Workspace('escape', values.map((value, i) => wms673Order(`o${i}`, `p${i}`, value, i)))]
     await open(kind); await print(); const document = doc()
     expect(colorCells(document)).toEqual(values); expect(document.querySelectorAll('tbody img, tbody script, tbody образец')).toHaveLength(0)
-    expect([...document.querySelectorAll('tbody tr')].map((tr) => tr.children.length)).toEqual([12, 12])
+    expect([...document.querySelectorAll('tbody tr')].map((tr) => tr.children.length)).toEqual([11, 11])
   })
   it('C6 empty print colspan agrees with all eleven headers', async () => {
     fixtures = [wms673Workspace('empty', [])]; await open('group'); await print(); const document = doc()
     expect([...document.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
-      '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб',
+      'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб',
       'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка',
     ])
-    expect(document.querySelector('tbody td')?.getAttribute('colspan')).toBe('12')
+    expect(document.querySelector('tbody td')?.getAttribute('colspan')).toBe('11')
   })
   it.each(['single', 'group'] as const)('C9 %s: option failure preserves color, fallback and explicit repeat', async (kind) => {
     pickFailure = true; fixtures[0].orders[1].inventory.locations = []
     await open(kind); await print(); const document = doc()
     expect(document.body.textContent).toContain('A-01: 9'); expect(document.body.textContent).toContain('—')
     expect(document.querySelectorAll('tbody tr')).toHaveLength(2)
-    expect(document.body.textContent).toContain('0 / 1')
+    expect(cellsWithoutColor(document).map((r) => [r[7], r[8]])).toEqual([['1', ''], ['1', '']])
     expect(document.body.textContent).toContain('Товар blue')
     expect(document.body.textContent).toContain('S673')
     expect(window.document.body.textContent).toContain('Не удалось получить ячейки и тару')
@@ -208,6 +216,9 @@ describe('WMS-673 business RED contract through real buttons and API fixtures', 
 
 describe('WMS-673 preexisting controls (must PASS without product edits)', () => {
   it.each(['single', 'group'] as const)('C6/C10 %s: print reads only, keeps fixtures and old cell semantics including fresh options', async (kind) => {
+    // Observe the real generator without replacing its implementation: the
+    // fresh server facts must still reach it even though WMS-725 prints blanks.
+    const buildPrint = vi.spyOn(fbsUx, 'buildFbsPickingListPrintHtml')
     const before = JSON.stringify(fixtures)
     options['supply-a'] = [{ product_id: 'red', picked_qty: 1, locations: [] }, { product_id: 'blue', picked_qty: 0,
       locations: [{ storage_location_id: 'loc-b', location_code: 'A-02', available: 7,
@@ -219,11 +230,13 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
     ])
     expect(requests.every((r) => r.method === 'GET' && r.auth === 'Bearer synthetic-wms673')).toBe(true)
     expect(JSON.stringify(fixtures)).toBe(before)
+    expect(buildPrint).toHaveBeenCalledTimes(1)
+    expect(buildPrint.mock.calls[0][0].rows.map((r) => [r.required, r.picked])).toEqual([[1, 1], [1, 0]])
     expect(cellsWithoutColor(doc())).toEqual([
       // Empty current location list uses the renderer's established wording;
-      // picked quantity still comes from the fresh pick-options response.
-      ['1', '—', 'Товар red WB 1673 · WB-CODE-red', 'ART-red', '46', 'Нет текущего остатка', '№673000', 'S673 0000', '1', '1 / 1', 'sgtin'],
-      ['2', '—', 'Товар blue WB 1673 · WB-CODE-blue', 'ART-blue', '46', 'A-02 · Короб B-02: 7', '№673001', 'S673 0001', '1', '0 / 1', 'sgtin'],
+      // WMS-725 leaves the printed fact blank for both picked/unpicked items;
+      ['—', 'Товар red WB 1673 · WB-CODE-red', 'ART-red', '46', 'Нет текущего остатка', '№673000', 'S673 0000', '1', '', 'sgtin'],
+      ['—', 'Товар blue WB 1673 · WB-CODE-blue', 'ART-blue', '46', 'A-02 · Короб B-02: 7', '№673001', 'S673 0001', '1', '', 'sgtin'],
     ])
   })
   it.each(['single', 'group'] as const)('C9 %s: blocked popup fetches no print options and allows explicit repeat', async (kind) => {
