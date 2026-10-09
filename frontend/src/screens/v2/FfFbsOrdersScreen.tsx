@@ -33,6 +33,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
+import { alpha, type Theme } from '@mui/material/styles'
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined'
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
@@ -118,6 +119,17 @@ type FbsStatusGroup = (typeof TABS)[number]['key']
 
 const NEW_ORDERS_PAGE_LIMIT = 500
 const MIN_TABLE_HEIGHT = 128
+
+// Непрозрачная бумага под прежним 8% оттенком: строки не просвечивают,
+// а видимый цвет темы сохраняется. Правило действует только в этих таблицах.
+const stickyHeaderSx = (theme: Theme) => {
+  const tint = alpha(theme.palette.primary.main, 0.08)
+  return {
+    bgcolor: 'background.paper',
+    backgroundImage: `linear-gradient(${tint}, ${tint})`,
+    zIndex: 2,
+  }
+}
 
 // HANDOFF-POLISH.md пул 1 п.4 (решение П3): «В работе», «В доставке» и «Завершённые» —
 // это работа с уже собранным документом (поставкой) целиком, не с отдельными заказами.
@@ -274,7 +286,12 @@ function LazyProductPhotoThumb({
     <Box
       component="span"
       ref={anchorRef}
-      sx={{ display: 'inline-flex', width: size, height: size, flex: '0 0 auto' }}
+      sx={{
+        display: 'inline-flex', width: size, height: size, flex: '0 0 auto',
+        // Без явной ширины контейнер Avatar с заглушкой сжимался по иконке,
+        // хотя его высота уже занимала всю строку. Фото и заглушка равноправны.
+        '& > [tabindex]': { width: '100%', height: '100%', flex: '0 0 auto' },
+      }}
     >
       <ProductPhotoThumb
         src={nearViewport ? src : null}
@@ -1651,14 +1668,14 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
           <Table stickyHeader size="small" data-testid="fbs-18-supplies-table">
             <TableHead>
               <TableRow>
-                <TableCell sx={{ minWidth: 210 }}>Номер / название поставки</TableCell>
-                <TableCell sx={{ minWidth: 130 }}>Селлер</TableCell>
-                <TableCell sx={{ minWidth: 190 }}>Склад</TableCell>
-                <TableCell sx={{ minWidth: 95 }}>Заказы / единицы</TableCell>
-                <TableCell sx={{ minWidth: 64 }}>Короба</TableCell>
-                <TableCell sx={{ minWidth: 115 }}>Статус</TableCell>
-                <TableCell sx={{ minWidth: 135 }}>Дата отгрузки</TableCell>
-                <TableCell align="right" sx={{ minWidth: 105 }}>Печать</TableCell>
+                <TableCell sx={[stickyHeaderSx, { minWidth: 210 }]}>Номер / название поставки</TableCell>
+                <TableCell sx={[stickyHeaderSx, { minWidth: 130 }]}>Селлер</TableCell>
+                <TableCell sx={[stickyHeaderSx, { minWidth: 190 }]}>Склад</TableCell>
+                <TableCell sx={[stickyHeaderSx, { minWidth: 95 }]}>Заказы / единицы</TableCell>
+                <TableCell sx={[stickyHeaderSx, { minWidth: 64 }]}>Короба</TableCell>
+                <TableCell sx={[stickyHeaderSx, { minWidth: 115 }]}>Статус</TableCell>
+                <TableCell sx={[stickyHeaderSx, { minWidth: 135 }]}>Дата отгрузки</TableCell>
+                <TableCell align="right" sx={[stickyHeaderSx, { minWidth: 105 }]}>Печать</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1716,7 +1733,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         <Table stickyHeader size="small" data-testid="fbs-worklist-table">
           <TableHead>
             <TableRow>
-              <TableCell padding="checkbox">
+              <TableCell padding="checkbox" sx={stickyHeaderSx}>
                 {statusGroup === 'new' ? (
                   <Checkbox
                     checked={selectableIds.length > 0 && selectableIds.every((id) => selected.has(id))}
@@ -1727,24 +1744,24 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
               </TableCell>
               {statusGroup === 'new' ? (
                 <>
-                  <TableCell sx={{ minWidth: 300 }}>Товар</TableCell>
-                  <TableCell sx={{ minWidth: 170 }}>Артикул продавца</TableCell>
-                  <TableCell sx={{ minWidth: 80 }}>Размер</TableCell>
-                  <TableCell sx={{ minWidth: 150 }}>ШК</TableCell>
-                  <TableCell sx={{ minWidth: 135 }}>Селлер</TableCell>
-                  <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
-                  <TableCell sx={{ minWidth: 105 }}>Отгрузить до</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 300 }]}>Товар</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 170 }]}>Артикул продавца</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 80 }]}>Размер</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 150 }]}>ШК</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 135 }]}>Селлер</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 125 }]}>Маршрут сдачи</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 105 }]}>Отгрузить до</TableCell>
                 </>
               ) : (
                 <>
-                  <TableCell sx={{ minWidth: 300 }}>Товар</TableCell>
-                  <TableCell sx={{ minWidth: 170 }}>Артикул продавца</TableCell>
-                  <TableCell sx={{ minWidth: 80 }}>Размер</TableCell>
-                  <TableCell sx={{ minWidth: 150 }}>ШК</TableCell>
-                  <TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>
-                  <TableCell sx={{ minWidth: 125 }}>Маршрут сдачи</TableCell>
-                  <TableCell sx={{ minWidth: 105 }}>Отгрузить до</TableCell>
-                  <TableCell sx={{ minWidth: 130 }}>Статус</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 300 }]}>Товар</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 170 }]}>Артикул продавца</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 80 }]}>Размер</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 150 }]}>ШК</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 125 }]}>Селлер</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 125 }]}>Маршрут сдачи</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 105 }]}>Отгрузить до</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 130 }]}>Статус</TableCell>
                 </>
               )}
             </TableRow>

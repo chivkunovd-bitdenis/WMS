@@ -1,6 +1,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
+import { ThemeProvider, type Theme } from '@mui/material/styles'
 import { expect, vi } from 'vitest'
 import { FfFbsOrdersScreen } from '../FfFbsOrdersScreen'
 import type { FbsWorklistOrder } from '../fbsApi'
@@ -83,16 +84,15 @@ export async function flush() {
   await act(async () => { for (let n = 0; n < 8; n += 1) await Promise.resolve() })
 }
 
-export async function mount(network: ReturnType<typeof installNetwork>) {
+export async function mount(network: ReturnType<typeof installNetwork>, theme?: Theme) {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() })
   vi.stubGlobal('fetch', network)
   const host = document.createElement('div')
   document.body.append(host)
   const root: Root = createRoot(host)
-  await act(async () => root.render(
-    <MemoryRouter><FfFbsOrdersScreen token="test-token" authHeaders={AUTH_HEADERS} sellers={SELLERS} /></MemoryRouter>,
-  ))
+  const screen = <MemoryRouter><FfFbsOrdersScreen token="test-token" authHeaders={AUTH_HEADERS} sellers={SELLERS} /></MemoryRouter>
+  await act(async () => root.render(theme ? <ThemeProvider theme={theme}>{screen}</ThemeProvider> : screen))
   await flush()
   return async () => { await act(async () => root.unmount()); host.remove() }
 }

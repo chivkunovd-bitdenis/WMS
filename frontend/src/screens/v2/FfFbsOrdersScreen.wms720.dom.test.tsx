@@ -112,6 +112,33 @@ function ozon() {
 }
 
 describe('WMS-720 photo sizing rules, loading and neighboring calls without browser layout', () => {
+  it.each(['Новые', 'Отменённые'])('R3 fills the same square for absent, failed and working images on %s', async (label) => {
+    const item = order(); heights.set(item.id, 80)
+    await open([item]); if (label !== 'Новые') await tab(label)
+    await resized(); await enter()
+    const assertFilledSquare = () => {
+      const avatar = photo()
+      const anchor = avatar.parentElement!
+      const frame = anchor.parentElement!
+      expect(getComputedStyle(anchor).width).toBe('100%')
+      expect(getComputedStyle(anchor).height).toBe('100%')
+      expect(getComputedStyle(anchor).flexShrink).toBe('0')
+      expect(getComputedStyle(avatar).width).toBe('100%')
+      expect(getComputedStyle(avatar).height).toBe('100%')
+      expect(getComputedStyle(frame).width).toBe('100%')
+      expect(getComputedStyle(frame).height).toBe('100%')
+      adaptive(item.id, 80)
+    }
+    expect(photo().querySelector('img')).toBeNull(); assertFilledSquare()
+    const before = sizing()
+    item.product.image_url = FIRST; await refresh(); await finish(FIRST, false)
+    expect(photo().querySelector('img')).toBeNull(); assertFilledSquare()
+    item.product.image_url = WORKING; await refresh(); await finish(WORKING)
+    expect(photo().querySelector('img')?.getAttribute('src')).toBe(WORKING)
+    expect(getComputedStyle(photo().querySelector('img')!).objectFit).toBe('cover')
+    assertFilledSquare(); expect(sizing()).toEqual(before)
+  })
+
   it.each(['Новые', 'Отменённые'])('C1 follows controlled row content heights without the old 52/56 px limit on %s', async (label) => {
     const short = order('short'); const long = order('long'); long.product.name = 'Длинное название '.repeat(15)
     heights.set('short', 80); heights.set('long', 160)

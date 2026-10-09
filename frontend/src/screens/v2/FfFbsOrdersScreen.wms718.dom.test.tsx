@@ -3,6 +3,8 @@ import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { click, flush, headers, installNetwork, json, mount, order, page, refresh, row, SERVER_NOW, tab } from './test-support/fbsOrdersDom'
 import type { FbsAssemblyTask, FbsSupplyWorklistItem, FbsWorklistOrder } from './fbsApi'
+import { muiTheme } from '../../mui/theme'
+import { alpha } from '@mui/material/styles'
 
 let dispose: (() => Promise<void>) | undefined
 afterEach(async () => { await dispose?.(); dispose = undefined; vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
@@ -35,7 +37,7 @@ async function open(items: FbsWorklistOrder[], withTask = false) {
     }
     return base(input, init)
   })
-  dispose = await mount(network)
+  dispose = await mount(network, muiTheme)
 }
 
 function table(): HTMLTableElement {
@@ -59,13 +61,21 @@ function assertStickyStructure() {
   expect(areaStyle.maxHeight).toMatch(/calc\(.*100vh.*\)/)
   // jsdom does not compute overflow-y's implicit "auto" from overflow-x.
   expect(areaStyle.overflowY || areaStyle.overflow || areaStyle.overflowX).toMatch(/auto|scroll/)
+  const bodyLayer = Math.max(0, ...Array.from(
+    current.tBodies[0].querySelectorAll('td, [data-testid^="fbs-product-photo-"]'),
+    (node) => Number.parseInt(getComputedStyle(node).zIndex, 10) || 0,
+  ))
   for (const cell of Array.from(current.tHead!.rows[0].cells)) {
     const style = getComputedStyle(cell)
     expect(style.position).toBe('sticky')
     expect(style.top).toBe('0px')
     expect(style.backgroundColor).not.toBe('')
-    expect(style.backgroundColor).not.toMatch(/transparent|rgba\([^)]*,\s*0\)/)
-    const bodyLayer = Number.parseInt(getComputedStyle(current.tBodies[0]).zIndex, 10) || 0
+    const channels = style.backgroundColor.match(/^rgba?\(([^)]+)\)$/)?.[1].split(',').map(Number)
+    expect(channels, 'header background must resolve to an RGB color').toBeTruthy()
+    expect(channels!.length === 4 ? channels![3] : 1, 'header background alpha must be 1').toBe(1)
+    expect(style.backgroundColor).toBe('rgb(255, 255, 255)')
+    const tint = alpha(muiTheme.palette.primary.main, 0.08)
+    expect(style.backgroundImage).toBe(`linear-gradient(${tint}, ${tint})`)
     expect(Number.parseInt(style.zIndex, 10)).toBeGreaterThan(bodyLayer)
   }
 }
@@ -212,7 +222,7 @@ describe('WMS-718 applied header styles and DOM state, without layout claims', (
       }
       if (url.pathname.endsWith('/fbs-supplies/worklist')) return json({ items: [supply()], server_now: SERVER_NOW })
       throw new Error(`Unexpected WMS-718 request: ${url}`)
-    }))
+    }), muiTheme)
     try {
       await refresh(); await tab('В работе')
       expect(document.body.textContent).toContain('Поставка нового контекста')
