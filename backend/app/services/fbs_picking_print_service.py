@@ -50,11 +50,13 @@ async def get_picking_context(
         result[row["product_id"]]["inbound_supplies"].append(label)
         kind = "В" if row["operation_type"] == "return" else "П"
         key = f"inbound:{row['id']}"
+        # Дата печатается отдельно, только если номер есть: без номера она уже в заголовке.
         groups[row["product_id"]][key] = {
-            "key": key, "title": f"{kind}: {number or date}", "lines": []
+            "key": key, "title": f"{kind}: {number or date}",
+            "date": date if number else None, "lines": [], "line_keys": [],
         }
     places = await session.execute(text("""
-        SELECT b.product_id, b.quantity, s.code AS location_code,
+        SELECT b.product_id, b.quantity, s.id AS location_id, s.code AS location_code,
                b.container_kind, b.container_id,
                coalesce(wb.internal_barcode, ib.internal_barcode,
                         cp.internal_barcode, p.barcode) AS barcode,
@@ -63,7 +65,9 @@ async def get_picking_context(
                origin.count_id AS inventory_count_id,
                origin_request.display_number AS origin_number,
                origin_request.document_number AS origin_document_number,
-               origin_request.operation_type AS origin_operation_type
+               origin_request.operation_type AS origin_operation_type,
+               origin_request.posted_at AS origin_posted_at,
+               origin_request.created_at AS origin_created_at
         FROM inventory_balances b
         JOIN storage_locations s ON s.id=b.storage_location_id
         LEFT JOIN warehouse_boxes wb ON wb.id=b.container_id
@@ -118,17 +122,25 @@ async def get_picking_context(
         pid = row["product_id"]
         key = f"inbound:{row['request_id']}" if row["request_id"] else ""
         if key not in groups[pid]:
+            origin_date: str | None = None
             if key and (row["origin_number"] or row["origin_document_number"]):
                 prefix = "В" if row["origin_operation_type"] == "return" else "П"
                 title = f"{prefix}: {row['origin_number'] or row['origin_document_number']}"
+                origin_moment = row["origin_posted_at"] or row["origin_created_at"]
+                origin_date = origin_moment.strftime("%d.%m.%Y") if origin_moment else None
             elif row["inventory_count_id"]:
                 key = f"inventory:{row['inventory_count_id']}"
                 title = f"И: {str(row['inventory_count_id'])[:8]}"
             else:
                 key, title = "unlinked", "Без привязки к документу:"
-            groups[pid].setdefault(key, {"key": key, "title": title, "lines": []})
+            groups[pid].setdefault(key, {
+                "key": key, "title": title, "date": origin_date, "lines": [], "line_keys": [],
+            })
         cell = "" if row["location_code"] == SORTING_LOCATION_CODE else f" · {location}"
         groups[pid][key]["lines"].append(f"{container}{cell}: {row['quantity']} шт.")
+        # WMS-710: ключ места той же формы, что строит фронт по pick-options: ячейка и самая внутренняя тара.
+        container_part = row["container_id"] if row["container_kind"] else "loose"
+        groups[pid][key]["line_keys"].append(f"{row['location_id']}|{container_part}")
     for pid in product_ids:
         result[pid]["source_groups"] = list(groups[pid].values())
     return list(result.values())

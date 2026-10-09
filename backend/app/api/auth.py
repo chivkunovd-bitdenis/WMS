@@ -31,6 +31,7 @@ from app.services.auth_service import (
     set_password_by_link,
 )
 from app.services.box_barcode_service import uses_numbered_inbound_box_labels
+from app.services.client_exceptions import uses_fbs_pick_list_tab_order
 from app.services.login_rate_limit import (
     check_login_rate_limit,
     register_login_success,
@@ -125,6 +126,7 @@ class UserMeResponse(BaseModel):
     withdrawal_enabled: bool = False
     address_storage_enabled: bool = True
     numbered_inbound_box_labels: bool = False
+    fbs_pick_list_tab_order: bool = False
     separate_marking_print_enabled: bool = False
     fbs_shipment_cutoff_time: str | None = None
 
@@ -473,6 +475,7 @@ async def me(
         ),
         address_storage_enabled=tenant.address_storage_enabled,
         numbered_inbound_box_labels=uses_numbered_inbound_box_labels(tenant.id),
+        fbs_pick_list_tab_order=uses_fbs_pick_list_tab_order(tenant.id),
         separate_marking_print_enabled=tenant.separate_marking_print_enabled,
         fbs_shipment_cutoff_time=(
             tenant.fbs_shipment_cutoff_time.strftime("%H:%M")

@@ -227,7 +227,13 @@ class FbsPickOptionLocationOut(BaseModel):
 class FbsPickingSourceGroupOut(BaseModel):
     key: str
     title: str
+    # WMS-710: дата приёмки или возврата («12.10.2025») — отдельным полем, чтобы
+    # лист Империи печатал её в заголовке. У инвентаризации и «без документа» нет.
+    date: str | None = None
     lines: list[str]
+    # WMS-710: ключ места на каждую строку lines по позиции: ячейка и самая
+    # внутренняя тара (или «loose»). Сопоставляет строку с ответом pick-options.
+    line_keys: list[str] = Field(default_factory=list)
 
 
 class FbsPickingContextOut(BaseModel):

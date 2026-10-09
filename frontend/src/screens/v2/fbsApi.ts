@@ -1461,7 +1461,9 @@ export async function getFbsPickingList(
 // Физические источники подбора: ячейки и тара на них со свободным количеством.
 // GET /operations/fbs-supplies/{id}/pick-options — тот же расчёт, что у выбора источника.
 export type FbsPickOptionSource = {
+  quantity?: number
   available: number
+  picked?: number
   is_loose: boolean
   source_label: string
   container_path: Array<{ kind: string; id: string; code: string; label: string }>
@@ -1476,6 +1478,10 @@ export type FbsPickOptionLocation = {
 
 export type FbsPickOptionProduct = {
   product_id: string
+  product_name?: string
+  sku_code?: string | null
+  seller_article?: string | null
+  barcode?: string | null
   planned_qty: number
   picked_qty: number
   locations: FbsPickOptionLocation[]
@@ -2152,7 +2158,8 @@ export type FbsPickingContext = {
   product_id: string
   inbound_supplies: string[]
   locations: string[]
-  source_groups: Array<{ key: string; title: string; lines: string[] }>
+  // WMS-710: date — дата приёмки для заголовка листа Империи; line_keys — ключ места на каждую строку lines.
+  source_groups: Array<{ key: string; title: string; date?: string | null; lines: string[]; line_keys?: string[] }>
 }
 
 export async function getFbsPickingContext(
