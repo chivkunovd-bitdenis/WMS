@@ -16,6 +16,7 @@ class SellerReportPhysicalTotals(BaseModel):
     packing_items: int = 0
     outbound_items: int = 0
     fbs_items: int = 0
+    in_work_items: int = 0
     # Коробов FBS, отгруженных (delivered_at заполнен) за период — WMS-447.
     fbs_boxes: int = 0
     return_items: int = 0
@@ -72,6 +73,7 @@ class SellerReportEntryBaseOut(BaseModel):
     sku: str | None
     # Только у заказов FBS: «ВБ получил» или «Передан ВБ».
     fbs_status_label: str | None = None
+    in_work: bool = False
 
 
 class SellerReportPhysicalEntryOut(SellerReportEntryBaseOut):

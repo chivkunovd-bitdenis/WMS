@@ -28,6 +28,7 @@ from app.models.fbs_order import (
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import FbsWbOperation
+from app.models.operation_fact import OperationFact
 from app.models.product import Product
 from app.models.seller import Seller
 from app.services.billing_ledger_service import (
@@ -46,6 +47,7 @@ CONFIRMED_STATUSES = frozenset(
     {FBS_ORDER_STATUS_IN_DELIVERY, FBS_ORDER_STATUS_SORTED, FBS_ORDER_STATUS_DONE}
 )
 SOURCE_TYPE = "fbs_order"
+IN_WORK_STATUSES = frozenset({"in_supply", "assembling", "packed"})
 
 
 async def confirmed_order_handover_dates(
@@ -168,6 +170,42 @@ async def _positions(session: AsyncSession, order: FbsOrder) -> list[tuple[uuid.
     return [(order.product_id, 1)]
 
 
+def existing_order_work_moment(order: FbsOrder) -> datetime | None:
+    """Existing warehouse date; a missing date must not become today's work."""
+    for moment in (order.packed_at, order.picked_at, order.created_at_wb):
+        if moment is not None:
+            return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+    return None
+
+
+async def in_work_order_dates(
+    session: AsyncSession, tenant_id: uuid.UUID, orders: list[FbsOrder],
+) -> dict[uuid.UUID, datetime]:
+    """Warehouse orders with no handover proof, shared by report and invoice."""
+    candidates = [order for order in orders if order.tenant_id == tenant_id
+                  and order.marketplace in {"wb", "ozon"}
+                  and order.status in IN_WORK_STATUSES and order.seller_id is not None]
+    if not candidates:
+        return {}
+    handed = await confirmed_order_handover_dates(
+        session, tenant_id, [order for order in candidates if order.marketplace == "wb"],
+    )
+    ozon_facts = set(await session.scalars(select(OperationFact.document_id).where(
+        OperationFact.tenant_id == tenant_id, OperationFact.marketplace == "ozon",
+        OperationFact.document_type == SOURCE_TYPE,
+        OperationFact.document_id.in_(
+            [order.id for order in candidates if order.marketplace == "ozon"],
+        ),
+        OperationFact.operation_code == FBS_ORDER_SERVICE_CODE,
+    )))
+    result = {}
+    for order in candidates:
+        moment = existing_order_work_moment(order)
+        if moment is not None and order.id not in handed and order.id not in ozon_facts:
+            result[order.id] = moment
+    return result
+
+
 def order_work_moment(order: FbsOrder) -> datetime:
     """Когда склад сделал работу по заказу, а не когда мы об этом узнали.
 
@@ -181,10 +219,7 @@ def order_work_moment(order: FbsOrder) -> datetime:
     заказ появился у маркетплейса. Первые два — сама работа склада, третий
     заполнен всегда и отличается от неё на день-два.
     """
-    for moment in (order.packed_at, order.picked_at, order.created_at_wb):
-        if moment is not None:
-            return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
-    return datetime.now(UTC)
+    return existing_order_work_moment(order) or datetime.now(UTC)
 
 
 async def record_fbs_order_confirmed(

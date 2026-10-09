@@ -119,7 +119,10 @@ class SellerBillingRatesOut(BaseModel):
     rates: list[SellerBillingRateOut]
 
 
-@router.get("/summary", response_model=SellerReportFinancialSummaryOut)
+@router.get(
+    "/summary", response_model=SellerReportFinancialSummaryOut,
+    response_model_exclude={"totals": {"in_work_items"}, "rows": {"__all__": {"in_work_items"}}},
+)
 async def get_seller_billing_summary(
     *,
     date_from: date,
@@ -137,6 +140,7 @@ async def get_seller_billing_summary(
             date_to=date_to,
             seller_id=seller_id,
             include_finance=True,
+            include_in_work=False,
         )
     except SellerReportError as exc:
         raise _seller_report_error(exc) from exc
@@ -144,7 +148,10 @@ async def get_seller_billing_summary(
     return SellerReportFinancialSummaryOut.model_validate(payload)
 
 
-@router.get("/details", response_model=SellerReportFinancialDetailsOut)
+@router.get(
+    "/details", response_model=SellerReportFinancialDetailsOut,
+    response_model_exclude={"totals": {"in_work_items"}, "entries": {"__all__": {"in_work"}}},
+)
 async def get_seller_billing_details(
     *,
     date_from: date,
@@ -165,6 +172,7 @@ async def get_seller_billing_details(
             date_from=date_from,
             date_to=date_to,
             include_finance=True,
+            include_in_work=False,
             limit=limit,
             cursor=cursor,
         )

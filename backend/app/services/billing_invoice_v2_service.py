@@ -39,13 +39,20 @@ from app.services.billing_ledger_service import (
     BillingLedgerError,
     OperationalBillingLine,
     _active_charge_for_source,
+    _resolve_v2_tariff,
     postgres_integer,
     record_operational_charge,
+    resolve_active_tariff,
 )
 from app.services.billing_seller_report_service import moscow_interval
 from app.services.document_event_service import record_document_mutation
 from app.services.document_number_service import DOC_TYPE_INVOICE, next_document_number
-from app.services.fbs_order_billing_service import _positions, confirmed_order_handover_dates
+from app.services.fbs_order_billing_service import (
+    _positions,
+    confirmed_order_handover_dates,
+    in_work_order_dates,
+)
+from app.services.storage_measurement_service import MOSCOW
 
 DECIMAL_RE = re.compile(r"^-?\d+(\.\d{1,2})?$")
 
@@ -310,6 +317,58 @@ async def _storage_line(
     }
 
 
+async def _preflight_in_work_sources(
+    session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID,
+    sources: list[dict[str, Any]], orders: dict[uuid.UUID, FbsOrder],
+    work_dates: dict[uuid.UUID, datetime],
+) -> dict[uuid.UUID, datetime]:
+    """Check every early invoice service before any charge can be persisted."""
+    fixed_dates = dict(work_dates)
+    for order_id in work_dates:
+        fixed_moment = await session.scalar(select(BillingLedgerEntry.occurred_at).where(
+            BillingLedgerEntry.tenant_id == tenant_id,
+            BillingLedgerEntry.seller_id == seller_id,
+            BillingLedgerEntry.source_type == "fbs_order",
+            BillingLedgerEntry.source_id == order_id,
+            BillingLedgerEntry.entry_type == "charge",
+            BillingLedgerEntry.service_code.in_(("fbs_order", "packing")),
+        ).order_by(BillingLedgerEntry.occurred_at, BillingLedgerEntry.id).limit(1))
+        if fixed_moment is not None:
+            fixed_dates[order_id] = (
+                fixed_moment if fixed_moment.tzinfo else fixed_moment.replace(tzinfo=UTC)
+            )
+    for source in sources:
+        order_id = uuid.UUID(str(source["source_id"]))
+        code = source["service_code"]
+        if (source["source_type"] != "fbs_order" or order_id not in fixed_dates
+                or code not in {"fbs_order", "packing"}):
+            continue
+        existing = await _active_charge_for_source(
+            session, tenant_id=tenant_id, source_type="fbs_order",
+            source_id=order_id, service_code=code,
+        )
+        if existing is not None:
+            if existing.amount is None or existing.seller_id != seller_id:
+                raise BillingInvoiceV2Error("unpriced_or_cross_seller_chain")
+            continue
+        order = orders[order_id]
+        moment = fixed_dates[order_id]
+        legacy = await resolve_active_tariff(
+            session, tenant_id=tenant_id, seller_id=seller_id,
+            warehouse_id=order.warehouse_id, service_code=code,
+            fact_date=moment.astimezone(MOSCOW).date(),
+        )
+        for product_id, _ in await _positions(session, order):
+            tariff = await _resolve_v2_tariff(
+                session, tenant_id=tenant_id, seller_id=seller_id,
+                product_id=product_id, service_code=code, occurred_at=moment,
+            )
+            rate = tariff.rate if tariff is not None else (legacy.amount if legacy else None)
+            if rate is None:
+                raise BillingInvoiceV2Error("unpriced_or_cross_seller_chain")
+    return fixed_dates
+
+
 async def _selected_shipment_charge(
     session: AsyncSession,
     *,
@@ -320,6 +379,7 @@ async def _selected_shipment_charge(
     end: datetime,
     orders: dict[uuid.UUID, FbsOrder],
     handovers: dict[uuid.UUID, datetime],
+    work_dates: dict[uuid.UUID, datetime],
 ) -> BillingLedgerEntry:
     source_type = source["source_type"]
     source_id = uuid.UUID(str(source["source_id"]))
@@ -349,7 +409,14 @@ async def _selected_shipment_charge(
                 source_id=order.id,
                 service_code=service_code,
             )
+            # An early invoice is not proof that a cancelled order was handed over.
+            if (fact_moment is None and moment is None
+                    and order.status in {"cancelled", "defect"}):
+                raise BillingInvoiceV2Error("selected_source_not_found")
             moment = fact_moment or (existing.occurred_at if existing is not None else moment)
+        if order.id in work_dates:
+            # The first saved service fixes the work date for both services.
+            moment = work_dates[order.id]
         warehouse_id = order.warehouse_id
         positions = await _positions(session, order)
         lines = [
@@ -420,6 +487,8 @@ async def _selected_shipment_charge(
     )
     if entry is None:
         raise BillingInvoiceV2Error("selected_source_not_found")
+    if source_type == "fbs_order" and source_id in work_dates and entry.amount is None:
+        raise BillingInvoiceV2Error("unpriced_or_cross_seller_chain")
     return entry
 
 
@@ -491,6 +560,11 @@ async def _preview_selected_operations(
         if orders
         else {}
     )
+    work_dates = await in_work_order_dates(session, tenant_id, list(orders.values()))
+    work_dates = await _preflight_in_work_sources(
+        session, tenant_id=tenant_id, seller_id=seller_id, sources=sources,
+        orders=orders, work_dates=work_dates,
+    )
     for source in sources:
         entry = await _selected_shipment_charge(
             session,
@@ -501,6 +575,7 @@ async def _preview_selected_operations(
             end=period_end,
             orders=orders,
             handovers=handovers,
+            work_dates=work_dates,
         )
         shipment_roots.add(entry.id)
         if entry.id not in root_ids:

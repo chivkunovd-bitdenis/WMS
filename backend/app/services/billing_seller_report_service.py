@@ -30,7 +30,11 @@ from app.models.operation_fact import OperationFact, OperationFactCutover, Opera
 from app.models.product import Product
 from app.models.seller import Seller
 from app.services.billing_ledger_service import _resolve_v2_tariff
-from app.services.fbs_order_billing_service import confirmed_order_handover_dates
+from app.services.fbs_order_billing_service import (
+    IN_WORK_STATUSES,
+    confirmed_order_handover_dates,
+    in_work_order_dates,
+)
 from app.services.marketplace_scope import MARKETPLACE_NAMES, order_display_number
 from app.services.storage_measurement_service import (
     MOSCOW,
@@ -155,7 +159,10 @@ def _natural_totals(entries: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def _totals(entries: list[dict[str, Any]], *, include_finance: bool) -> dict[str, int]:
+    in_work_items = sum(int(row.get("item_quantity") or 0) for row in entries if row.get("in_work"))
+    entries = [row for row in entries if not row.get("in_work")]
     result: dict[str, int] = {
+        "in_work_items": in_work_items,
         "operation_count": len(entries),
         "item_quantity": sum(int(row.get("item_quantity") or 0) for row in entries),
         "not_billable_count": sum(1 for row in entries if row.get("result") == "not_billable"),
@@ -558,6 +565,82 @@ async def _fbs_handed_entries(
     return rows
 
 
+async def _fbs_in_work_entries(
+    session: AsyncSession, *, tenant_id: uuid.UUID, start: datetime, end: datetime,
+    seller_id: uuid.UUID | None, include_finance: bool,
+) -> tuple[list[dict[str, Any]], set[tuple[str, uuid.UUID]]]:
+    query = select(FbsOrder).where(
+        FbsOrder.tenant_id == tenant_id, FbsOrder.marketplace.in_(("wb", "ozon")),
+        FbsOrder.status.in_(IN_WORK_STATUSES), FbsOrder.seller_id.is_not(None),
+    )
+    if seller_id is not None:
+        query = query.where(FbsOrder.seller_id == seller_id)
+    orders = list(await session.scalars(query))
+    moments = await in_work_order_dates(session, tenant_id, orders)
+    orders = [order for order in orders if order.id in moments]
+    if not orders:
+        return [], set()
+    ids = {order.id for order in orders}
+    charges: dict[uuid.UUID, list[BillingLedgerEntry]] = defaultdict(list)
+    for entry in await session.scalars(select(BillingLedgerEntry).where(
+        BillingLedgerEntry.tenant_id == tenant_id,
+        BillingLedgerEntry.source_type == FBS_ORDER_DOCUMENT_TYPE,
+        BillingLedgerEntry.source_id.in_(ids), BillingLedgerEntry.entry_type == "charge",
+        BillingLedgerEntry.service_code.in_((FBS_ORDER_DOCUMENT_TYPE, "packing")),
+    ).order_by(BillingLedgerEntry.occurred_at, BillingLedgerEntry.id)):
+        charges[entry.source_id].append(entry)
+    units = {order_id: int(quantity or 0) for order_id, quantity in (await session.execute(
+        select(FbsOrderProduct.order_id, func.sum(FbsOrderProduct.quantity))
+        .where(FbsOrderProduct.order_id.in_(ids)).group_by(FbsOrderProduct.order_id)
+    )).all()}
+    names: dict[uuid.UUID, str] = {
+        seller_key: name for seller_key, name in (await session.execute(
+            select(Seller.id, Seller.name).where(Seller.tenant_id == tenant_id),
+        )).all()
+    }
+    products = {product.id: product for product in await session.scalars(select(Product).where(
+        Product.tenant_id == tenant_id, Product.id.in_({order.product_id for order in orders if order.product_id}),
+    ))}
+    supplies = {supply.id: supply for supply in await session.scalars(select(FbsSupply).where(
+        FbsSupply.tenant_id == tenant_id, FbsSupply.id.in_({order.supply_id for order in orders if order.supply_id}),
+    ))}
+    rows: list[dict[str, Any]] = []
+    for order in orders:
+        own_charges = [entry for entry in charges[order.id] if entry.seller_id == order.seller_id]
+        # Creating the invoice fixes its date; later picking/packing cannot move it.
+        moment = own_charges[0].occurred_at if own_charges else moments[order.id]
+        if not start <= _as_moscow(moment) < end:
+            continue
+        product = products.get(order.product_id) if order.product_id else None
+        supply = supplies.get(order.supply_id) if order.supply_id else None
+        label = (supply.display_number or supply.wb_supply_id or supply.name) if supply else None
+        for code in (FBS_ORDER_DOCUMENT_TYPE, "packing"):
+            row: dict[str, Any] = {
+                "id": f"fbs_in_work:{order.id}:{code}", "kind": "operation_fact", "in_work": True,
+                "seller_id": str(order.seller_id), "seller_name": names.get(order.seller_id, "Не указан"),
+                "occurred_at": _as_moscow(moment).isoformat(), "service_code": code,
+                # Show pieces once, while both services remain individually selectable.
+                "item_quantity": units.get(order.id, 1) if code == FBS_ORDER_DOCUMENT_TYPE else 0,
+                "source_type": FBS_ORDER_DOCUMENT_TYPE, "source_id": str(order.id),
+                "source_target": _source_target(FBS_ORDER_DOCUMENT_TYPE, order.id),
+                "document_number": f"Заказ {order_display_number(order)}",
+                "product_name": product.name if product else None,
+                "sku": product.sku_code if product else order.wb_article,
+                "supply": {"id": str(supply.id), "number": label} if supply and label else None,
+                "fbs_status_label": None, "result": "completed",
+            }
+            if include_finance:
+                priced = next((entry for entry in own_charges if entry.service_code == code), None)
+                row.update(rate_kopecks=priced.rate if priced else None,
+                           amount_kopecks=priced.amount if priced else None,
+                           unit=priced.unit if priced else None,
+                           billing_ledger_entry_id=str(priced.id) if priced else None,
+                           invoice_history={"state": "unknown"})
+            rows.append(row)
+    # Early invoice charges are never another, completed legacy document.
+    return rows, {(FBS_ORDER_DOCUMENT_TYPE, order.id) for order in orders}
+
+
 async def _legacy_entries(
     session: AsyncSession,
     *, tenant_id: uuid.UUID, start: datetime, end: datetime, seller_id: uuid.UUID | None, include_finance: bool,
@@ -853,12 +936,15 @@ async def _fbs_box_counts(
 
 
 async def build_seller_report(
-    session: AsyncSession, *, tenant_id: uuid.UUID, date_from: date, date_to: date, include_finance: bool, seller_id: uuid.UUID | None = None, search: str | None = None,
+    session: AsyncSession, *, tenant_id: uuid.UUID, date_from: date, date_to: date, include_finance: bool, seller_id: uuid.UUID | None = None, search: str | None = None, include_in_work: bool = True,
 ) -> dict[str, Any]:
     start, end = moscow_interval(date_from, date_to)
+    work_entries, work_documents = await _fbs_in_work_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance)
     entries, covered = await _operation_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance)
-    entries.extend(await _legacy_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance, exclude_documents=covered))
+    entries.extend(await _legacy_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance, exclude_documents=covered | work_documents))
     entries.extend(await _fbs_handed_entries(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id, include_finance=include_finance))
+    if include_in_work:
+        entries.extend(work_entries)
     entries.sort(key=lambda row: (row["occurred_at"], row["kind"], row["id"]), reverse=True)
     box_counts = await _fbs_box_counts(session, tenant_id=tenant_id, start=start, end=end, seller_id=seller_id)
     sellers = list((await session.scalars(select(Seller).where(Seller.tenant_id == tenant_id).order_by(Seller.name))).all())
@@ -967,12 +1053,12 @@ async def storage_totals(
 
 
 async def seller_details(
-    session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, date_from: date, date_to: date, include_finance: bool, limit: int = 50, cursor: str | None = None,
+    session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, date_from: date, date_to: date, include_finance: bool, limit: int = 50, cursor: str | None = None, include_in_work: bool = True,
 ) -> dict[str, Any]:
     seller = await session.scalar(select(Seller).where(Seller.id == seller_id, Seller.tenant_id == tenant_id))
     if seller is None:
         raise SellerReportError("seller_not_found")
-    report = await build_seller_report(session, tenant_id=tenant_id, seller_id=seller_id, date_from=date_from, date_to=date_to, include_finance=include_finance)
+    report = await build_seller_report(session, tenant_id=tenant_id, seller_id=seller_id, date_from=date_from, date_to=date_to, include_finance=include_finance, include_in_work=include_in_work)
     entries = report["entries"]
     totals = _totals(entries, include_finance=include_finance)
     # Тот же агрегат, что и в сводке (уже посчитан build_seller_report для

@@ -40,6 +40,7 @@ export type SellerReportEntry = {
   billing_ledger_entry_id?: string
   /** Только у заказов FBS: «Передан ВБ» или «ВБ получил». */
   fbs_status_label?: string | null
+  in_work?: boolean
   /** Сумма посчитана по тарифу на дату операции, а не взята из начисления. */
   priced_live?: boolean
   invoice_history?: { state: 'known'; count: number } | { state: 'unknown' }
@@ -137,9 +138,10 @@ export function documentTitleCell(
 ): ReactNode {
   // Номер документа уже содержит его вид («Приёмка № 000045»), поэтому
   // подпись типа добавляется только тогда, когда номера нет вовсе.
-  const title = entry.document_number ?? (sourceTypeLabels[entry.source_type] ?? 'Документ без номера')
+  const baseTitle = entry.document_number ?? (sourceTypeLabels[entry.source_type] ?? 'Документ без номера')
+  const title = entry.in_work && !sellerScope ? `${baseTitle} (в работе)` : baseTitle
   const target = entry.source_target
-  const status = entry.fbs_status_label
+  const status = entry.in_work && !sellerScope ? null : entry.fbs_status_label
   // У заказа FBS статус — часть его имени: по нему видно, почему заказ
   // уже в сумме или ещё нет. Отдельной колонкой ради одного раздела
   // таблицу расширять незачем.
@@ -260,15 +262,15 @@ export function invoiceSelectionKey(entry: SellerReportEntry): string {
 }
 
 export function billableIds(entries: SellerReportEntry[]): string[] {
-  return entries.filter((entry) => !selectionReason(entry)).map(invoiceSelectionKey)
+  return entries.filter((entry) => !entry.in_work && !selectionReason(entry)).map(invoiceSelectionKey)
 }
 
 function sumItems(entries: SellerReportEntry[]): number {
-  return entries.reduce((sum, entry) => sum + (entry.item_quantity ?? 0), 0)
+  return entries.filter((entry) => !entry.in_work).reduce((sum, entry) => sum + (entry.item_quantity ?? 0), 0)
 }
 
 function sumAmount(entries: SellerReportEntry[]): number | null {
-  const priced = entries.filter((entry) => typeof entry.amount_kopecks === 'number')
+  const priced = entries.filter((entry) => !entry.in_work && typeof entry.amount_kopecks === 'number')
   if (!priced.length) return null
   return priced.reduce((sum, entry) => sum + (entry.amount_kopecks ?? 0), 0)
 }
@@ -280,6 +282,7 @@ function sumAmount(entries: SellerReportEntry[]): number | null {
 function sectionRate(entries: SellerReportEntry[]): number | null {
   const rates = new Set(
     entries
+      .filter((entry) => !entry.in_work)
       .map((entry) => entry.rate_kopecks)
       .filter((rate): rate is number => typeof rate === 'number'),
   )
@@ -448,6 +451,18 @@ export function FfBillingSellerDetails({
             <QtyCell value={row.entry.item_quantity ?? 0} />
           ),
       },
+      ...(!sellerScope
+        ? [{
+            key: 'in_work',
+            header: 'В работе',
+            width: 130,
+            align: 'right' as const,
+            render: (row: DocumentRow) =>
+              row.kind === 'document' && row.entry.in_work && (row.entry.item_quantity ?? 0) > 0
+                ? <QtyCell value={row.entry.item_quantity ?? 0} />
+                : <TextCell value="" />,
+          }]
+        : []),
       ...(includeFinance
         ? [
             {
@@ -549,7 +564,7 @@ export function FfBillingSellerDetails({
         ) : (
           // Переданные в WB заказы денег не приносят и в счётчик документов не
           // идут: иначе «4 документа по 15 ₽» давало бы 45 ₽ и выглядело ошибкой.
-          <QtyCell value={row.entries.filter((entry) => entry.kind !== 'fbs_order_handed').length} />
+          <QtyCell value={row.entries.filter((entry) => !entry.in_work && entry.kind !== 'fbs_order_handed').length} />
         ),
     },
     {
