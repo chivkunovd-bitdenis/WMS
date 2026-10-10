@@ -90,10 +90,10 @@ function sizing(id = 'order-a') {
     return { width: css.width, height: css.height, minHeight: css.minHeight, maxHeight: css.maxHeight, aspectRatio: css.aspectRatio, position: css.position, top: css.top, bottom: css.bottom }
   })
 }
-// WMS-756 R1 (заменяет WMS-720 R1): квадрат фото фиксирован 72×72 px и не тянется по высоте строки.
+// WMS-756 R1 (заменяет WMS-720 R1): квадрат фото фиксирован 84×84 px и не тянется по высоте строки.
 function fixedSquare(id: string) {
   const rules = sizing(id)
-  expect(rules.some((rule) => rule.width === '72px' && rule.height === '72px'), 'rendered CSS keeps a fixed 72 px square').toBe(true)
+  expect(rules.some((rule) => rule.width === '84px' && rule.height === '84px'), 'rendered CSS keeps a fixed 84 px square').toBe(true)
 }
 
 function ozon() {
@@ -106,24 +106,24 @@ function ozon() {
 }
 
 describe('WMS-720 photo sizing rules, loading and neighboring calls without browser layout', () => {
-  it.each(['Новые', 'Отменённые'])('R1/R3 keeps the same 72 px square for absent, failed and working images on %s', async (label) => {
+  it.each(['Новые', 'Отменённые'])('R1/R3 keeps the same 84 px square for absent, failed and working images on %s', async (label) => {
     const item = order(); heights.set(item.id, 80)
     await open([item]); if (label !== 'Новые') await tab(label)
     await resized(); await enter()
     const assertFilledSquare = () => {
       const avatar = photo()
       const wrapper = avatar.parentElement!   // обёртка с tabindex: 100% от слоя фото
-      const slot = wrapper.parentElement!     // слой фото (LazyProductPhotoThumb): 72 px
-      const frame = slot.parentElement!       // рамка в ячейке «Товар»: 72 px, по центру строки
+      const slot = wrapper.parentElement!     // слой фото (LazyProductPhotoThumb): 84 px
+      const frame = slot.parentElement!       // рамка в ячейке «Товар»: 84 px, по центру строки
       expect(getComputedStyle(wrapper).width).toBe('100%')
       expect(getComputedStyle(wrapper).height).toBe('100%')
-      expect(getComputedStyle(slot).width).toBe('72px')
-      expect(getComputedStyle(slot).height).toBe('72px')
+      expect(getComputedStyle(slot).width).toBe('84px')
+      expect(getComputedStyle(slot).height).toBe('84px')
       expect(getComputedStyle(slot).flexShrink).toBe('0')
-      expect(getComputedStyle(avatar).width).toBe('72px')
-      expect(getComputedStyle(avatar).height).toBe('72px')
-      expect(getComputedStyle(frame).width).toBe('72px')
-      expect(getComputedStyle(frame).height).toBe('72px')
+      expect(getComputedStyle(avatar).width).toBe('84px')
+      expect(getComputedStyle(avatar).height).toBe('84px')
+      expect(getComputedStyle(frame).width).toBe('84px')
+      expect(getComputedStyle(frame).height).toBe('84px')
       fixedSquare(item.id)
     }
     expect(photo().querySelector('img')).toBeNull(); assertFilledSquare()
@@ -136,7 +136,7 @@ describe('WMS-720 photo sizing rules, loading and neighboring calls without brow
     assertFilledSquare(); expect(sizing()).toEqual(before)
   })
 
-  it.each(['Новые', 'Отменённые'])('C1 keeps the 72 px square for short and tall rows, whatever their measured height, on %s', async (label) => {
+  it.each(['Новые', 'Отменённые'])('C1 keeps the 84 px square for short and tall rows, whatever their measured height, on %s', async (label) => {
     const short = order('short'); const long = order('long'); long.product.name = 'Длинное название '.repeat(15)
     heights.set('short', 80); heights.set('long', 160)
     await open([short, long]); if (label !== 'Новые') await tab(label)
@@ -159,7 +159,7 @@ describe('WMS-720 photo sizing rules, loading and neighboring calls without brow
     expect(photo().querySelector('img')?.getAttribute('src')).toBe(present ? FIRST : PRODUCT)
   })
 
-  it('C2 keeps one 72 px square for a multi-position Ozon row, not sized by the first position', async () => {
+  it('C2 keeps one 84 px square for a multi-position Ozon row, not sized by the first position', async () => {
     heights.set('order-a', 180); await open([ozon()]); await resized(); fixedSquare('order-a')
   })
 
@@ -173,7 +173,7 @@ describe('WMS-720 photo sizing rules, loading and neighboring calls without brow
     expect(photo().querySelector('img')?.getAttribute('src')).toBe(item.product.image_url)
   })
 
-  it('C3 gives every image source the same fixed 72 px square', async () => {
+  it('C3 gives every image source the same fixed 84 px square', async () => {
     const items = ['square', 'portrait', 'landscape'].map((shape) => {
       const item = order(shape); item.product.image_url = `https://images.example/720-${shape}.jpg`
       heights.set(shape, 120); return item

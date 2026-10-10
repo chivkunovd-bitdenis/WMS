@@ -313,10 +313,10 @@ function LazyProductPhotoThumb({
 
 // Название не уже этой ширины: иначе узкая колонка переносит текст на много строк и строка растёт.
 const FBS_PRODUCT_TEXT_MIN_WIDTH = 300
-// WMS-756 R1: фото строки заказа FBS — квадрат 72×72 px, одинаковый во всех строках и вкладках,
-// по вертикали по центру строки. Текст отступает от фото на постоянные 72 + 12 px. Строка не ниже
+// WMS-756 R1: фото строки заказа FBS — квадрат 84×84 px (как в листе подбора), одинаковый во всех строках и вкладках,
+// по вертикали по центру строки. Текст отступает от фото на постоянные 84 + 12 px. Строка не ниже
 // фото (minHeight у блока текста), поэтому фото не касается границ строки.
-const FBS_PRODUCT_PHOTO_SIZE = 72
+const FBS_PRODUCT_PHOTO_SIZE = 84
 const FBS_PRODUCT_PHOTO_GAP = 12
 
 // Фото вынесено из потока и не задаёт высоту строки: её задают текст и действия.
@@ -348,8 +348,8 @@ function OrderProductCell({ order, children, photoRetryKey }: { order: FbsWorkli
       <Box sx={{
         position: 'absolute', top: '50%', left: 16, transform: 'translateY(-50%)',
         width: FBS_PRODUCT_PHOTO_SIZE, height: FBS_PRODUCT_PHOTO_SIZE,
-        // Фото видно целиком: пустое место вокруг узкой или широкой картинки — светлый фон темы.
-        '& img': { objectFit: 'contain', bgcolor: 'grey.100' },
+        // Фото видно целиком на белом, как в листе подбора.
+        '& img': { objectFit: 'contain', bgcolor: '#fff' },
       }}>
         <LazyProductPhotoThumb
           src={positions?.[0]?.image_url ?? order.product.image_url}

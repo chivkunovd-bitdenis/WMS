@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// WMS-756 R1/R2: фото строки заказа FBS — квадрат 72×72 px одного размера во всех строках и
+// WMS-756 R1/R2: фото строки заказа FBS — квадрат 84×84 px одного размера во всех строках и
 // вкладках, фото видно целиком (object-fit: contain). jsdom не делает раскладку, поэтому
 // проверяются применённые стили, которые задают поведение в браузере.
 import { act } from 'react'
@@ -77,8 +77,8 @@ function ozon(id: string) {
   return item
 }
 
-describe('WMS-756 R1: фото строки заказа FBS — один квадрат 72×72 px', () => {
-  it.each(['Новые', 'Отменённые'])('gives a short WB row, a tall WB row and a two-position Ozon row the same 72 px square on %s', async (label) => {
+describe('WMS-756 R1: фото строки заказа FBS — один квадрат 84×84 px', () => {
+  it.each(['Новые', 'Отменённые'])('gives a short WB row, a tall WB row and a two-position Ozon row the same 84 px square on %s', async (label) => {
     const short = order('short')
     const tall = order('tall'); tall.product.name = 'Очень длинное название товара '.repeat(12)
     const oz = ozon('oz')
@@ -88,18 +88,18 @@ describe('WMS-756 R1: фото строки заказа FBS — один ква
     for (const id of ['short', 'tall', 'oz']) {
       const { frame, text } = productCell(id)
       const css = getComputedStyle(frame)
-      expect(css.width, `photo frame of ${id} width`).toBe('72px')
-      expect(css.height, `photo frame of ${id} height`).toBe('72px')
+      expect(css.width, `photo frame of ${id} width`).toBe('84px')
+      expect(css.height, `photo frame of ${id} height`).toBe('84px')
       expect(css.position, `photo frame of ${id} is taken out of the text flow`).toBe('absolute')
       expect(css.top, `photo frame of ${id} is centred vertically in the row`).toBe('50%')
-      expect(getComputedStyle(photo(id)).width, `photo of ${id} width`).toBe('72px')
-      expect(getComputedStyle(photo(id)).height, `photo of ${id} height`).toBe('72px')
-      expect(getComputedStyle(text).marginLeft, `text of ${id} keeps a constant gap after the photo`).toBe('84px')
+      expect(getComputedStyle(photo(id)).width, `photo of ${id} width`).toBe('84px')
+      expect(getComputedStyle(photo(id)).height, `photo of ${id} height`).toBe('84px')
+      expect(getComputedStyle(text).marginLeft, `text of ${id} keeps a constant gap after the photo`).toBe('96px')
       expect(getComputedStyle(text).minWidth, `text of ${id} keeps its minimum width`).toBe('300px')
     }
   })
 
-  it.each(['Новые', 'Отменённые'])('shows the whole photo with object-fit contain on a light neutral background on %s', async (label) => {
+  it.each(['Новые', 'Отменённые'])('shows the whole photo with object-fit contain on white on %s', async (label) => {
     const item = order('pic'); item.product.image_url = WORKING
     await open([item])
     if (label !== 'Новые') await tab(label)
@@ -107,6 +107,6 @@ describe('WMS-756 R1: фото строки заказа FBS — один ква
     const image = photo('pic').querySelector('img')
     expect(image, 'the loaded photo is rendered as an image').toBeTruthy()
     expect(cascadedValue(image!, 'object-fit'), 'the whole picture is visible, nothing is cropped').toBe('contain')
-    expect(getComputedStyle(image!).backgroundColor, 'the empty area around a narrow picture is the theme light grey (grey 100)').toBe('rgb(245, 245, 245)')
+    expect(getComputedStyle(image!).backgroundColor, 'the empty area around a narrow picture is white, as on the pick list').toBe('rgb(255, 255, 255)')
   })
 })

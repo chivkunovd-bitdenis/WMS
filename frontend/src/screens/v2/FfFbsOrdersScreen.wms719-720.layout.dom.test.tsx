@@ -115,10 +115,10 @@ describe('WMS-720 R1/R3: фото не сужает название и не з�
       // «съедается» фото и при высокой строке название превращается в узкую полосу.
       expect(css.minWidth, `title block of ${id} keeps its minimum width`).toBe(`${MIN_TEXT}px`)
       expect(['', '0px'], 'photo space must not be taken from the title block').toContain(css.paddingLeft)
-      // WMS-756 R1 (заменяет WMS-720 R1): рамка фото фиксирована 72 px и не зависит от высоты строки;
-      // текст отступает от фото на постоянные 72 + 12 px
-      expect(getComputedStyle(frame).width, `photo frame of ${id} is 72 px wide`).toBe('72px')
-      expect(css.marginLeft, `title block of ${id} keeps a constant gap after the photo`).toBe('84px')
+      // WMS-756 R1 (заменяет WMS-720 R1): рамка фото фиксирована 84 px и не зависит от высоты строки;
+      // текст отступает от фото на постоянные 84 + 12 px
+      expect(getComputedStyle(frame).width, `photo frame of ${id} is 84 px wide`).toBe('84px')
+      expect(css.marginLeft, `title block of ${id} keeps a constant gap after the photo`).toBe('96px')
     }
   })
 
@@ -139,9 +139,9 @@ describe('WMS-720 R1/R3: фото не сужает название и не з�
     const css = getComputedStyle(frame)
     expect(getComputedStyle(cell).position).toBe('relative')
     expect(css.position, 'photo frame is taken out of the flow').toBe('absolute')
-    // WMS-756 R1: рамка центрируется по вертикали строки, а строка не ниже фото (72 px)
+    // WMS-756 R1: рамка центрируется по вертикали строки, а строка не ниже фото (84 px)
     expect(css.top, 'photo frame is centred vertically in the row').toBe('50%')
-    expect(getComputedStyle(text).minHeight, 'the row is never shorter than the photo').toBe('72px')
+    expect(getComputedStyle(text).minHeight, 'the row is never shorter than the photo').toBe('84px')
   })
 
   it.each(['Новые', 'Отменённые'])('C8 image loading does not change the photo frame, the title offset or the row on %s', async (label) => {
