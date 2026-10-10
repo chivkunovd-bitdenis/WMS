@@ -193,6 +193,12 @@ type Props = {
   catalogById: Map<string, WbProductCatalogRow>
   onUpdated: () => Promise<void>
   onMarkingScan?: (code: string, lineId: string | null) => Promise<void>
+  /**
+   * WMS-755: скан наклейки короба/грузоместа этой приёмки. Возвращает переход
+   * в него или null, если это не код контейнера. Перед переходом окно
+   * сохраняет начатое в текущем коробе.
+   */
+  onContainerScan?: (code: string) => (() => void) | null
 }
 
 export function FfInboundBoxAddDialog(props: Props) {
@@ -219,6 +225,7 @@ function FfInboundBoxAddDialogContent({
   catalogById,
   onUpdated,
   onMarkingScan,
+  onContainerScan,
 }: Props) {
   const authHeaders = useMemo(
     () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
@@ -374,6 +381,18 @@ function FfInboundBoxAddDialogContent({
     }
     setError(null)
     try {
+      const switchContainer = onContainerScan?.(raw) ?? null
+      if (switchContainer) {
+        setScanBarcode('')
+        await flushPendingQty()
+        if (ffDraft && readIntake(token, requestId).pending?.length) {
+          setError('Проверьте результат предыдущего запроса.')
+          return
+        }
+        await onUpdated()
+        switchContainer()
+        return
+      }
       if (isInboundMarkingScan(raw)) {
         if (!onMarkingScan) throw new Error('Коды ЧЗ нужно сканировать в документе приёмки.')
         await onMarkingScan(raw, lastProductLineId.current)

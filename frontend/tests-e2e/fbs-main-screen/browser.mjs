@@ -117,7 +117,7 @@ await run('S3-ozon-position-fields', async page => {
   const sizeValues = await posting.locator('td').nth(sizeIndex).locator('[data-fbs-position-content]').allInnerTexts()
   assert.equal(sizeValues.length, fixture.positions.length, 'one size value per Ozon position')
   assert(sizeValues.every(value => value.trim().length > 0), 'every Ozon position shows a size or a dash')
-  for (const column of ['Товар', 'Артикул продавца', 'Размер', 'ШК', 'Селлер', 'Маршрут сдачи', 'Отгрузить до']) await expect(page.getByTestId('fbs-worklist-table').getByRole('columnheader', { name: column, exact: true })).toBeVisible()
+  for (const column of ['Товар', 'Артикул продавца', 'Размер', 'ШК', 'Селлер', 'Маршрут сдачи', 'Прошло с заказа']) await expect(page.getByTestId('fbs-worklist-table').getByRole('columnheader', { name: column, exact: true })).toBeVisible()
 })
 await run('S2-two-wb-warehouses-exact-membership', async page => {
   await choose(page, 'Маркетплейс', 'Wildberries')

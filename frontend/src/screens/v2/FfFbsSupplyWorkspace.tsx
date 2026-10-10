@@ -70,7 +70,7 @@ import { DeliveryCheckGroupList } from './FbsDeliveryCheckGroups'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { FbsTransferSupplyDialog, makeFbsTransferSupplyDeps } from './FbsTransferSupplyDialog'
 import { FbsAssemblySupplyFrame, type FbsAssemblyFrameControl } from './FbsAssemblySupplyFrame'
-import { imperiyaWalkRows, usesTabOrderPickList } from './imperiyaPickListOrder'
+import { imperiyaOrderUnits, imperiyaWalkRows, usesTabOrderPickList } from './imperiyaPickListOrder'
 import { fbsAssemblySupplyTitle, fbsCodeBelongsToSupply } from './fbsSupplyAssembly'
 import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStage'
 import { fbsMenuReprintRequest, hasOperatorKiz } from './fbsMenuReprint'
@@ -3269,7 +3269,7 @@ export function FfFbsSupplyWorkspace({
       // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: лист идёт маршрутом вкладки «Подбор».
       // Остальные клиенты печатают как раньше. См. imperiyaPickListOrder.ts.
       if (isImperiyaPickList && optionList.length) {
-        rows = imperiyaWalkRows(rows, optionList, contextList)
+        rows = imperiyaWalkRows(rows, optionList, contextList, imperiyaOrderUnits(printWorkspace.orders))
       }
     } catch {
       if (!isCurrentPrint()) {
