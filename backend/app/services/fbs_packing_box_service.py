@@ -314,7 +314,14 @@ async def _cargo_operation_key_for_retry(
     seller_id: uuid.UUID,
     operator_key: str,
 ) -> str:
-    """Continue uncertain retries; advance past definitive WB 404/409 refusals."""
+    """Continue uncertain retries; advance past definitive WB 404/409/429 refusals.
+
+    429 (WMS-761) means WB refused the request for its rate limit. The code treats
+    that as nothing created; this is an assumption, not checked against WB docs.
+    Before the next create, the QR-recovery path compares WB's current cargo-place
+    list with the snapshot stored on the failed operation (create_cargo_places,
+    expected_wb_trbx_ids_before), so the retry does not attach foreign places.
+    """
     candidate = operator_key
     seen: set[str] = set()
     while candidate not in seen:
@@ -327,6 +334,7 @@ async def _cargo_operation_key_for_retry(
             and operation.error_code in {
                 "wb_upstream_error_404", "wb_business_error_404",
                 "wb_upstream_error_409", "wb_business_error_409",
+                "wb_upstream_error_429", "wb_business_error_429",
             }
         ):
             # Pending/pending-confirmation must keep its exact key so the cargo
