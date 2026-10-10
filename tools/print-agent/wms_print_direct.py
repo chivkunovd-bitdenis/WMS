@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 import wms_print_agent as agent
-from wms_print_runtime import WindowsAdapter, state_directory
+from wms_print_runtime import WindowsAdapter, abort_document, start_document, state_directory
 
 PORT = 17843
 ORIGIN = f"http://127.0.0.1:{PORT}"
@@ -74,21 +74,16 @@ class DefaultWindowsAdapter(WindowsAdapter):
             ratio = min(width / image.width, height / image.height)
             w, h = max(1, round(image.width * ratio)), max(1, round(image.height * ratio))
             x, y = (width - w) // 2, (height - h) // 2
-            receipt = dc.StartDoc("WMS QR")
-            if not isinstance(receipt, int) or receipt <= 0:
-                raise agent.UnknownPrintOutcome("Windows не вернула номер задания")
+            receipt = start_document(dc, "WMS QR")
             try:
                 dc.StartPage()
                 self.modules["ImageWin"].Dib(image).draw(dc.GetHandleOutput(), (x, y, x+w, y+h))
                 dc.EndPage()
                 dc.EndDoc()
             except BaseException:
-                try:
-                    dc.AbortDoc()
-                except BaseException:
-                    pass
+                abort_document(dc)
                 raise agent.UnknownPrintOutcome("Исход печати неизвестен. Проверьте принтер.") from None
-            return f"windows-{receipt}"
+            return receipt
         finally:
             dc.DeleteDC()
 

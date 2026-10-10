@@ -220,13 +220,47 @@ class CupsAdapter:
         )
 
 
+def abort_document(dc: Any) -> None:
+    """Best-effort cancel of a GDI document so no half-open job stays in the spooler."""
+    try:
+        dc.AbortDoc()
+    except BaseException:
+        pass
+
+
+def start_document(dc: Any, name: str) -> str:
+    """Open a GDI document and return a non-empty receipt for it.
+
+    pywin32 ``StartDoc`` returns ``None`` on success (and raises on failure), so
+    ``None`` is not an error: the receipt is then a unique agent-side id.  If a
+    driver does return a job number, a positive ``int`` is used as it is.
+    Anything else is not a trustworthy answer: the document is cancelled.
+    """
+    try:
+        number = dc.StartDoc(name)
+    except BaseException:
+        abort_document(dc)
+        raise agent.UnknownPrintOutcome(
+            "Windows не приняла задание печати. Проверьте очередь принтера."
+        ) from None
+    if number is None:
+        return f"windows-{uuid.uuid4().hex[:12]}"
+    if type(number) is int and number > 0:
+        return f"windows-{number}"
+    abort_document(dc)
+    raise agent.UnknownPrintOutcome(
+        "Windows вернула непонятный номер задания. Проверьте очередь принтера."
+    )
+
+
 class WindowsAdapter:
     """Windows spooler adapter using the named queue and a real GDI job receipt.
 
     PDF pages are rasterized locally and PNG labels are decoded locally; neither
     is opened in a viewer or routed through the default printer.  ``StartDoc``
-    returns the Windows spooler job ID only after the selected queue accepted a
-    print document.  A driver still decides whether it can put paper through.
+    returns nothing (``None``) when the selected queue accepted a print document
+    and raises otherwise; see ``start_document``.  A driver still decides whether
+    it can put paper through.
     """
 
     def __init__(self, modules: dict[str, Any] | None = None):
@@ -427,11 +461,7 @@ class WindowsAdapter:
         dc = self._create_printer_dc(queue)
         try:
             self._validate_page_size(dc, width_mm, height_mm)
-            receipt = dc.StartDoc("WMS label")
-            if not isinstance(receipt, int) or receipt <= 0:
-                raise agent.UnknownPrintOutcome(
-                    "Очередь Windows не вернула номер задания"
-                )
+            receipt = start_document(dc, "WMS label")
             try:
                 dpi_x = dc.GetDeviceCaps(88)  # LOGPIXELSX
                 dpi_y = dc.GetDeviceCaps(90)  # LOGPIXELSY
@@ -454,16 +484,13 @@ class WindowsAdapter:
             except BaseException:
                 # A GDI document may already have reached the spooler.  The
                 # runtime must keep it in the unknown state and never retry.
-                try:
-                    dc.AbortDoc()
-                except BaseException:
-                    pass
+                abort_document(dc)
                 raise agent.UnknownPrintOutcome(
                     "Исход передачи в очередь Windows неизвестен; повтор запрещён"
                 ) from None
         finally:
             dc.DeleteDC()
-        return f"windows-{receipt}"
+        return receipt
 
 
 def printer_adapter() -> CupsAdapter | WindowsAdapter:
