@@ -929,20 +929,25 @@ async def get_inbound_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="request_not_found",
         )
-    lines_out: list[InboundIntakeLineOut] = []
-    for ln in r.lines:
-        p = ln.product
-        lines_out.append(
-            await _line_out_for_request(
-                session,
-                user.tenant_id,
-                request_id,
-                r.status,
-                ln,
-                p,
-                enrich_variant=False,
-            )
+    effective_actual_by_product: dict[uuid.UUID, int] | None = None
+    if r.status in (svc.STATUS_DRAFT, svc.STATUS_SUBMITTED, svc.STATUS_RECEIVING):
+        effective_actual_by_product = await svc.effective_actual_quantities(session, r)
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
+        session, user.tenant_id
+    )
+    lines_out = [
+        _line_out_from_orm(
+            line,
+            line.product,
+            effective_actual_qty=(
+                effective_actual_by_product[line.product_id]
+                if effective_actual_by_product is not None
+                else None
+            ),
+            reveal_storage=reveal_storage,
         )
+        for line in r.lines
+    ]
     boxes = await inbound_box_svc.list_boxes_with_lines(
         session, user.tenant_id, request_id
     )
