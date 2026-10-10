@@ -31,7 +31,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { plural } from '../../utils/plural'
 import { FbsSupplyHistoryDialog } from './FbsSupplyHistoryDialog'
 import { FfFbsAssemblyPick } from './FfFbsAssemblyPick'
-import { imperiyaWalkRows, usesTabOrderPickList } from './imperiyaPickListOrder'
+import { imperiyaOrderUnits, imperiyaWalkRows, usesTabOrderPickList } from './imperiyaPickListOrder'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
   fetchFbsWorkspace,
@@ -365,7 +365,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
       // (сумма группы). Остальные клиенты печатают как раньше. См. imperiyaPickListOrder.ts.
       if (isImperiyaPickList && allOptions.length) {
         const allContexts = lists.flat()
-        rows = imperiyaWalkRows(rows, allOptions, allContexts)
+        rows = imperiyaWalkRows(rows, allOptions, allContexts, imperiyaOrderUnits(printable.flatMap((one) => one.orders)))
       }
     } catch {
       setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')

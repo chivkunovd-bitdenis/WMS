@@ -311,17 +311,18 @@ function LazyProductPhotoThumb({
   )
 }
 
-// Название не уже этой ширины. Без неё высокая строка (много позиций, длинный текст) даёт
-// широкое фото, фото съедает ширину текста, текст переносится уже и строка становится ещё выше.
-// Минимум задан самому блоку текста, а место под фото — внешний отступ: ширина фото
-// блок не сужает, и высоту строки определяет только текст.
+// Название не уже этой ширины: иначе узкая колонка переносит текст на много строк и строка растёт.
 const FBS_PRODUCT_TEXT_MIN_WIDTH = 300
+// WMS-756 R1: фото строки заказа FBS — квадрат 84×84 px (как в листе подбора), одинаковый во всех строках и вкладках,
+// по вертикали по центру строки. Текст отступает от фото на постоянные 84 + 12 px. Строка не ниже
+// фото (minHeight у блока текста), поэтому фото не касается границ строки.
+const FBS_PRODUCT_PHOTO_SIZE = 84
+const FBS_PRODUCT_PHOTO_GAP = 12
 
-// Фото исключено из расчёта высоты строки: её задают текст и действия.
-// Измерение лишь резервирует такую же ширину рядом с текстом, без роста по кругу.
+// Фото вынесено из потока и не задаёт высоту строки: её задают текст и действия.
+// Измерение нужно только для выравнивания позиций Ozon по строкам.
 function OrderProductCell({ order, children, photoRetryKey }: { order: FbsWorklistOrder; children: React.ReactNode; photoRetryKey: number }) {
   const cellRef = useRef<HTMLTableCellElement | null>(null)
-  const [photoWidth, setPhotoWidth] = useState(0)
   useLayoutEffect(() => {
     const cell = cellRef.current
     const row = cell?.closest('tr')
@@ -333,8 +334,6 @@ function OrderProductCell({ order, children, photoRetryKey }: { order: FbsWorkli
         positionHeights.set(index, Math.max(positionHeights.get(index) ?? 0, content.getBoundingClientRect().height))
       })
       positionHeights.forEach((height, index) => row.style.setProperty(`--fbs-position-${index}-height`, `${height}px`))
-      const border = Number.parseFloat(getComputedStyle(cell).borderBottomWidth) || 0
-      setPhotoWidth(Math.max(0, row.getBoundingClientRect().height - border))
     }
     measure()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
@@ -346,17 +345,26 @@ function OrderProductCell({ order, children, photoRetryKey }: { order: FbsWorkli
   const positions = order.marketplace === 'ozon' && order.positions.length > 0 ? order.positions : null
   return (
     <TableCell ref={cellRef} sx={{ minWidth: 300, position: 'relative' }}>
-      <Box sx={{ position: 'absolute', top: 0, bottom: 0, left: 16, width: photoWidth, height: '100%', aspectRatio: '1 / 1' }}>
+      <Box sx={{
+        position: 'absolute', top: '50%', left: 16, transform: 'translateY(-50%)',
+        width: FBS_PRODUCT_PHOTO_SIZE, height: FBS_PRODUCT_PHOTO_SIZE,
+        // Фото видно целиком на белом, как в листе подбора.
+        '& img': { objectFit: 'contain', bgcolor: '#fff' },
+      }}>
         <LazyProductPhotoThumb
           src={positions?.[0]?.image_url ?? order.product.image_url}
           alt={positions?.[0]?.name ?? order.product.name}
-          size="100%"
+          size={FBS_PRODUCT_PHOTO_SIZE}
           previewSize={280}
           testId={`fbs-product-photo-${order.id}`}
           retryKey={photoRetryKey}
         />
       </Box>
-      <Box sx={{ ml: `${photoWidth + 10}px`, minWidth: FBS_PRODUCT_TEXT_MIN_WIDTH }}>{children}</Box>
+      <Box sx={{
+        ml: `${FBS_PRODUCT_PHOTO_SIZE + FBS_PRODUCT_PHOTO_GAP}px`,
+        minWidth: FBS_PRODUCT_TEXT_MIN_WIDTH,
+        minHeight: FBS_PRODUCT_PHOTO_SIZE,
+      }}>{children}</Box>
     </TableCell>
   )
 }
@@ -1779,7 +1787,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                   <TableCell sx={[stickyHeaderSx, { minWidth: 150 }]}>ШК</TableCell>
                   <TableCell sx={[stickyHeaderSx, { minWidth: 135 }]}>Селлер</TableCell>
                   <TableCell sx={[stickyHeaderSx, { minWidth: 125 }]}>Маршрут сдачи</TableCell>
-                  <TableCell sx={[stickyHeaderSx, { minWidth: 105 }]}>Отгрузить до</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 105 }]}>Прошло с заказа</TableCell>
                 </>
               ) : (
                 <>
@@ -1789,7 +1797,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                   <TableCell sx={[stickyHeaderSx, { minWidth: 150 }]}>ШК</TableCell>
                   <TableCell sx={[stickyHeaderSx, { minWidth: 125 }]}>Селлер</TableCell>
                   <TableCell sx={[stickyHeaderSx, { minWidth: 125 }]}>Маршрут сдачи</TableCell>
-                  <TableCell sx={[stickyHeaderSx, { minWidth: 105 }]}>Отгрузить до</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 105 }]}>Прошло с заказа</TableCell>
                   <TableCell sx={[stickyHeaderSx, { minWidth: 130 }]}>Статус</TableCell>
                 </>
               )}
