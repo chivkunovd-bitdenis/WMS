@@ -1787,7 +1787,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                   <TableCell sx={[stickyHeaderSx, { minWidth: 150 }]}>ШК</TableCell>
                   <TableCell sx={[stickyHeaderSx, { minWidth: 135 }]}>Селлер</TableCell>
                   <TableCell sx={[stickyHeaderSx, { minWidth: 125 }]}>Маршрут сдачи</TableCell>
-                  <TableCell sx={[stickyHeaderSx, { minWidth: 105 }]}>Отгрузить до</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 105 }]}>Прошло с заказа</TableCell>
                 </>
               ) : (
                 <>
@@ -1797,7 +1797,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
                   <TableCell sx={[stickyHeaderSx, { minWidth: 150 }]}>ШК</TableCell>
                   <TableCell sx={[stickyHeaderSx, { minWidth: 125 }]}>Селлер</TableCell>
                   <TableCell sx={[stickyHeaderSx, { minWidth: 125 }]}>Маршрут сдачи</TableCell>
-                  <TableCell sx={[stickyHeaderSx, { minWidth: 105 }]}>Отгрузить до</TableCell>
+                  <TableCell sx={[stickyHeaderSx, { minWidth: 105 }]}>Прошло с заказа</TableCell>
                   <TableCell sx={[stickyHeaderSx, { minWidth: 130 }]}>Статус</TableCell>
                 </>
               )}
