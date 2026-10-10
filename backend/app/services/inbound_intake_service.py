@@ -56,7 +56,10 @@ from app.services.document_number_service import (
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
-from app.services.inbound_intake_quantity_service import container_total_for_product
+from app.services.inbound_intake_quantity_service import (
+    container_total_for_product,
+    container_totals_by_product,
+)
 from app.services.inventory_container_service import ContainerKind
 from app.services.operation_fact_service import record_inbound_completion
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
@@ -134,6 +137,28 @@ async def effective_actual_qty(
             raw = line.expected_qty
     container_total = await container_total_for_product(session, request_id, line.product_id)
     return raw + container_total
+
+
+async def effective_actual_quantities(
+    session: AsyncSession, request: InboundIntakeRequest
+) -> dict[uuid.UUID, int]:
+    """Return receiving totals for all request lines with one container query."""
+    if request.status in SORTING_STATUSES | DONE_STATUSES:
+        return {line.product_id: _loose_qty(line) for line in request.lines}
+
+    container_totals = await container_totals_by_product(session, request.id)
+    use_legacy_draft_expected = (
+        request.status == STATUS_DRAFT
+        and request.operation_type == OPERATION_TYPE_INBOUND
+        and request.created_by_seller_id is None
+    )
+    result: dict[uuid.UUID, int] = {}
+    for line in request.lines:
+        raw = _loose_qty(line)
+        if use_legacy_draft_expected and line.actual_qty is None:
+            raw = line.expected_qty
+        result[line.product_id] = raw + container_totals.get(line.product_id, 0)
+    return result
 
 
 def _accepted_qty_for_line(line: InboundIntakeLine) -> int:

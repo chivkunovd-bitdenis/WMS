@@ -42,3 +42,35 @@ async def container_total_for_product(
         select(sa.func.coalesce(sa.func.sum(quantities.c.quantity), 0))
     )
     return int(total or 0)
+
+
+async def container_totals_by_product(
+    session: AsyncSession, request_id: uuid.UUID
+) -> dict[uuid.UUID, int]:
+    """Return box and cargo-place quantities for every product in one intake."""
+    box_quantities = (
+        select(
+            InboundIntakeBoxLine.product_id.label("product_id"),
+            InboundIntakeBoxLine.quantity.label("quantity"),
+        )
+        .join(InboundIntakeBox, InboundIntakeBoxLine.box_id == InboundIntakeBox.id)
+        .where(InboundIntakeBox.request_id == request_id)
+    )
+    cargo_place_quantities = (
+        select(
+            InboundIntakeCargoPlaceLine.product_id.label("product_id"),
+            InboundIntakeCargoPlaceLine.quantity.label("quantity"),
+        )
+        .join(
+            InboundIntakeCargoPlace,
+            InboundIntakeCargoPlaceLine.cargo_place_id == InboundIntakeCargoPlace.id,
+        )
+        .where(InboundIntakeCargoPlace.request_id == request_id)
+    )
+    quantities = sa.union_all(box_quantities, cargo_place_quantities).subquery()
+    totals = await session.execute(
+        select(quantities.c.product_id, sa.func.sum(quantities.c.quantity)).group_by(
+            quantities.c.product_id
+        )
+    )
+    return {product_id: int(total or 0) for product_id, total in totals}
