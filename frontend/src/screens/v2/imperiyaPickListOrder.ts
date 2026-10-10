@@ -10,8 +10,11 @@
 // 1. Печатный лист подбора у Империи идёт тем же маршрутом, что вкладка «Подбор»
 //    (pickRows.cellPickRowsOf — та же функция, что рисует вкладку): место за
 //    местом, в каждой строке — товар из этого места, его приёмка/возврат с датой и
-//    короб. Колонки листа прежние. Заказы, стикер и маркировка — в первой строке
-//    товара (иначе один заказ выглядит как пять). Номер строки — номер товара.
+//    короб. Колонки листа прежние. Номер строки — номер товара.
+//    WMS-752, владелец 10.10.2026: «если тебе нужно 5 курток собрать, значит у тебя
+//    5 QR-кодов». В лист идут только места, которые покрывают «Осталось»; «Взять» —
+//    сколько брать из этого места, рядом заказы и стикеры именно этих штук и
+//    маркировка. Строк без стикера у неподобранного товара нет.
 // 2. На вкладке «Подбор» у Империи к коробу дописана его приёмка/возврат.
 // В строке места нет системного кода INB. У всех остальных клиентов всё прежнее.
 // Реестр исключений: docs/KLIENTSKIE_ISKLYUCHENIYA.md. Не переносить на других
@@ -23,7 +26,7 @@
 import { cellPickRowsOf, rowsOf, pickKey, type PickedMap } from '../ff/unload-pick/pickRows'
 import { cellRef, objRef } from '../ff/unload-pick/pickStub'
 import type { Cell, GoodsLine, ObjKind, PickProduct, PlanLine, WarehouseObject } from '../ff/unload-pick/pickStub'
-import type { FbsPickOptionProduct, FbsPickingContext } from './fbsApi'
+import type { FbsPickOptionProduct, FbsPickingContext, FbsWorkspace } from './fbsApi'
 import type { FbsPickingListPrintRow } from './fbsUx'
 
 export const IMPERIYA_FF_TENANT_ID = '7b98a8aa-c03c-4649-9677-a645be45c622'
@@ -75,25 +78,50 @@ export function boxReceiptLabels(contexts: FbsPickingContext[]): Map<string, str
 }
 
 /**
+ * Штуки товара в каждом заказе и сколько из них уже подобрано: ключ — номер
+ * заказа так, как он стоит в строке листа, и товар. У WB заказ — одна штука.
+ */
+export function imperiyaOrderUnits(orders: FbsWorkspace['orders']): Map<string, { units: number; picked: number }> {
+  const units = new Map<string, { units: number; picked: number }>()
+  for (const order of orders) {
+    const id = String(order.marketplace === 'ozon' ? (order.external_order_id ?? order.wb_order_id) : order.wb_order_id)
+    if (order.marketplace !== 'wb' && (order.positions?.length ?? 0) > 0) {
+      for (const position of order.positions) {
+        if (!position.product_id) continue
+        const key = `${id}#${position.product_id}`
+        const previous = units.get(key)
+        units.set(key, {
+          units: (previous?.units ?? 0) + position.quantity,
+          picked: (previous?.picked ?? 0) + position.picked_quantity,
+        })
+      }
+    } else if (order.product.id) {
+      units.set(`${id}#${order.product.id}`, { units: 1, picked: order.pick.status === 'picked' ? 1 : 0 })
+    }
+  }
+  return units
+}
+
+/**
  * Строки печатного листа Империи маршрутом вкладки «Подбор».
  * `rows` — обычные строки листа (по товару, ключ — product_id), `options` — места
  * подбора (pick-options одной поставки или всех поставок группы), `contexts` —
- * контекст печати (строки мест, приёмки, ключи мест).
+ * контекст печати (строки мест, приёмки, ключи мест), `orderUnits` — штуки
+ * заказов (imperiyaOrderUnits).
  */
 export function imperiyaWalkRows<T extends PrintRow>(
   rows: T[],
   options: FbsPickOptionProduct[],
   contexts: FbsPickingContext[],
+  orderUnits: Map<string, { units: number; picked: number }> = new Map(),
 ): T[] {
   const cellsById = new Map<string, Cell>()
   const objectsById = new Map<string, WarehouseObject>()
   const stock = new Map<string, GoodsLine & { pickCapacity?: number }>()
   const picked: PickedMap = {}
   const placeKey = new Map<string, string>()
-  const pickedByProduct = new Map<string, number>()
   const skuByProduct = new Map<string, string>()
   for (const option of options) {
-    pickedByProduct.set(option.product_id, (pickedByProduct.get(option.product_id) ?? 0) + option.picked_qty)
     const sku = (option as FbsPickOptionProduct & { sku_code?: string | null }).sku_code
     if (sku) skuByProduct.set(option.product_id, sku)
     for (const location of option.locations) {
@@ -164,43 +192,66 @@ export function imperiyaWalkRows<T extends PrintRow>(
     position = to + 1
     positionByKey.set(row.key, from === to ? `${from}` : `${from}–${to}`)
   }
+
+  // WMS-752: штуки товара по заказам. У WB заказ — одна штука, у Ozon отправление
+  // может нести несколько штук товара. Сначала идут штуки, которые ещё не подобраны.
+  const unitsOf = new Map<string, number[]>()
+  for (const row of rows) {
+    const entries = row.wbOrders.map((id, index) => {
+      const known = orderUnits.get(`${String(id)}#${row.key}`)
+      return { index, units: known?.units ?? 1, picked: known?.picked ?? 0 }
+    })
+    const ordered = [
+      ...entries.filter((entry) => entry.picked < entry.units),
+      ...entries.filter((entry) => entry.picked >= entry.units),
+    ]
+    unitsOf.set(row.key, ordered.flatMap((entry) => Array.from({ length: Math.max(1, entry.units) }, () => entry.index)))
+  }
+  const cursor = new Map<string, number>()
+  const leftByKey = new Map(screenRows.map((screenRow) => [screenRow.key, screenRow.left]))
   const rowByKey = new Map(rows.map((row) => [row.key, row]))
-  const emitted = new Set<string>()
   const out: T[] = []
-  const emit = (row: T, sourceGroups: PrintRow['sourceGroups']) => {
-    const first = !emitted.has(row.key)
-    emitted.add(row.key)
+  // Строка листа — сколько взять из этого места и заказы именно этих штук.
+  const emit = (row: T, take: number, sourceGroups: PrintRow['sourceGroups']) => {
+    const units = unitsOf.get(row.key) ?? []
+    const from = cursor.get(row.key) ?? 0
+    cursor.set(row.key, from + take)
+    const indexes = [...new Set(units.slice(from, from + take))]
     out.push({
       ...row,
       positionLabel: positionByKey.get(row.key),
+      required: take,
+      picked: 0,
       locations: [],
       inboundSupplies: [],
       sourceGroups,
-      ...(first ? {} : { wbOrders: [], stickerCodes: [], marking: '' }),
+      wbOrders: indexes.map((index) => row.wbOrders[index]),
+      stickerCodes: indexes.map((index) => row.stickerCodes[index] ?? null),
     })
   }
-  // Маршрут вкладки; свёрнутое «Уже подобрано» сотрудник не видит — не печатаем.
+  // Маршрут вкладки, но только те места, что покрывают «Осталось»: из места
+  // берётся не больше, чем в нём можно снять. Свёрнутое «Уже подобрано» не печатаем.
   for (const item of cellPickRowsOf(screenRows, objects, cells)) {
-    if (item.kind !== 'goods' || item.alreadyPicked) continue
+    if (item.kind !== 'goods' || item.alreadyPicked || !item.place) continue
     const row = rowByKey.get(item.row.key)
     if (!row) continue
-    if (!item.place) {
-      emit(row, [{ key: 'none', title: 'Нет текущего остатка', lines: [] }])
-      continue
-    }
+    const take = Math.min(leftByKey.get(row.key) ?? 0, item.place.left)
+    if (take <= 0) continue
+    leftByKey.set(row.key, (leftByKey.get(row.key) ?? 0) - take)
     const found = byKey.get(`${row.key}#${placeKey.get(item.place.key) ?? ''}`)
-    emit(row, [{
+    emit(row, take, [{
       key: item.place.key,
       // Место без приёмки (россыпь и т.п.) подписываем так же, как на вкладке: «Без ячеек», «Ж-1-7».
       title: found && !found.title.startsWith('Без привязки') ? found.title : item.place.standing,
       lines: [found?.line ?? `${item.place.standing} · ${item.place.sourceTitle}: ${item.place.qty} шт.`],
     }])
   }
-  // Товары, которых на маршруте нет (всё уже подобрано) — в конце, как в обычном листе.
+  // В конце, как в обычном листе: чего не хватило на местах, и что уже подобрано.
   for (const row of rows) {
-    if (emitted.has(row.key)) continue
-    const done = row.required > 0 && (pickedByProduct.get(row.key) ?? 0) >= row.required
-    emit(row, [{ key: 'none', title: done ? 'Подобрано' : 'Нет текущего остатка', lines: [] }])
+    const missing = leftByKey.get(row.key) ?? Math.max(0, row.required - row.picked)
+    if (missing > 0) emit(row, missing, [{ key: 'none', title: 'Нет текущего остатка', lines: [] }])
+    const done = (unitsOf.get(row.key)?.length ?? 0) - (cursor.get(row.key) ?? 0)
+    if (done > 0) emit(row, done, [{ key: 'none', title: 'Подобрано', lines: [] }])
   }
   return out
 }
