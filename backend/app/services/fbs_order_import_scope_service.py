@@ -111,9 +111,16 @@ async def import_wb_order_rows(
                 session,
                 tenant_id,
                 seller_id,
-                wb_barcode=wb_marketplace_orders_service._first_barcode(row),
+                wb_barcode=(
+                    wb_marketplace_orders_service._first_barcode(row)
+                    or (existing.wb_barcode if existing is not None else None)
+                ),
                 wb_nm_id=int(wb_nm_id) if wb_nm_id is not None else None,
-                wb_chrt_id=int(wb_chrt_id) if wb_chrt_id is not None else None,
+                wb_chrt_id=(
+                    int(wb_chrt_id)
+                    if wb_chrt_id is not None
+                    else (existing.wb_chrt_id if existing is not None else None)
+                ),
             )
             if product is not None:
                 stock_product_ids.add(product.id)

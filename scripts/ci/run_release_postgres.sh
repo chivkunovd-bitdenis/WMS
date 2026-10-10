@@ -90,7 +90,7 @@ report_status=0
 python - "$evidence" <<'PY' || report_status=$?
 import pathlib, sys, xml.etree.ElementTree as ET
 root = pathlib.Path(sys.argv[1])
-expected_reports = [('662.xml', 10), ('662-f6.xml', 4), ('663-669-670-683.xml', 6), ('663-release-retry.xml', 5), ('fbs-concurrency.xml', 6), ('744.xml', 8)]
+expected_reports = [('662.xml', 10), ('662-f6.xml', 4), ('663-669-670-683.xml', 6), ('663-release-retry.xml', 5), ('fbs-concurrency.xml', 6), ('744.xml', 10)]
 failed = False
 for name, expected in expected_reports:
     path = root / name

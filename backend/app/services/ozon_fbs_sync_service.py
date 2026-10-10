@@ -845,28 +845,47 @@ async def _prelock_ozon_import_stock_products(
     seller_id: uuid.UUID,
     rows: list[dict[str, Any]],
 ) -> None:
-    """Acquire all stock rows touched by this import before per-order reserves."""
+    """Lock packaging parents, then all stock rows, before per-order reserves."""
     from app.services import inventory_service
+    from app.services.fbs_packaging_integration_service import lock_order_batch_packaging_rows
 
-    external_ids = {
-        external_id
-        for row in rows
-        if (external_id := _text(row, "posting_number", "order_id", "id")) is not None
-    }
-    existing_orders = list(
-        (
-            await session.scalars(
-                select(FbsOrder)
-                .options(selectinload(FbsOrder.product_positions))
-                .where(
-                    FbsOrder.tenant_id == tenant_id,
-                    FbsOrder.seller_id == seller_id,
-                    FbsOrder.marketplace == "ozon",
-                    FbsOrder.external_order_id.in_(external_ids),
-                )
+    served_external_ids: set[str] = set()
+    bindings_by_external_id: dict[str, FbsWarehouseBinding | None] = {}
+    for row in rows:
+        external_id = _text(row, "posting_number", "order_id", "id")
+        if external_id is None:
+            continue
+        binding = await _binding_for_row(session, tenant_id, seller_id, row)
+        bindings_by_external_id[external_id] = binding
+        if _warehouse_is_served_for_row(binding):
+            served_external_ids.add(external_id)
+
+    existing_order_ids = list(
+        (await session.scalars(
+            select(FbsOrder.id).where(
+                FbsOrder.tenant_id == tenant_id,
+                FbsOrder.seller_id == seller_id,
+                FbsOrder.marketplace == "ozon",
+                FbsOrder.external_order_id.in_(served_external_ids),
             )
-        ).all()
-    ) if external_ids else []
+        )).all()
+    ) if served_external_ids else []
+    if existing_order_ids:
+        await lock_order_batch_packaging_rows(session, tenant_id, existing_order_ids)
+
+    existing_orders = list(
+        (await session.scalars(
+            select(FbsOrder)
+            .options(selectinload(FbsOrder.product_positions))
+            .where(
+                FbsOrder.tenant_id == tenant_id,
+                FbsOrder.seller_id == seller_id,
+                FbsOrder.marketplace == "ozon",
+                FbsOrder.external_order_id.in_(served_external_ids),
+            )
+            .execution_options(populate_existing=True)
+        )).all()
+    ) if served_external_ids else []
     existing_by_external_id = {
         order.external_order_id: order for order in existing_orders
     }
@@ -877,7 +896,7 @@ async def _prelock_ozon_import_stock_products(
         external_id = _text(row, "posting_number", "order_id", "id")
         if external_id is None:
             continue
-        binding = await _binding_for_row(session, tenant_id, seller_id, row)
+        binding = bindings_by_external_id.get(external_id)
         if not _warehouse_is_served_for_row(binding):
             continue
 
