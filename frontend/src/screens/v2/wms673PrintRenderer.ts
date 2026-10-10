@@ -90,8 +90,8 @@ function parsePdfTextReport(xml: string): PdfTextReport {
 // Coordinates keep every fragment tied to its actual PDF column and row.
 function pdfTable(report: PdfTextReport, geometry: GeometryReport): PdfTable {
   const geometryWidth = geometry.tableBounds.right - geometry.tableBounds.left
-  if (geometryWidth <= 0 || geometry.columnBounds.length !== 12) {
-    throw new Error('Браузер не вернул границы двенадцати колонок таблицы')
+  if (geometryWidth <= 0 || geometry.columnBounds.length !== 11) {
+    throw new Error('Браузер не вернул границы одиннадцати колонок таблицы')
   }
   const marginPoints = 10 * 72 / 25.4
   return {
@@ -105,9 +105,19 @@ function pdfTable(report: PdfTextReport, geometry: GeometryReport): PdfTable {
       const header = page.words.find((word) => word.text === 'РАЗМЕР')
       if (!header) throw new Error(`На странице ${(page.words[0]?.pageIndex ?? 0) + 1} PDF нет заголовка «РАЗМЕР»`)
       const footerTop = page.words.find((word) => word.text === 'Сформировано')?.yMin ?? Number.POSITIVE_INFINITY
+      // WMS-725 adds a summary outside the table. Identify its label at the
+      // left page margin, so a product containing the same words still counts
+      // as table content and remains subject to the existing bounds checks.
+      const totalTop = page.words.find((word) => word.text === 'Общее'
+        && Math.abs(word.xMin - marginPoints) < 2
+        && word.yMin > header.yMax && word.yMax < footerTop
+        && page.words.some((next) => next.text === 'количество:'
+          && next.xMin > word.xMax && Math.abs(next.yMin - word.yMin) < 1))?.yMin
+        ?? Number.POSITIVE_INFINITY
+      const tableEnd = Math.min(footerTop, totalTop)
       for (const word of page.words) {
         const centerX = (word.xMin + word.xMax) / 2
-        if (word.yMin <= header.yMax + 1 || word.yMax >= footerTop - 1) continue
+        if (word.yMin <= header.yMax + 1 || word.yMax >= tableEnd - 1) continue
         const column = columns.find((bounds) => centerX >= bounds.left - 0.5 && centerX <= bounds.right + 0.5)
         if (column) column.words.push(word)
       }
