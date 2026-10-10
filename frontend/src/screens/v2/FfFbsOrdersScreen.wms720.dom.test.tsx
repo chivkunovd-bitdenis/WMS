@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
-import { flush, headers, installNetwork, json, mount, order, page, refresh, row, select, SERVER_NOW, tab } from './test-support/fbsOrdersDom'
+import { cascadedValue, flush, headers, installNetwork, json, mount, order, page, refresh, row, select, SERVER_NOW, tab } from './test-support/fbsOrdersDom'
 import type { FbsWorklistOrder } from './fbsApi'
 
 const FIRST = 'https://images.example/720-first.jpg'
@@ -90,16 +90,10 @@ function sizing(id = 'order-a') {
     return { width: css.width, height: css.height, minHeight: css.minHeight, maxHeight: css.maxHeight, aspectRatio: css.aspectRatio, position: css.position, top: css.top, bottom: css.bottom }
   })
 }
-function adaptive(id: string, controlledHeight: number) {
+// WMS-756 R1 (заменяет WMS-720 R1): квадрат фото фиксирован 84×84 px и не тянется по высоте строки.
+function fixedSquare(id: string) {
   const rules = sizing(id)
-  for (const rule of rules) {
-    expect([rule.width, rule.height, rule.minHeight, rule.maxHeight], 'the old independent thumbnail size must not constrain the row photo').not.toContain('52px')
-    expect([rule.width, rule.height, rule.minHeight, rule.maxHeight]).not.toContain('56px')
-  }
-  const square = rules.some((rule) => /^(1|1\s*\/\s*1)$/.test(rule.aspectRatio) || (rule.width === rule.height && !['', 'auto', '0px'].includes(rule.width)))
-  const followsRow = rules.some((rule) => rule.height === `${controlledHeight}px` || rule.height === '100%' || (rule.position === 'absolute' && rule.top === '0px' && rule.bottom === '0px'))
-  expect(square, 'rendered CSS must retain a square sizing rule').toBe(true)
-  expect(followsRow, 'rendered dimensions must follow measured row content or a row-relative height').toBe(true)
+  expect(rules.some((rule) => rule.width === '84px' && rule.height === '84px'), 'rendered CSS keeps a fixed 84 px square').toBe(true)
 }
 
 function ozon() {
@@ -112,22 +106,25 @@ function ozon() {
 }
 
 describe('WMS-720 photo sizing rules, loading and neighboring calls without browser layout', () => {
-  it.each(['Новые', 'Отменённые'])('R3 fills the same square for absent, failed and working images on %s', async (label) => {
+  it.each(['Новые', 'Отменённые'])('R1/R3 keeps the same 84 px square for absent, failed and working images on %s', async (label) => {
     const item = order(); heights.set(item.id, 80)
     await open([item]); if (label !== 'Новые') await tab(label)
     await resized(); await enter()
     const assertFilledSquare = () => {
       const avatar = photo()
-      const anchor = avatar.parentElement!
-      const frame = anchor.parentElement!
-      expect(getComputedStyle(anchor).width).toBe('100%')
-      expect(getComputedStyle(anchor).height).toBe('100%')
-      expect(getComputedStyle(anchor).flexShrink).toBe('0')
-      expect(getComputedStyle(avatar).width).toBe('100%')
-      expect(getComputedStyle(avatar).height).toBe('100%')
-      expect(getComputedStyle(frame).width).toBe('100%')
-      expect(getComputedStyle(frame).height).toBe('100%')
-      adaptive(item.id, 80)
+      const wrapper = avatar.parentElement!   // обёртка с tabindex: 100% от слоя фото
+      const slot = wrapper.parentElement!     // слой фото (LazyProductPhotoThumb): 84 px
+      const frame = slot.parentElement!       // рамка в ячейке «Товар»: 84 px, по центру строки
+      expect(getComputedStyle(wrapper).width).toBe('100%')
+      expect(getComputedStyle(wrapper).height).toBe('100%')
+      expect(getComputedStyle(slot).width).toBe('84px')
+      expect(getComputedStyle(slot).height).toBe('84px')
+      expect(getComputedStyle(slot).flexShrink).toBe('0')
+      expect(getComputedStyle(avatar).width).toBe('84px')
+      expect(getComputedStyle(avatar).height).toBe('84px')
+      expect(getComputedStyle(frame).width).toBe('84px')
+      expect(getComputedStyle(frame).height).toBe('84px')
+      fixedSquare(item.id)
     }
     expect(photo().querySelector('img')).toBeNull(); assertFilledSquare()
     const before = sizing()
@@ -135,17 +132,17 @@ describe('WMS-720 photo sizing rules, loading and neighboring calls without brow
     expect(photo().querySelector('img')).toBeNull(); assertFilledSquare()
     item.product.image_url = WORKING; await refresh(); await finish(WORKING)
     expect(photo().querySelector('img')?.getAttribute('src')).toBe(WORKING)
-    expect(getComputedStyle(photo().querySelector('img')!).objectFit).toBe('cover')
+    expect(cascadedValue(photo().querySelector('img')!, 'object-fit')).toBe('contain')
     assertFilledSquare(); expect(sizing()).toEqual(before)
   })
 
-  it.each(['Новые', 'Отменённые'])('C1 follows controlled row content heights without the old 52/56 px limit on %s', async (label) => {
+  it.each(['Новые', 'Отменённые'])('C1 keeps the 84 px square for short and tall rows, whatever their measured height, on %s', async (label) => {
     const short = order('short'); const long = order('long'); long.product.name = 'Длинное название '.repeat(15)
     heights.set('short', 80); heights.set('long', 160)
     await open([short, long]); if (label !== 'Новые') await tab(label)
-    await resized(); adaptive('short', 80); adaptive('long', 160)
+    await resized(); fixedSquare('short'); fixedSquare('long')
     const before = sizing('long'); await resized(); expect(sizing('long')).toEqual(before)
-    heights.set('long', 200); await resized(); adaptive('long', 200)
+    heights.set('long', 200); await resized(); fixedSquare('long')
   })
 
   it.each([['Новые', true], ['Новые', false], ['Отменённые', true], ['Отменённые', false]] as const)('C2 preserves one Ozon photo and all positions on %s with first photo present=%s', async (label, present) => {
@@ -162,27 +159,27 @@ describe('WMS-720 photo sizing rules, loading and neighboring calls without brow
     expect(photo().querySelector('img')?.getAttribute('src')).toBe(present ? FIRST : PRODUCT)
   })
 
-  it('C2 applies whole-order sizing to multi-position Ozon rather than the first position', async () => {
-    heights.set('order-a', 180); await open([ozon()]); await resized(); adaptive('order-a', 180)
+  it('C2 keeps one 84 px square for a multi-position Ozon row, not sized by the first position', async () => {
+    heights.set('order-a', 180); await open([ozon()]); await resized(); fixedSquare('order-a')
   })
 
-  it.each(['square', 'portrait', 'landscape'])('C3 retains cover scaling and stable sizing rules for a %s source on refresh', async (shape) => {
+  it.each(['square', 'portrait', 'landscape'])('C3 keeps contain scaling and stable sizing rules for a %s source on refresh', async (shape) => {
     const item = order(); item.product.image_url = `https://images.example/720-${shape}.jpg`
     await open([item]); await enter(); await finish(item.product.image_url)
     const image = photo().querySelector('img')!
-    expect(image).toBeTruthy(); expect(getComputedStyle(image).objectFit).toBe('cover')
+    expect(image).toBeTruthy(); expect(cascadedValue(image, 'object-fit')).toBe('contain')
     const before = sizing(); await refresh(); await finish(item.product.image_url)
     expect(sizing()).toEqual(before)
     expect(photo().querySelector('img')?.getAttribute('src')).toBe(item.product.image_url)
   })
 
-  it('C3 applies a square row-relative area consistently to different image sources', async () => {
+  it('C3 gives every image source the same fixed 84 px square', async () => {
     const items = ['square', 'portrait', 'landscape'].map((shape) => {
       const item = order(shape); item.product.image_url = `https://images.example/720-${shape}.jpg`
       heights.set(shape, 120); return item
     })
     await open(items); await resized()
-    items.forEach((item) => adaptive(item.id, 120))
+    items.forEach((item) => fixedSquare(item.id))
   })
 
   it.each([undefined, null, ''])('C4 restores a missing photo source %s without replacing the area or hiding actions', async (source) => {

@@ -143,3 +143,40 @@ export async function search(value: string) {
 export async function refresh() {
   await click(Array.from(document.querySelectorAll('button')).find((node) => node.textContent === 'Обновить') ?? null)
 }
+
+/**
+ * Значение свойства, которое выигрывает в браузере для узла. jsdom при getComputedStyle берёт
+ * последнее совпавшее правило и не учитывает специфичность селектора, а в браузере выигрывает
+ * правило с большей специфичностью (WMS-756: правило обёртки «фото img» 0,1,1 против правила
+ * MUI Avatar 0,1,0). Здесь правила сравниваются по специфичности, при равенстве побеждает последнее.
+ */
+export function cascadedValue(node: Element, property: string): string {
+  let best: { value: string; specificity: number; order: number } | null = null
+  let order = 0
+  for (const sheet of Array.from(document.styleSheets)) {
+    for (const rule of Array.from(sheet.cssRules)) {
+      order += 1
+      const styled = rule as CSSStyleRule
+      const value = styled.style?.getPropertyValue(property)
+      if (typeof styled.selectorText !== 'string' || !value) continue
+      for (const part of styled.selectorText.split(',')) {
+        const selector = part.trim()
+        let matches = false
+        try { matches = node.matches(selector) } catch { matches = false }
+        if (!matches) continue
+        const specificity = specificityOf(selector)
+        if (!best || specificity > best.specificity || (specificity === best.specificity && order > best.order)) {
+          best = { value, specificity, order }
+        }
+      }
+    }
+  }
+  return best?.value ?? ''
+}
+
+function specificityOf(selector: string): number {
+  const ids = (selector.match(/#[\w-]+/g) ?? []).length
+  const classes = (selector.match(/\.[\w-]+|\[[^\]]*\]|::?[\w-]+/g) ?? []).length
+  const elements = (selector.replace(/\[[^\]]*\]/g, '').match(/(^|[\s>+~])[a-zA-Z][\w-]*/g) ?? []).length
+  return ids * 10000 + classes * 100 + elements
+}

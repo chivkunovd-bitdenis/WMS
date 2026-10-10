@@ -106,7 +106,7 @@ describe('WMS-718 applied header styles and DOM state, without layout claims', (
       { id: 'pos-2', product_id: 'pos-2', name: 'Вторая позиция', seller_article: 'ART-2', sku: 'SKU-2', barcode: 'BAR-2', size: 'XL', quantity: 1, reserved_quantity: 1, picked_quantity: 0 },
     ]
     await open([wb, ozon]); if (label !== 'Новые') await tab(label)
-    expect(headers()).toEqual(['', 'Товар', 'Артикул продавца', 'Размер', 'ШК', 'Селлер', 'Маршрут сдачи', 'Отгрузить до', ...(label === 'Новые' ? [] : ['Статус'])])
+    expect(headers()).toEqual(['', 'Товар', 'Артикул продавца', 'Размер', 'ШК', 'Селлер', 'Маршрут сдачи', 'Прошло с заказа', ...(label === 'Новые' ? [] : ['Статус'])])
     for (const item of [wb, ozon]) {
       consistentCells(row(item.id))
       expect(row(item.id).closest('table')).toBe(table())
@@ -157,7 +157,7 @@ describe('WMS-718 applied header styles and DOM state, without layout claims', (
   it.each(['В работе', 'В доставке', 'Завершённые', 'Отменённые'])('C5 preserves %s columns, row spans and one sticky header', async (label) => {
     await open([order()], true); await tab(label)
     if (label === 'Отменённые') {
-      expect(headers()).toEqual(expect.arrayContaining(['Товар', 'Селлер', 'Маршрут сдачи', 'Отгрузить до', 'Статус']))
+      expect(headers()).toEqual(expect.arrayContaining(['Товар', 'Селлер', 'Маршрут сдачи', 'Прошло с заказа', 'Статус']))
       consistentCells(row())
     } else {
       expect(headers()).toEqual(['Номер / название поставки', 'Селлер', 'Склад', 'Заказы / единицы', 'Короба', 'Статус', 'Печать'])
@@ -174,7 +174,7 @@ describe('WMS-718 applied header styles and DOM state, without layout claims', (
     assertStickyStructure()
     if (label === 'Отменённые' && Array.from(document.querySelectorAll('[role="tab"]')).some((node) => node.textContent === 'Просрочены')) {
       await tab('Просрочены')
-      expect(headers()).toEqual(expect.arrayContaining(['Товар', 'Селлер', 'Маршрут сдачи', 'Отгрузить до', 'Статус']))
+      expect(headers()).toEqual(expect.arrayContaining(['Товар', 'Селлер', 'Маршрут сдачи', 'Прошло с заказа', 'Статус']))
       consistentCells(row()); assertStickyStructure()
     }
     // No requirement to add an overdue tab when WMS-692 removes it.
