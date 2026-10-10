@@ -247,7 +247,7 @@ jobs:
         id: printagent
         continue-on-error: true
         working-directory: .
-        run: python -m pytest -q tools/print-agent/test_wms_print_direct.py tools/print-agent/test_wms_print_runtime.py -k 'not test_windows_cmd_synthetic_queue_receipt' --junitxml="$RUNNER_TEMP/native-print.xml"
+        run: python -m pytest -q tools/print-agent/test_wms_print_direct.py tools/print-agent/test_wms_print_runtime.py tools/print-agent/test_wms762_startdoc.py -k 'not test_windows_cmd_synthetic_queue_receipt' --junitxml="$RUNNER_TEMP/native-print.xml"
       - name: Fail only after reporting all independent checks
         if: always()
         env:
@@ -614,11 +614,21 @@ jobs:
       - run: python -m pip install pytest
       - name: Persist receipt and recover unknown outcome on Windows
         run: python -m pytest -q tools/print-agent/test_wms_print_direct.py tools/print-agent/test_wms_print_runtime.py -k "not test_safe_synthetic_queue_runs_real_child_process_once and not test_actual_process_exit_after_spool_acceptance_recovers_without_second_submit" --junitxml=native-print-windows.xml
+      # WMS-762: настоящая pywin32 + «Microsoft Print to PDF» (StartDoc возвращает None).
+      - run: python -m pip install pywin32==311 Pillow==11.3.0 PyMuPDF==1.26.4
+      - name: Real Windows print to PDF without StartDoc job number (WMS-762)
+        run: python -m pytest -q tools/print-agent/test_wms762_startdoc.py tools/print-agent/test_wms762_real_windows.py --junitxml=native-print-windows-wms762.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: printer-windows-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: native-print-windows.xml
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms762-windows-pdf-print-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: native-print-windows-wms762.xml
           retention-days: 14
 
   process-proof:
