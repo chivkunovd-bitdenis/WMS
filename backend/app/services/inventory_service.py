@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Literal, cast
 
@@ -69,6 +70,28 @@ async def lock_stock_product(
             .execution_options(populate_existing=True)
         )
     ).one_or_none()
+
+
+async def lock_stock_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: Iterable[uuid.UUID],
+) -> None:
+    """Lock every product row in a transaction using one stable database order."""
+    unique_product_ids = sorted(set(product_ids), key=str)
+    if not unique_product_ids:
+        return
+    products = await session.scalars(
+        select(Product)
+        .where(
+            Product.tenant_id == tenant_id,
+            Product.id.in_(unique_product_ids),
+        )
+        .order_by(Product.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    products.all()
 
 
 async def update_fbs_order_reservation(

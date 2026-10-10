@@ -405,6 +405,15 @@ async def write_off_order(
         for row in ledger.ozon_positions_json:
             if row.get("movement_id"):
                 remaining[uuid.UUID(str(row["product_id"]))] -= int(str(row["quantity"]))
+    await inv_svc.lock_stock_products(
+        session,
+        tenant_id,
+        {
+            uuid.UUID(str(row["product_id"]))
+            for row in ledger.ozon_positions_json
+            if not row.get("movement_id") and not row.get("cancelled_postings")
+        },
+    )
     for original in ledger.ozon_positions_json:
         row = dict(original)
         completed_recipe.append(row)

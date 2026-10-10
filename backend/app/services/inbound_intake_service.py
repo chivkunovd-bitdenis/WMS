@@ -1692,13 +1692,19 @@ async def complete_receiving(
     if req.status == STATUS_DRAFT and is_ff_inbound(req):
         if not req.lines:
             raise InboundIntakeError("submit_empty")
+    elif req.status not in RECEIVING_STATUSES:
+        raise InboundIntakeError("not_verifying")
+
+    await inv_svc.lock_stock_products(
+        session, tenant_id, {line.product_id for line in req.lines}
+    )
+
+    if req.status == STATUS_DRAFT and is_ff_inbound(req):
         # Only an editable FF draft may adopt the quantity entered before this release.
         for line in req.lines:
             if line.actual_qty is None:
                 line.actual_qty = line.expected_qty
         req.primary_accepted_at = datetime.now(UTC)
-    elif req.status not in RECEIVING_STATUSES:
-        raise InboundIntakeError("not_verifying")
     await sync_request_actuals_from_boxes(session, req)
     line_discrepancy = False
     ff_document = is_ff_inbound(req)
@@ -1889,6 +1895,11 @@ async def post_all_remaining(
         await session.commit()
         await session.refresh(req)
         return req
+    await inv_svc.lock_stock_products(
+        session,
+        tenant_id,
+        {line.product_id for line, _remaining in to_receive},
+    )
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )
@@ -2069,6 +2080,18 @@ async def apply_box_putaway(
 
     req, box = await _get_box_for_putaway(session, tenant_id, request_id, box_id)
 
+    whole_box = line_items is None
+    if whole_box:
+        line_items = [
+            (bl.product_id, box_line_remaining_qty(bl))
+            for bl in box.lines
+            if box_line_remaining_qty(bl) > 0
+        ]
+    if line_items:
+        await inv_svc.lock_stock_products(
+            session, tenant_id, {product_id for product_id, _qty in line_items}
+        )
+
     if await inbound_box_svc.request_has_boxes(session, tenant_id, request_id):
         await sync_request_actuals_from_boxes(session, req)
 
@@ -2080,13 +2103,6 @@ async def apply_box_putaway(
     if sorting_loc_svc.is_sorting_location(loc):
         raise InboundIntakeError("sorting_location_reserved")
 
-    whole_box = line_items is None
-    if whole_box:
-        line_items = [
-            (bl.product_id, box_line_remaining_qty(bl))
-            for bl in box.lines
-            if box_line_remaining_qty(bl) > 0
-        ]
     if not line_items:
         raise InboundIntakeError("nothing_to_putaway")
     moved_qty = sum(qty for _product_id, qty in line_items)
@@ -2641,6 +2657,11 @@ async def complete_distribution(
             raise InboundIntakeError("qty_exceeds_accepted")
 
     posted_rows = await _distribution_posted_quantities(session, req, rows)
+    await inv_svc.lock_stock_products(
+        session,
+        tenant_id,
+        {row.product_id for row in rows},
+    )
     for r in rows:
         line = lines_by_product[r.product_id]
         quantity_to_post = r.quantity - posted_rows.get(r.id, 0)
@@ -2700,6 +2721,15 @@ async def reopen_receiving(
     if any(ln.posted_qty > 0 for ln in req.lines):
         raise InboundIntakeError("already_posted_partial")
 
+    await inv_svc.lock_stock_products(
+        session,
+        tenant_id,
+        {
+            line.product_id
+            for line in req.lines
+            if _accepted_qty_for_line(line) > 0
+        },
+    )
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )

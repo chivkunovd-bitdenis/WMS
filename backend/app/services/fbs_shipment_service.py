@@ -1457,6 +1457,41 @@ async def _write_off_delivered_orders_once(
         for item in (source_plan.resolutions if source_plan is not None else ())
     }
 
+    stock_product_ids: set[uuid.UUID] = set()
+    for order in active_orders:
+        ledger = existing_ledgers.get(order.id)
+        resolution = resolutions.get(order.id)
+        if order.marketplace == "ozon":
+            if order.product_id is not None:
+                stock_product_ids.add(order.product_id)
+            stock_product_ids.update(
+                position.product_id
+                for position in order.product_positions
+                if position.product_id is not None
+            )
+        if ledger is None:
+            if resolution is not None:
+                stock_product_ids.add(resolution.product_id)
+            continue
+
+        if ledger.shipment_movement_id is None:
+            if ledger.product_id is not None:
+                stock_product_ids.add(ledger.product_id)
+            if resolution is not None:
+                stock_product_ids.add(resolution.product_id)
+        stock_product_ids.update(
+            uuid.UUID(str(row["product_id"]))
+            for row in (ledger.ozon_positions_json or [])
+            if not row.get("movement_id") and not row.get("cancelled_postings")
+        )
+    if proved_quantities_by_order is not None:
+        stock_product_ids.update(
+            product_id
+            for quantities in proved_quantities_by_order.values()
+            for product_id in quantities
+        )
+    await inventory_svc.lock_stock_products(session, supply.tenant_id, stock_product_ids)
+
     for order in active_orders:
         ledger = existing_ledgers.get(order.id)
         if order.marketplace == "ozon" and (

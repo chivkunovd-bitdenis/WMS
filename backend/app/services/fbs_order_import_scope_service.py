@@ -54,7 +54,13 @@ async def import_wb_order_rows(
             for binding in (await session.execute(stmt)).scalars().all()
         }
 
-    from app.models.fbs_order import FbsOrder
+    from app.models.fbs_order import (
+        FbsOrder,
+        FbsOrderProduct,
+        FbsOrderProductReservation,
+        FbsOrderReservation,
+    )
+    from app.services import inventory_service, wb_marketplace_orders_service
     from app.services.fbs_packaging_integration_service import lock_order_batch_packaging_rows
 
     existing_ids = list((await session.scalars(select(FbsOrder.id).where(
@@ -69,13 +75,76 @@ async def import_wb_order_rows(
     await lock_order_batch_packaging_rows(session, tenant_id, existing_ids)
     # Historical fulfilled orders still need price evidence after a warehouse binding
     # becomes inactive. This does not import unserved orders or change their workflow.
-    known_orders = {wb_id: order_id for wb_id, order_id in (await session.execute(
-        select(FbsOrder.wb_order_id, FbsOrder.id).where(
+    known_order_rows = list((await session.scalars(
+        select(FbsOrder).where(
         FbsOrder.tenant_id == tenant_id, FbsOrder.seller_id == seller_id,
         FbsOrder.marketplace == "wb", FbsOrder.wb_order_id.in_([
             int(row["id"]) for row in rows if row.get("id") is not None
         ]),
-    ))).all()}
+    ))).all())
+    known_orders = {order.wb_order_id: order.id for order in known_order_rows}
+    known_orders_by_wb_id = {order.wb_order_id: order for order in known_order_rows}
+
+    # Resolve this transaction's complete stock-lock set before the first
+    # per-order reservation. Reservation helpers keep their own row locks until
+    # commit, so processing rows in provider order can otherwise invert the
+    # order across imported orders.
+    stock_product_ids: set[uuid.UUID] = set()
+    affected_order_ids: set[uuid.UUID] = set()
+    for row in rows:
+        warehouse_id = _warehouse_id(row)
+        if (
+            row.get("id") is None
+            or warehouse_id is None
+            or scopes.get(warehouse_id) is not True
+        ):
+            continue
+        existing = known_orders_by_wb_id.get(int(row["id"]))
+        if existing is not None:
+            affected_order_ids.add(existing.id)
+            if existing.product_id is not None:
+                stock_product_ids.add(existing.product_id)
+        if existing is None or existing.product_id is None:
+            wb_nm_id = row.get("nmId")
+            wb_chrt_id = row.get("chrtId")
+            product = await wb_marketplace_orders_service._map_product(
+                session,
+                tenant_id,
+                seller_id,
+                wb_barcode=(
+                    wb_marketplace_orders_service._first_barcode(row)
+                    or (existing.wb_barcode if existing is not None else None)
+                ),
+                wb_nm_id=int(wb_nm_id) if wb_nm_id is not None else None,
+                wb_chrt_id=(
+                    int(wb_chrt_id)
+                    if wb_chrt_id is not None
+                    else (existing.wb_chrt_id if existing is not None else None)
+                ),
+            )
+            if product is not None:
+                stock_product_ids.add(product.id)
+
+    if affected_order_ids:
+        stock_product_ids.update(
+            (await session.scalars(
+                select(FbsOrderReservation.product_id).where(
+                    FbsOrderReservation.fbs_order_id.in_(affected_order_ids)
+                )
+            )).all()
+        )
+        stock_product_ids.update(
+            (await session.scalars(
+                select(FbsOrderProductReservation.product_id)
+                .join(
+                    FbsOrderProduct,
+                    FbsOrderProduct.id == FbsOrderProductReservation.order_product_id,
+                )
+                .where(FbsOrderProduct.order_id.in_(affected_order_ids))
+            )).all()
+        )
+    await inventory_service.lock_stock_products(session, tenant_id, stock_product_ids)
+
     stats.received += len(rows)
     for row in rows:
         warehouse_id = _warehouse_id(row)
