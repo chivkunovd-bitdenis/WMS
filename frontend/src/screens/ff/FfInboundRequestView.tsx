@@ -443,6 +443,24 @@ function inboundStatusChipColor(
 const GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{14}$/
 const LEGACY_GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9A-F]{12}$/
 
+// WMS-755: скан наклейки короба/грузоместа в приёмке открывает его наполнение,
+// как кнопка «Наполнить». Совпадение только точное (без учёта регистра).
+export type InboundScannedContainer = { kind: 'box' | 'cargo_place'; id: string }
+
+export function findInboundContainerByScan(
+  code: string,
+  boxes: ReadonlyArray<{ id: string; internal_barcode: string }>,
+  cargoPlaces: ReadonlyArray<{ id: string; internal_barcode: string }>,
+): InboundScannedContainer | null {
+  const raw = code.trim().toUpperCase()
+  if (!raw) return null
+  const box = boxes.find((one) => one.internal_barcode.trim().toUpperCase() === raw)
+  if (box) return { kind: 'box', id: box.id }
+  const place = cargoPlaces.find((one) => one.internal_barcode.trim().toUpperCase() === raw)
+  if (place) return { kind: 'cargo_place', id: place.id }
+  return null
+}
+
 function inboundReceiptDate(value: string | null | undefined): string {
   if (!value) return '—'
   const normalized = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`
@@ -1825,6 +1843,11 @@ export function FfInboundRequestView({
         await marking.attach(code, lastProductScan.current)
         return
       }
+      const scannedContainer = findInboundContainerByScan(code, detail?.boxes ?? [], cargoPlaces)
+      if (scannedContainer) {
+        openScannedContainer(scannedContainer)
+        return
+      }
       lastProductScan.current = null
       receivingScanReconciler.cancel()
       ++loadDetailSeq.current
@@ -1922,6 +1945,22 @@ export function FfInboundRequestView({
 
   const openBoxAddDialog = (boxId: string) => {
     setBoxAddDialogBoxId(boxId)
+  }
+
+  const openScannedContainer = (container: InboundScannedContainer) => {
+    if (container.kind === 'box') {
+      setCargoAddDialogPlaceId(null)
+      setBoxAddDialogBoxId(container.id)
+    } else {
+      setBoxAddDialogBoxId(null)
+      setCargoAddDialogPlaceId(container.id)
+    }
+  }
+
+  // Скан другого короба внутри окна наполнения — переход в него (WMS-755).
+  const switchToScannedContainer = (code: string): (() => void) | null => {
+    const container = findInboundContainerByScan(code, detail?.boxes ?? [], cargoPlaces)
+    return container ? () => openScannedContainer(container) : null
   }
 
   const createCargoPlaces = async () => {
@@ -3933,8 +3972,10 @@ export function FfInboundRequestView({
 
       {boxAddDialogBox && boxAddDialogBoxId ? (
         <FfInboundBoxAddDialog
+          key={`box-${boxAddDialogBoxId}`}
           open
           onClose={() => setBoxAddDialogBoxId(null)}
+          onContainerScan={switchToScannedContainer}
           requestId={requestId}
           boxId={boxAddDialogBoxId}
           boxLabel={`Короб ${inboundBoxDisplayLabel(boxAddDialogBox.box_number, boxAddDialogBox.internal_barcode, numberedInboundBoxLabels)}`}
@@ -3958,8 +3999,10 @@ export function FfInboundRequestView({
             if (!place) return null
             return (
               <FfInboundBoxAddDialog
+                key={`cargo-${place.id}`}
                 open
                 onClose={() => setCargoAddDialogPlaceId(null)}
+                onContainerScan={switchToScannedContainer}
                 requestId={requestId}
                 boxId={place.id}
                 boxLabel={`Грузоместо № ${place.place_number}`}

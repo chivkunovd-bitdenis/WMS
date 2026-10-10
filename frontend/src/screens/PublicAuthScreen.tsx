@@ -275,12 +275,12 @@ export function PublicAuthScreen({
       <form data-testid="login-form" noValidate onSubmit={onLogin}>
         <Box sx={fieldStackSx}>
           <TextField
-            name="email"
-            type="email"
-            label="Email"
+            name="login"
+            type="text"
+            label="Email или ФИО"
             required
             fullWidth
-            autoComplete="email"
+            autoComplete="username"
           />
           <TextField
             name="password"
