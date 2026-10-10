@@ -2177,6 +2177,20 @@ async def apply_box_putaway(
             )
         )
 
+    if whole_box:
+        from app.services.warehouse_map_service import _place_container
+
+        await _place_container(
+            session,
+            tenant_id,
+            req.warehouse_id,
+            "box",
+            box_id,
+            "cell",
+            None,
+            storage_location_id,
+        )
+
     _maybe_set_distribution_completed(req)
     _maybe_complete_request(req)
     await _record_charge_if_done(session, req, performer_id=performer_id)
