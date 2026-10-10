@@ -1717,13 +1717,19 @@ async def complete_receiving(
     if req.status == STATUS_DRAFT and is_ff_inbound(req):
         if not req.lines:
             raise InboundIntakeError("submit_empty")
+    elif req.status not in RECEIVING_STATUSES:
+        raise InboundIntakeError("not_verifying")
+
+    await inv_svc.lock_stock_products(
+        session, tenant_id, {line.product_id for line in req.lines}
+    )
+
+    if req.status == STATUS_DRAFT and is_ff_inbound(req):
         # Only an editable FF draft may adopt the quantity entered before this release.
         for line in req.lines:
             if line.actual_qty is None:
                 line.actual_qty = line.expected_qty
         req.primary_accepted_at = datetime.now(UTC)
-    elif req.status not in RECEIVING_STATUSES:
-        raise InboundIntakeError("not_verifying")
     from app.services import inbound_intake_box_service as inbound_box_svc
 
     await inbound_box_svc.close_open_boxes_for_completion(
@@ -2101,6 +2107,18 @@ async def apply_box_putaway(
 
     req, box = await _get_box_for_putaway(session, tenant_id, request_id, box_id)
 
+    whole_box = line_items is None
+    if whole_box:
+        line_items = [
+            (bl.product_id, box_line_remaining_qty(bl))
+            for bl in box.lines
+            if box_line_remaining_qty(bl) > 0
+        ]
+    if line_items:
+        await inv_svc.lock_stock_products(
+            session, tenant_id, {product_id for product_id, _qty in line_items}
+        )
+
     if await inbound_box_svc.request_has_boxes(session, tenant_id, request_id):
         await sync_request_actuals_from_boxes(session, req)
 
@@ -2112,13 +2130,6 @@ async def apply_box_putaway(
     if sorting_loc_svc.is_sorting_location(loc):
         raise InboundIntakeError("sorting_location_reserved")
 
-    whole_box = line_items is None
-    if whole_box:
-        line_items = [
-            (bl.product_id, box_line_remaining_qty(bl))
-            for bl in box.lines
-            if box_line_remaining_qty(bl) > 0
-        ]
     if not line_items:
         raise InboundIntakeError("nothing_to_putaway")
     moved_qty = sum(qty for _product_id, qty in line_items)
