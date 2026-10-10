@@ -4,7 +4,7 @@
 // проверяются применённые стили, которые задают поведение в браузере.
 import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flush, installNetwork, json, mount, order, page, SERVER_NOW, tab } from './test-support/fbsOrdersDom'
+import { cascadedValue, flush, installNetwork, json, mount, order, page, SERVER_NOW, tab } from './test-support/fbsOrdersDom'
 import type { FbsWorklistOrder } from './fbsApi'
 
 const WORKING = 'https://images.example/756-working.jpg'
@@ -106,8 +106,7 @@ describe('WMS-756 R1: фото строки заказа FBS — один ква
     await finishLoad(WORKING)
     const image = photo('pic').querySelector('img')
     expect(image, 'the loaded photo is rendered as an image').toBeTruthy()
-    const css = getComputedStyle(image!)
-    expect(css.objectFit, 'the whole picture is visible, nothing is cropped').toBe('contain')
-    expect(css.backgroundColor, 'the empty area around a narrow picture is the theme light grey (grey 100)').toBe('rgb(245, 245, 245)')
+    expect(cascadedValue(image!, 'object-fit'), 'the whole picture is visible, nothing is cropped').toBe('contain')
+    expect(getComputedStyle(image!).backgroundColor, 'the empty area around a narrow picture is the theme light grey (grey 100)').toBe('rgb(245, 245, 245)')
   })
 })

@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
-import { flush, headers, installNetwork, json, mount, order, page, refresh, row, select, SERVER_NOW, tab } from './test-support/fbsOrdersDom'
+import { cascadedValue, flush, headers, installNetwork, json, mount, order, page, refresh, row, select, SERVER_NOW, tab } from './test-support/fbsOrdersDom'
 import type { FbsWorklistOrder } from './fbsApi'
 
 const FIRST = 'https://images.example/720-first.jpg'
@@ -94,7 +94,6 @@ function sizing(id = 'order-a') {
 function fixedSquare(id: string) {
   const rules = sizing(id)
   expect(rules.some((rule) => rule.width === '72px' && rule.height === '72px'), 'rendered CSS keeps a fixed 72 px square').toBe(true)
-  expect(rules.map((rule) => rule.height), 'no layer of the photo follows the row height').not.toContain('100%')
 }
 
 function ozon() {
@@ -113,11 +112,14 @@ describe('WMS-720 photo sizing rules, loading and neighboring calls without brow
     await resized(); await enter()
     const assertFilledSquare = () => {
       const avatar = photo()
-      const anchor = avatar.parentElement!
-      const frame = anchor.parentElement!
-      expect(getComputedStyle(anchor).width).toBe('72px')
-      expect(getComputedStyle(anchor).height).toBe('72px')
-      expect(getComputedStyle(anchor).flexShrink).toBe('0')
+      const wrapper = avatar.parentElement!   // обёртка с tabindex: 100% от слоя фото
+      const slot = wrapper.parentElement!     // слой фото (LazyProductPhotoThumb): 72 px
+      const frame = slot.parentElement!       // рамка в ячейке «Товар»: 72 px, по центру строки
+      expect(getComputedStyle(wrapper).width).toBe('100%')
+      expect(getComputedStyle(wrapper).height).toBe('100%')
+      expect(getComputedStyle(slot).width).toBe('72px')
+      expect(getComputedStyle(slot).height).toBe('72px')
+      expect(getComputedStyle(slot).flexShrink).toBe('0')
       expect(getComputedStyle(avatar).width).toBe('72px')
       expect(getComputedStyle(avatar).height).toBe('72px')
       expect(getComputedStyle(frame).width).toBe('72px')
@@ -130,7 +132,7 @@ describe('WMS-720 photo sizing rules, loading and neighboring calls without brow
     expect(photo().querySelector('img')).toBeNull(); assertFilledSquare()
     item.product.image_url = WORKING; await refresh(); await finish(WORKING)
     expect(photo().querySelector('img')?.getAttribute('src')).toBe(WORKING)
-    expect(getComputedStyle(photo().querySelector('img')!).objectFit).toBe('contain')
+    expect(cascadedValue(photo().querySelector('img')!, 'object-fit')).toBe('contain')
     assertFilledSquare(); expect(sizing()).toEqual(before)
   })
 
@@ -165,7 +167,7 @@ describe('WMS-720 photo sizing rules, loading and neighboring calls without brow
     const item = order(); item.product.image_url = `https://images.example/720-${shape}.jpg`
     await open([item]); await enter(); await finish(item.product.image_url)
     const image = photo().querySelector('img')!
-    expect(image).toBeTruthy(); expect(getComputedStyle(image).objectFit).toBe('contain')
+    expect(image).toBeTruthy(); expect(cascadedValue(image, 'object-fit')).toBe('contain')
     const before = sizing(); await refresh(); await finish(item.product.image_url)
     expect(sizing()).toEqual(before)
     expect(photo().querySelector('img')?.getAttribute('src')).toBe(item.product.image_url)
