@@ -113,7 +113,7 @@ describe('WMS-719 size replaces SKU in the real FBS screen', () => {
     await open([order()])
     for (const label of ['Новые', 'Отменённые']) {
       if (label !== 'Новые') await tab(label)
-      expect(headers()).toEqual(expect.arrayContaining(['Товар', 'Селлер', 'Маршрут сдачи', 'Отгрузить до']))
+      expect(headers()).toEqual(expect.arrayContaining(['Товар', 'Селлер', 'Маршрут сдачи', 'Прошло с заказа']))
       expect(headers().includes('Статус')).toBe(label !== 'Новые')
     }
     for (const label of ['В работе', 'В доставке', 'Завершённые']) {
