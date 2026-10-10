@@ -123,27 +123,46 @@ async function checkComposition(
   // This existing message describes the WHOLE supply, not preparation or picking.
   expect(document.body.textContent?.includes('Поставка уже передана в WB'), `${checkpoint}: parent completion`)
     .toBe(phase === 'full')
-  await click(tab('Состав'))
-  const table = [...document.querySelectorAll<HTMLTableElement>('table')]
-    .find((element) => element.textContent?.includes('Заказ WB'))!
-  expect(table).toBeDefined()
-  const headers = [...table.querySelectorAll('thead th')].map((element) => element.textContent)
-  const pickIndex = headers.indexOf('Подбор')
-  expect(pickIndex).toBeGreaterThanOrEqual(0)
-  const rows = [...table.querySelectorAll('tbody tr')]
-  expect(rows).toHaveLength(2)
+  // WMS-723: the «Состав» tab is gone by owner decision. The identity of every
+  // order (WB order number, row, selection label) is read where the supply
+  // composition is now shown: the rows of the selected «Упаковка и маркировка» tab.
+  const rows = [...document.querySelectorAll<HTMLElement>('[data-order-id]')]
+  expect(rows, `${checkpoint}: exactly the two supply orders`).toHaveLength(2)
+  expect(tab('Состав'), `${checkpoint}: no «Состав» tab`).toBeUndefined()
   for (const orderId of [662000, 662001]) {
-    const row = rows.find((element) => element.textContent?.includes(`№${orderId}`))!
-    expect(row, `${checkpoint}: order ${orderId}`).toBeDefined()
-    expect(row.children[pickIndex].textContent, `${checkpoint}: picking stays independent`).toBe('Ожидает')
-    // Direct owner instruction 2026-10-06: undo the added composition chip.
-    // C19 picking/navigation/read-only protections below remain unchanged.
-    expect(row.querySelector('.MuiChip-root'), `${checkpoint}: baseline composition has no added chip`).toBeNull()
-    const link = row.querySelector(`[data-testid="fbs-composition-history-${phase}-${orderId}"]`)
-      ?? [...row.querySelectorAll('button')].find(node => node.textContent === `№${orderId}`)
-    expect(link, `${checkpoint}: existing order history action`).toBeTruthy()
-    expect(link!.parentElement?.tagName, `${checkpoint}: baseline direct cell layout`).toBe('TD')
+    const fixtureOrder = partial.orders.find((order) => order.wb_order_id === orderId)!
+    expect(fixtureOrder, `${checkpoint}: fixture order ${orderId}`).toBeDefined()
+    const row = rows.find((element) => element.getAttribute('data-order-id') === fixtureOrder.id)!
+    expect(row, `${checkpoint}: order ${orderId} row is bound to its own order id`).toBeDefined()
+    expect(row.textContent, `${checkpoint}: order ${orderId} number`).toContain(`заказ ${orderId}`)
+    const otherId = orderId === 662000 ? 662001 : 662000
+    expect(row.textContent, `${checkpoint}: order ${orderId} row does not carry ${otherId}`).not.toContain(`заказ ${otherId}`)
+    expect(row.querySelector(`input[aria-label="Выбрать заказ ${orderId}"]`), `${checkpoint}: order ${orderId} selection control`).not.toBeNull()
   }
+  // Picking stays independent of the parent supply status: what the operator sees
+  // on «Подбор» is the real picking screen, and both orders are still to be picked
+  // (2 of 2 left, nothing taken) in the partial and in the full phase, after open,
+  // reopen and page refresh.
+  await click(tab('Подбор'))
+  await vi.waitFor(() => {
+    expect(document.querySelector('[data-testid="fbs-pick-unified"]')?.textContent ?? '', `${checkpoint}: picking screen`)
+      .toMatch(/осталось снять из 2 по плану/)
+  }, { timeout: 3_000 })
+  const pickingText = document.querySelector('[data-testid="fbs-pick-unified"]')!.textContent ?? ''
+  expect(pickingText, `${checkpoint}: both orders still wait for picking`).toMatch(/2\s*штук осталось снять из 2 по плану/)
+  expect(pickingText, `${checkpoint}: picking screen is not shown as finished`).not.toMatch(/0\s*штук осталось/)
+  // The whole open «Подбор» panel, including the messages beside the picking screen.
+  const panelText = document.querySelector('[data-testid="fbs-pick-unified"]')!
+    .closest('.MuiDialogContent-root')!.textContent ?? ''
+  expect(panelText, `${checkpoint}: panel contains the picking screen`).toContain(pickingText)
+  // «Все товары подобраны» is for a current picking stage with everything taken; 2 of 2 are left.
+  expect(panelText, `${checkpoint}: no «all picked» message while 2 pieces are left`).not.toContain('Все товары подобраны')
+  // «Подбор завершён…» only says the supply is past the picking stage (stage ≠ current):
+  // absent in the assembling supply, present in the handed-over one (stage tracking).
+  expect(panelText.includes('Подбор завершён. Этот этап доступен только для просмотра.'), `${checkpoint}: past-stage notice`)
+    .toBe(phase === 'full')
+  await click(tab('Упаковка и маркировка'))
+  expect(tab('Упаковка и маркировка').getAttribute('aria-selected'), `${checkpoint}: back on packing`).toBe('true')
   // Reuse the real history with its saved creation event, without inventing events.
   await click(document.querySelector<HTMLElement>('[data-testid="fbs-supply-history-open"]')!)
   expect(document.querySelector('[data-testid="fbs-supply-history-timeline"]')?.textContent).toContain('Поставка создана')
@@ -168,7 +187,7 @@ async function checkComposition(
   expect(printTape).not.toHaveBeenCalled()
 }
 
-it('C19: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged', { timeout: 15_000 }, async () => {
+it('C19: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged', { timeout: 20_000 }, async () => {
   const immutableProof = JSON.stringify(proof)
   for (const phase of ['partial', 'full'] as const) {
     current = phase === 'partial' ? partial : full

@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
-  Alert,
   Box,
-  CircularProgress,
   IconButton,
   Paper,
   Stack,
@@ -11,8 +9,6 @@ import {
 import { alpha } from '@mui/material/styles'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
-import { apiUrl } from '../../api'
-import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { plural } from '../../utils/plural'
 
 export type FfInboundSummary = {
@@ -45,23 +41,14 @@ type Me = {
   seller_name?: string | null
 }
 
-type FbsCalendarRow = {
-  id: string
-  date: string
-  direction: string
-  boxes_count: number
-  shipment_type: 'FBS'
-  title: string
-}
-
 type ShipmentCalendarRow = {
   id: string
   date: string
   direction: string
   boxesCount: number
-  shipmentType: 'FBS' | 'FBO' | 'MP'
+  shipmentType: 'FBO' | 'MP'
   title: string
-  source: 'fbs' | 'fbo' | 'mp'
+  source: 'fbo' | 'mp'
 }
 
 type Props = {
@@ -115,68 +102,19 @@ const dayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
 export function FfDashboard({
   me,
-  token,
-  authHeaders,
   inboundSummaries: _inboundSummaries,
   outboundSummaries,
   mpUnloadSummaries = [],
   onOpenOutbound,
   onOpenMarketplaceUnload,
-  onOpenFbsSupply,
 }: Props) {
   const [monthOffset, setMonthOffset] = useState(0)
-  const [fbsRows, setFbsRows] = useState<FbsCalendarRow[]>([])
-  const [fbsBusy, setFbsBusy] = useState(false)
-  const [fbsError, setFbsError] = useState<string | null>(null)
-
   const visibleMonth = useMemo(() => {
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
   }, [monthOffset])
   const days = useMemo(() => monthGrid(visibleMonth), [visibleMonth])
-  const rangeStart = fmtKey(days[0]!)
-  const rangeEnd = fmtKey(days[days.length - 1]!)
-
-  useEffect(() => {
-    let cancelled = false
-    setFbsBusy(true)
-    setFbsError(null)
-    void fetch(apiUrl(`/operations/fbs-supplies/calendar?start_date=${rangeStart}&end_date=${rangeEnd}`), {
-      headers: authHeaders(token),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          throw new Error(await readApiErrorMessage(res))
-        }
-        return (await res.json()) as FbsCalendarRow[]
-      })
-      .then((rows) => {
-        if (!cancelled) setFbsRows(rows)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setFbsRows([])
-          setFbsError(err instanceof Error ? err.message : 'Не удалось загрузить календарь FBS.')
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setFbsBusy(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [authHeaders, rangeEnd, rangeStart, token])
-
   const shipmentRows = useMemo<ShipmentCalendarRow[]>(() => {
-    const fbs = fbsRows.map((row) => ({
-      id: row.id,
-      date: row.date,
-      direction: row.direction,
-      boxesCount: row.boxes_count,
-      shipmentType: 'FBS' as const,
-      title: row.title,
-      source: 'fbs' as const,
-    }))
     const mp = mpUnloadSummaries
       .filter((row) => row.status === 'submitted' && row.planned_shipment_date)
       .map((row) => ({
@@ -202,11 +140,11 @@ export function FfDashboard({
         title: 'FBO',
         source: 'fbo' as const,
       }))
-    return [...fbs, ...mp, ...fbo].sort((a, b) => {
+    return [...mp, ...fbo].sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date)
       return `${a.shipmentType}-${a.direction}`.localeCompare(`${b.shipmentType}-${b.direction}`)
     })
-  }, [fbsRows, mpUnloadSummaries, outboundSummaries])
+  }, [mpUnloadSummaries, outboundSummaries])
 
   const rowsByDay = useMemo(() => {
     const map = new Map<string, ShipmentCalendarRow[]>()
@@ -219,10 +157,6 @@ export function FfDashboard({
   }, [shipmentRows])
 
   const openRow = (row: ShipmentCalendarRow) => {
-    if (row.source === 'fbs') {
-      onOpenFbsSupply(row.id)
-      return
-    }
     if (row.source === 'mp') {
       onOpenMarketplaceUnload(row.id)
       return
@@ -272,12 +206,6 @@ export function FfDashboard({
           </Stack>
         </Stack>
       </Paper>
-
-      {fbsError ? (
-        <Alert severity="warning" data-testid="cal-01-fbs-load-error" data-task-id="CAL-01">
-          {fbsError}
-        </Alert>
-      ) : null}
 
       <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="ff-week-calendar" data-task-id="CAL-01">
         <Box
@@ -352,7 +280,7 @@ export function FfDashboard({
                         border: `1px solid ${alpha(theme.palette.primary.main, 0.18)}`,
                         borderRadius: 1,
                         cursor: 'pointer',
-                        bgcolor: row.shipmentType === 'FBS' ? alpha(theme.palette.success.main, 0.1) : alpha(theme.palette.info.main, 0.1),
+                        bgcolor: alpha(theme.palette.info.main, 0.1),
                         '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.12) },
                       })}
                       data-testid="cal-01-shipment-row"
@@ -375,14 +303,6 @@ export function FfDashboard({
         </Box>
       </Paper>
 
-      {fbsBusy ? (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} data-testid="cal-01-loading" data-task-id="CAL-01">
-          <CircularProgress size={18} />
-          <Typography variant="body2" color="text.secondary" data-task-id="CAL-01">
-            Обновляем календарь
-          </Typography>
-        </Stack>
-      ) : null}
     </Stack>
   )
 }

@@ -107,9 +107,17 @@ await run('S3-ozon-position-fields', async page => {
   const posting = row(page, 'ozon_new')
   await expect(posting).toContainText(fixture.orders.ozon_new.number)
   for (const position of fixture.positions) {
-    for (const value of [position.name, position.article, position.sku]) await expect(posting).toContainText(value)
+    for (const value of [position.name, position.article]) await expect(posting).toContainText(value)
   }
-  for (const column of ['Товар', 'Артикул продавца', 'SKU', 'ШК', 'Размер', 'Селлер', 'Маршрут сдачи', 'Отгрузить до']) await expect(page.getByTestId('fbs-worklist-table').getByRole('columnheader', { name: column, exact: true })).toBeVisible()
+  // WMS-719: the size column replaces SKU; each Ozon position shows its own size (or a dash) and no SKU is rendered.
+  const headerTexts = await page.getByTestId('fbs-worklist-table').locator('thead th').allInnerTexts()
+  assert(!headerTexts.includes('SKU'), 'SKU column must be gone from the order list')
+  const sizeIndex = headerTexts.indexOf('Размер')
+  assert(sizeIndex > 0, 'size column must exist')
+  const sizeValues = await posting.locator('td').nth(sizeIndex).locator('[data-fbs-position-content]').allInnerTexts()
+  assert.equal(sizeValues.length, fixture.positions.length, 'one size value per Ozon position')
+  assert(sizeValues.every(value => value.trim().length > 0), 'every Ozon position shows a size or a dash')
+  for (const column of ['Товар', 'Артикул продавца', 'Размер', 'ШК', 'Селлер', 'Маршрут сдачи', 'Отгрузить до']) await expect(page.getByTestId('fbs-worklist-table').getByRole('columnheader', { name: column, exact: true })).toBeVisible()
 })
 await run('S2-two-wb-warehouses-exact-membership', async page => {
   await choose(page, 'Маркетплейс', 'Wildberries')
