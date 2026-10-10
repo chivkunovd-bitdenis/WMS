@@ -343,6 +343,46 @@ async def _get_request_for_intake(
     return req
 
 
+async def _close_box_intake(
+    session: AsyncSession,
+    box: InboundIntakeBox,
+) -> None:
+    if box.intake_closed_at is not None:
+        raise InboundIntakeBoxError("box_closed")
+    if box.intake_opened_at is None:
+        raise InboundIntakeBoxError("no_open_box")
+    before = intake_svc.container_audit_fields(box)
+    box.intake_closed_at = datetime.now(UTC)
+    await intake_svc.record_container_mutation(
+        session,
+        box,
+        before=before,
+        after=intake_svc.container_audit_fields(box),
+    )
+
+
+async def close_open_boxes_for_completion(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> None:
+    """Close every open receiving box in the completion transaction."""
+    stmt = (
+        select(InboundIntakeBox)
+        .where(
+            InboundIntakeBox.tenant_id == tenant_id,
+            InboundIntakeBox.request_id == request_id,
+            InboundIntakeBox.intake_opened_at.is_not(None),
+            InboundIntakeBox.intake_closed_at.is_(None),
+        )
+        .order_by(InboundIntakeBox.box_number)
+    )
+    boxes = (await session.scalars(stmt)).all()
+    for box in boxes:
+        await _close_box_intake(session, box)
+    await session.flush()
+
+
 async def _open_box_for_request(
     session: AsyncSession, request_id: uuid.UUID
 ) -> InboundIntakeBox | None:
@@ -351,23 +391,7 @@ async def _open_box_for_request(
         InboundIntakeBox.intake_opened_at.is_not(None),
         InboundIntakeBox.intake_closed_at.is_(None),
     )
-    res = await session.execute(stmt)
-    return res.scalar_one_or_none()
-
-
-async def _close_open_boxes(session: AsyncSession, request_id: uuid.UUID) -> None:
-    open_box = await _open_box_for_request(session, request_id)
-    if open_box is None:
-        return
-    before = intake_svc.container_audit_fields(open_box)
-    open_box.intake_closed_at = datetime.now(UTC)
-    await intake_svc.record_container_mutation(
-        session,
-        open_box,
-        before=before,
-        after=intake_svc.container_audit_fields(open_box),
-    )
-    await session.flush()
+    return (await session.execute(stmt)).scalar_one_or_none()
 
 
 async def _total_in_other_boxes(
@@ -756,18 +780,7 @@ async def close_box_intake(
     box = await session.get(InboundIntakeBox, box_id)
     if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
         raise InboundIntakeBoxError("box_not_found")
-    if box.intake_closed_at is not None:
-        raise InboundIntakeBoxError("box_closed")
-    if box.intake_opened_at is None:
-        raise InboundIntakeBoxError("no_open_box")
-    before = intake_svc.container_audit_fields(box)
-    box.intake_closed_at = datetime.now(UTC)
-    await intake_svc.record_container_mutation(
-        session,
-        box,
-        before=before,
-        after=intake_svc.container_audit_fields(box),
-    )
+    await _close_box_intake(session, box)
     req_loaded = await intake_svc.get_request(session, tenant_id, request_id)
     if req_loaded is None:
         raise InboundIntakeBoxError("request_not_found")
