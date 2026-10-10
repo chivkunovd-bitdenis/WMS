@@ -160,7 +160,7 @@ describe('WMS-717 real order age with a server clock', () => {
     expect(pill().textContent).toBe('2 ч 05 мин')
     for (const label of ['В работе', 'В доставке', 'Завершённые']) {
       await tab(label)
-      expect(headers()).not.toContain('Отгрузить до')
+      expect(headers()).not.toContain('Прошло с заказа')
     }
   })
 })

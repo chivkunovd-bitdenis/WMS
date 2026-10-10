@@ -396,16 +396,18 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
       setAuthBusy(true)
       try {
         const fd = new FormData(e.currentTarget)
-        const email = String(fd.get('email') ?? '').trim()
+        const login = String(fd.get('login') ?? '').trim()
         const password = String(fd.get('password') ?? '')
-        if (!email) {
-          setError('Укажите email.')
+        if (!login) {
+          setError('Укажите email или ФИО.')
           return
         }
-        const res = await fetch(apiUrl('/auth/login'), {
+        // WMS-753: сотрудник без почты входит по ФИО и паролю — как на ТСД.
+        const byEmail = login.includes('@')
+        const res = await fetch(apiUrl(byEmail ? '/auth/login' : '/auth/login-by-name'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, portal }),
+          body: JSON.stringify(byEmail ? { email: login, password, portal } : nameLoginPayload(login, password, '')),
         })
         if (res.status === 403) {
           const text = await res.text()

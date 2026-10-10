@@ -951,6 +951,69 @@ async def test_wms681_qr_refusal_preserves_old_group_and_next_explicit_retry(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("wb_error_kind", ["upstream_error", "business_error"])
+async def test_wms761_qr_retry_after_wb_429_opens_new_attempt_and_gets_qr(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+    wb_error_kind: str,
+) -> None:
+    # WMS-761: a WB 429 (rate limit) is a failed create, not a definitive refusal.
+    # The first create stored the 429 under the box's own key, and the retry rule
+    # replayed that stored error without calling WB. The QR button stayed broken.
+    # A retry after 429 must open a new attempt under box-retry:<id> and reach WB.
+    headers, supply_id, _ = await _packed_supply(async_client)
+    first_key = "wms761-429-first-create"
+    original_create = pvz_svc.create_marketplace_supply_trbx
+    creates: list[str] = []
+
+    async def create_rate_limited_once(*args: object, **kwargs: object) -> list[str]:
+        creates.append("create")
+        if len(creates) == 1:
+            raise WildberriesClientError(wb_error_kind, status_code=429)
+        return await original_create(*args, **kwargs)  # type: ignore[arg-type]
+
+    async def remote_list(*args: object, **kwargs: object) -> list[str]:
+        return []
+
+    monkeypatch.setattr(pvz_svc, "create_marketplace_supply_trbx", create_rate_limited_once)
+    monkeypatch.setattr(pvz_svc, "fetch_marketplace_supply_trbx_list", remote_list)
+    rejected = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": first_key},
+    )
+    assert rejected.status_code >= 400, rejected.text
+    assert rejected.json()["detail"]["code"] == f"wb_{wb_error_kind}_429"
+    async with SessionLocal() as session:
+        box_id = await session.scalar(
+            select(FbsPackingBox.id).where(FbsPackingBox.supply_id == supply_id)
+        )
+        failed = await session.scalar(select(FbsWbOperation).where(
+            FbsWbOperation.idempotency_key == first_key,
+        ))
+        assert box_id is not None
+        assert failed is not None and failed.state == WB_OPERATION_STATE_FAILED
+        assert failed.error_code == f"wb_{wb_error_kind}_429"
+    assert len(creates) == 1
+
+    url = f"/operations/fbs-supplies/{supply_id}/boxes/{box_id}/retry-qr"
+    recovered = await async_client.post(url, headers=headers)
+    assert recovered.status_code == 200, recovered.text
+    assert len(creates) == 2
+    box = recovered.json()["boxes"][0]
+    assert box["wb_trbx_id"] and box["qr_asset"]["status"] == "ready"
+    async with SessionLocal() as session:
+        retry = await session.scalar(select(FbsWbOperation).where(
+            FbsWbOperation.idempotency_key == f"box-retry:{failed.id}",
+        ))
+        assert retry is not None and retry.state == WB_OPERATION_STATE_CONFIRMED
+    repeated = await async_client.post(url, headers=headers)
+    assert repeated.status_code == 200, repeated.text
+    assert len(creates) == 2
+
+
+@pytest.mark.asyncio
 async def test_wms681_qr_failed_group_does_not_duplicate_unattributable_remote_ids(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,

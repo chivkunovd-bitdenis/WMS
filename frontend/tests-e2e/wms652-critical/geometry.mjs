@@ -114,7 +114,7 @@ export async function geometryContracts(ctx){
   await until(`document.querySelector('[data-testid="fbs-worklist-table"] thead').innerText.includes('Статус')&&document.querySelector('[data-testid="fbs-order-order-a"]')`);
   const m=await evaluate(`(()=>{const table=document.querySelector('[data-testid="fbs-worklist-table"]'),b=e=>{const r=e.getBoundingClientRect();return{x:r.x,right:r.right,y:r.y,bottom:r.bottom,width:r.width,height:r.height}};
    return{headers:[...table.querySelectorAll('thead th')].map(e=>({text:e.innerText,bounds:b(e)})),rows:[...table.querySelectorAll('tbody tr')].map(r=>({id:r.dataset.testid,cells:[...r.children].map(e=>({text:e.innerText,bounds:b(e)}))}))};})()`);
-  lastMeasurement=m;assert.deepEqual(m.headers.map(h=>h.text),['','Товар','Артикул продавца','Размер','ШК','Селлер','Маршрут сдачи','Отгрузить до','Статус']);
+  lastMeasurement=m;assert.deepEqual(m.headers.map(h=>h.text),['','Товар','Артикул продавца','Размер','ШК','Селлер','Маршрут сдачи','Прошло с заказа','Статус']);
   for(const cells of [m.headers,...m.rows.map(r=>r.cells)])for(let i=1;i<cells.length;i++)assert(cells[i-1].bounds.right<=cells[i].bounds.x+1,'order table columns must not overlap');
   const route='[data-testid="fbs-order-order-a-delivery-route"]';await clickElement(`document.querySelector('${route}')`,'long route');
   await until(`document.querySelector('[role=tooltip]')?.textContent===${JSON.stringify(longRoute)}`);
