@@ -1,0 +1,21 @@
+name: WMS-762 Windows StartDoc probe
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fix/wms762-print-windows-startdoc']
+    paths: ['tools/print-agent/windows_startdoc_probe.py', '.github/workflows/wms762-windows-startdoc.yml']
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install pywin32==311 Pillow==11.3.0
+      - run: python tools/print-agent/windows_startdoc_probe.py
