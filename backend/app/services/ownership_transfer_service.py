@@ -291,7 +291,7 @@ async def _products_by_barcode(
         Product.wb_barcode.is_not(None),
     )
     if lock:
-        stmt = stmt.with_for_update()
+        stmt = stmt.order_by(Product.id).with_for_update()
     products = list((await session.execute(stmt)).scalars())
     return {
         (product.seller_id, str(product.wb_barcode).strip()): product

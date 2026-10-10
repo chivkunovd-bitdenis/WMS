@@ -313,6 +313,8 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
       return
     }
     let rows = fbsAssemblyPickingRows(printable)
+    const isImperiyaPickList = usesTabOrderPickList(token)
+    const totalQuantity = rows.reduce((sum, row) => sum + row.required, 0)
     let allOptions: FbsPickOptionProduct[] = []
     try {
       const optionLists = await Promise.all(ordered.map((one) => getFbsPickOptions(token, authHeaders, one.supply.id)))
@@ -361,7 +363,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
       })
       // ⛔️ WMS-710 — ТОЛЬКО «ИМПЕРИЯ ФФ»: лист идёт маршрутом вкладки «Подбор»
       // (сумма группы). Остальные клиенты печатают как раньше. См. imperiyaPickListOrder.ts.
-      if (usesTabOrderPickList(token) && allOptions.length) {
+      if (isImperiyaPickList && allOptions.length) {
         const allContexts = lists.flat()
         rows = imperiyaWalkRows(rows, allOptions, allContexts)
       }
@@ -391,6 +393,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
       deadlineLabel: earliestDeadline ? new Date(earliestDeadline).toLocaleString('ru-RU') : '—',
       printedAtLabel: new Date().toLocaleString('ru-RU'),
       rows,
+      ...(isImperiyaPickList ? { totalQuantity } : {}),
     }))
     printWindow.document.close()
   }

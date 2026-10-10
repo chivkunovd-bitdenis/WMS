@@ -299,7 +299,7 @@ async def test_whole_box_putaway_moves_every_product_to_one_location(
         assert filled.status_code == 200, filled.text
     verified = await async_client.post(f"{base}/{rid}/verify", headers=ah)
     assert verified.status_code == 200, verified.text
-    assert verified.json()["boxes"][0]["intake_closed_at"] is None
+    assert verified.json()["boxes"][0]["intake_closed_at"] is not None
 
     placed = await async_client.post(
         f"{base}/{rid}/boxes/{box_id}/putaway",
