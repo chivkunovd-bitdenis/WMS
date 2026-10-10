@@ -7,7 +7,7 @@ const boxes = [
 ]
 const places = [{ id: 'place-1', internal_barcode: 'GM-0001' }]
 
-describe('WMS-754: скан наклейки короба в приёмке', () => {
+describe('WMS-755: скан наклейки короба в приёмке', () => {
   it('код короба открывает именно этот короб, регистр не важен', () => {
     expect(findInboundContainerByScan(' inb-4jdzn6vtgzbh5z ', boxes, places)).toEqual({ kind: 'box', id: 'box-2' })
   })

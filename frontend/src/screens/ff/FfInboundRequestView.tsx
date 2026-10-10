@@ -443,7 +443,7 @@ function inboundStatusChipColor(
 const GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{14}$/
 const LEGACY_GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9A-F]{12}$/
 
-// WMS-754: скан наклейки короба/грузоместа в приёмке открывает его наполнение,
+// WMS-755: скан наклейки короба/грузоместа в приёмке открывает его наполнение,
 // как кнопка «Наполнить». Совпадение только точное (без учёта регистра).
 export type InboundScannedContainer = { kind: 'box' | 'cargo_place'; id: string }
 
@@ -1957,7 +1957,7 @@ export function FfInboundRequestView({
     }
   }
 
-  // Скан другого короба внутри окна наполнения — переход в него (WMS-754).
+  // Скан другого короба внутри окна наполнения — переход в него (WMS-755).
   const switchToScannedContainer = (code: string): (() => void) | null => {
     const container = findInboundContainerByScan(code, detail?.boxes ?? [], cargoPlaces)
     return container ? () => openScannedContainer(container) : null
