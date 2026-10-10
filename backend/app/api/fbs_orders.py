@@ -31,6 +31,7 @@ from app.services.fbs_cancellation_service import (
     sync_seller_order_statuses,
 )
 from app.services.fbs_cancelled_after_pack_service import fetch_cancelled_after_pack_page
+from app.services.fbs_counts_service import fetch_fbs_counts
 from app.services.fbs_order_history_service import FbsOrderHistoryError, order_history
 from app.services.fbs_worklist_service import fetch_worklist_page
 from app.services.marketplace_provider import (
@@ -320,6 +321,7 @@ class FbsWorklistMetadataStateOut(BaseModel):
 
 
 class FbsWorklistMetadataOut(BaseModel):
+    requirements_known: bool | None = None
     required: list[str]
     optional: list[str]
     states: list[FbsWorklistMetadataStateOut]
@@ -351,6 +353,7 @@ class FbsWorklistBlockerOut(BaseModel):
 
 
 class FbsWorklistPositionOut(BaseModel):
+    requires_honest_sign: bool = False
     id: str
     barcode: str | None = None
     image_url: str | None = None
@@ -379,6 +382,8 @@ class FbsWorklistOrderOut(BaseModel):
     status: str
     wb_status: str | None
     supplier_status: str | None
+    delivered_at: str | None = None
+    ozon_confirmed_stage: str | None = None
     seller: FbsWorklistSellerOut
     wb_warehouse: FbsWorklistWarehouseOut
     wms_warehouse: FbsWorklistWarehouseOut
@@ -537,6 +542,34 @@ async def start_fbs_orders_sync(
     else:
         background_tasks.add_task(job_svc.run_wildberries_marketplace_orders_sync_job, job.id)
     return FbsOrderSyncOut(id=str(job.id), status=job.status)
+
+
+@router.get("/counts")
+async def get_fbs_orders_counts(
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    marketplace: Annotated[str | None, Query(pattern="^(wb|ozon)$")] = None,
+    status_group: Annotated[str, Query()] = "new",
+    wb_warehouse_id: Annotated[int | None, Query(gt=0)] = None,
+    search: Annotated[str | None, Query()] = None,
+) -> dict[str, dict[str, int]]:
+    filter_seller = effective_seller_id if effective_seller_id is not None else seller_id
+    if filter_seller is not None:
+        seller = await session.get(Seller, filter_seller)
+        if seller is None or seller.tenant_id != user.tenant_id:
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
+    try:
+        return await fetch_fbs_counts(
+            session, user.tenant_id, seller_id=filter_seller,
+            effective_seller_id=effective_seller_id, marketplace=marketplace,
+            status_group=status_group, wb_warehouse_id=wb_warehouse_id, search=search,
+        )
+    except ValueError as exc:
+        if str(exc) == "invalid_status_group":
+            raise_fbs_http(status.HTTP_400_BAD_REQUEST, str(exc))
+        raise
 
 
 @router.get("/worklist", response_model=FbsWorklistPageOut)

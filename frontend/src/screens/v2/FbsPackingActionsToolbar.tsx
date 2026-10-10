@@ -19,6 +19,7 @@ export type FbsPackingActions = {
   honestSignSkipped: boolean
   skipBusy: boolean
   packAllDisabled: boolean
+  selectWithoutHonestSign?: () => void
   select: (ids: string[]) => void
   print: (ids: string[], onClose: (completed: boolean) => void) => boolean
   verify: () => void
@@ -93,6 +94,7 @@ export function FbsPackingActionsToolbar({ entries, active, contextKey }: Props)
       </Box>
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
         <Button disabled={!total || busy || printing} onClick={() => entries.forEach(entry => entry.select(selected === total ? [] : entry.orderIds))} data-testid="fbs-packing-select-all">{selected === total && total ? 'Снять выбор' : 'Выбрать всё'}</Button>
+        <Button disabled={busy || printing} onClick={() => entries.forEach(entry => entry.selectWithoutHonestSign?.())}>Выбрать без ЧЗ</Button>
         <Button disabled={!total || busy || printing} onClick={print} data-task-id="FBS-21" data-testid="fbs-packing-print">{selected ? `Печать выбранного (${selected})` : `Печать всего (${total})`}</Button>
         {wbEntries.some(entry => entry.editable) ? <Button disabled={!verifiable.length || wbEntries.some(entry => entry.busy)} onClick={() => verifiable.forEach(entry => entry.verify())} data-testid="fbs-packing-check-wb">Проверить в WB{entries.length > 1 ? ` · все ${wbEntries.length} поставки` : ''}</Button> : null}
         <Button disabled={!entries.length} onClick={event => setAnchor(event.currentTarget)} data-testid="fbs-packing-more-actions">Действия с поставкой</Button>

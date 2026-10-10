@@ -24,7 +24,7 @@ function createDeadlineClock(serverNow: string | null | undefined) {
 
   const getSnapshot = () => {
     const clientNow = readClock()
-    if (clientAnchor === null) return clientNow
+    if (clientAnchor === null) return Number.isFinite(serverMs) ? serverMs : clientNow
     return Number.isFinite(serverMs) ? serverMs + (clientNow - clientAnchor) : clientNow
   }
 
@@ -33,7 +33,12 @@ function createDeadlineClock(serverNow: string | null | undefined) {
       clientAnchor = readClock()
       onStoreChange()
       const timer = window.setInterval(onStoreChange, CLOCK_TICK_MS)
-      return () => window.clearInterval(timer)
+      const onVisibility = () => { if (!document.hidden) onStoreChange() }
+      document.addEventListener('visibilitychange', onVisibility)
+      return () => {
+        window.clearInterval(timer)
+        document.removeEventListener('visibilitychange', onVisibility)
+      }
     },
     getSnapshot,
     getServerSnapshot: () => (Number.isFinite(serverMs) ? serverMs : 0),
@@ -69,9 +74,52 @@ const ORDER_STATUS_META: Record<
   defect: { label: 'Дефект', color: 'error' },
 }
 
+const OZON_ORDER_STATUS_META: Record<string, { label: string; color: ChipProps['color'] }> = {
+  ozon_awaiting_approve: { label: 'Ожидает подтверждения', color: 'primary' },
+  ozon_awaiting_verification: { label: 'Создано', color: 'primary' },
+  ozon_awaiting_registration: { label: 'Ожидает регистрации', color: 'primary' },
+  ozon_ready: { label: 'Готов к сдаче', color: 'primary' },
+  ozon_shipped: { label: 'Отгружен', color: 'primary' },
+  ozon_transferring_to_delivery: { label: 'Передаётся в доставку', color: 'primary' },
+  ozon_transferring_to_courier: { label: 'Передаётся курьеру', color: 'primary' },
+  ozon_acceptance_in_progress: { label: 'Идёт приёмка', color: 'primary' },
+  ozon_driver_pickup: { label: 'У водителя', color: 'primary' },
+  ozon_delivering: { label: 'В доставке', color: 'primary' },
+  ozon_sent_by_seller: { label: 'В доставке', color: 'primary' },
+  ozon_posting_delivered: { label: 'Доставлен', color: 'success' },
+  ozon_posting_received: { label: 'Получен', color: 'success' },
+  ozon_split: { label: 'Разделён', color: 'default' },
+  ozon_arbitration: { label: 'Арбитраж', color: 'primary' },
+  ozon_client_arbitration: { label: 'Клиентский арбитраж', color: 'primary' },
+  ozon_not_accepted: { label: 'Не принят на сортировочном центре', color: 'primary' },
+  ozon_unknown: { label: 'Статус уточняется', color: 'default' },
+  ozon_posting_acceptance_in_progress: { label: 'Идёт приёмка', color: 'primary' },
+  ozon_posting_in_arbitration: { label: 'Арбитраж', color: 'primary' },
+  ozon_posting_in_client_arbitration: { label: 'Клиентский арбитраж', color: 'primary' },
+  ozon_posting_created: { label: 'Создано', color: 'primary' },
+  ozon_posting_split_pending: { label: 'Создано', color: 'primary' },
+  ozon_posting_in_carriage: { label: 'В перевозке', color: 'primary' },
+  ozon_posting_not_in_carriage: { label: 'Не добавлен в перевозку', color: 'primary' },
+  ozon_posting_registered: { label: 'Зарегистрирован', color: 'primary' },
+  ozon_posting_awaiting_passport_data: { label: 'Ожидает паспортных данных', color: 'primary' },
+  ozon_posting_awaiting_registration: { label: 'Ожидает регистрации', color: 'primary' },
+  ozon_posting_registration_error: { label: 'Ошибка регистрации', color: 'primary' },
+  ozon_posting_canceled: { label: 'Отменён', color: 'default' },
+  ozon_posting_conditionally_delivered: { label: 'Условно доставлен', color: 'primary' },
+  ozon_posting_in_courier_service: { label: 'Курьер в пути', color: 'primary' },
+  ozon_posting_transferred_to_courier_service: { label: 'Передаётся в службу доставки', color: 'primary' },
+  ozon_posting_driver_pick_up: { label: 'У водителя', color: 'primary' },
+  ozon_posting_in_pickup_point: { label: 'В пункте выдачи', color: 'primary' },
+  ozon_posting_on_way_to_city: { label: 'В пути в город', color: 'primary' },
+  ozon_posting_on_way_to_pickup_point: { label: 'В пути в пункт выдачи', color: 'primary' },
+  ozon_posting_returned_to_warehouse: { label: 'Возвращён на склад', color: 'primary' },
+  ozon_posting_not_in_sort_center: { label: 'Не принят на сортировочном центре', color: 'primary' },
+  ozon_ship_failed: { label: 'Сборка не удалась', color: 'primary' },
+}
+
 export function FbsStatusChip({ status }: { status: string }) {
-  const meta = ORDER_STATUS_META[status as FbsOrderStatus] ?? {
-    label: status,
+  const meta = ORDER_STATUS_META[status as FbsOrderStatus] ?? OZON_ORDER_STATUS_META[status] ?? {
+    label: status.startsWith('ozon_') ? 'Статус уточняется' : status,
     color: 'default' as ChipProps['color'],
   }
   return (
@@ -92,11 +140,15 @@ export function DeadlinePill({
   cancelled,
   serverNow,
   marketplace = 'wb',
+  createdAt,
+  elapsed = false,
 }: {
   deadlineAt: string | null
   cancelled?: boolean
   serverNow?: string | null
   marketplace?: 'wb' | 'ozon'
+  createdAt?: string | null
+  elapsed?: boolean
 }) {
   // Серверное время — базовая отметка, а клиентские часы измеряют только прошедшее после
   // получения этой отметки время. Поэтому clock-skew оператора не меняет старт дедлайна,
@@ -104,35 +156,40 @@ export function DeadlinePill({
   const clock = useMemo(() => createDeadlineClock(serverNow), [serverNow])
   const now = useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.getServerSnapshot)
 
-  if (cancelled || !deadlineAt) {
-    return (
-      <Chip size="small" variant="outlined" color="default" label="—" data-testid="fbs-deadline-pill" />
-    )
+  const createdMs = createdAt ? Date.parse(createdAt) : Number.NaN
+  const deadlineMs = deadlineAt ? Date.parse(deadlineAt) : Number.NaN
+  if (cancelled || (elapsed ? !Number.isFinite(createdMs) : !Number.isFinite(deadlineMs))) {
+    return <Chip size="small" variant="outlined" color="default" label="—" data-testid="fbs-deadline-pill" />
   }
-  const msLeft = new Date(deadlineAt).getTime() - now
-  if (marketplace === 'ozon' && msLeft <= 0) return null
+  const hasDeadline = Number.isFinite(deadlineMs)
+  const msLeft = deadlineMs - now
+  if (!elapsed && marketplace === 'ozon' && msLeft <= 0) return null
   const hoursLeft = Math.floor(msLeft / 3_600_000)
-  let color: ChipProps['color'] = 'success'
-  let label = `${hoursLeft} ч`
-  if (msLeft <= 0) {
-    color = 'error'
-    label = 'Просрочен'
-  } else if (hoursLeft <= 12) {
-    color = 'warning'
-  } else if (hoursLeft <= 48) {
-    color = 'info'
+  const minutesElapsed = Math.max(0, Math.floor((now - createdMs) / 60_000))
+  let color: ChipProps['color'] = 'default'
+  let label = elapsed
+    ? `${Math.floor(minutesElapsed / 60)} ч ${String(minutesElapsed % 60).padStart(2, '0')} мин`
+    : `${hoursLeft} ч`
+  if (hasDeadline) {
+    if (msLeft <= 0) {
+      color = marketplace === 'ozon' ? 'default' : 'error'
+      if (!elapsed) label = 'Просрочен'
+    } else if (hoursLeft <= 12) color = 'warning'
+    else if (hoursLeft <= 48) color = 'info'
+    else color = 'success'
   }
   return (
-    <Tooltip title={marketplace === 'ozon'
-      ? `Отгрузить в Ozon до ${new Date(deadlineAt).toLocaleString('ru-RU')}.`
-      : `Отгрузить до ${new Date(deadlineAt).toLocaleString('ru-RU')}. Рассчитано WMS: 120 часов с момента создания заказа в WB.`}>
+    <Tooltip title={!hasDeadline ? '' : marketplace === 'ozon'
+      ? `Отгрузить в Ozon до ${new Date(deadlineMs).toLocaleString('ru-RU')}.`
+      : `Отгрузить до ${new Date(deadlineMs).toLocaleString('ru-RU')}. Рассчитано WMS: 120 часов с момента создания заказа в WB.`}>
       <Chip
         size="small"
         variant="outlined"
         color={color}
         label={label}
+        sx={{ whiteSpace: 'nowrap' }}
         data-testid="fbs-deadline-pill"
-        data-overdue={msLeft <= 0 ? 'true' : 'false'}
+        data-overdue={hasDeadline && msLeft <= 0 && marketplace !== 'ozon' ? 'true' : 'false'}
       />
     </Tooltip>
   )

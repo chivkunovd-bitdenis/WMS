@@ -1,3 +1,6 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { FbsStatusChip } from '../../components/fbs/FbsChips'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -67,14 +70,18 @@ describe('FBS API client', () => {
     )
   })
 
-  it('keeps the original unknown Ozon status in the existing status chip', () => {
+  it('uses the translated Ozon status in the existing chip and preserves WB', () => {
     expect(
       orderStatusForChip({
         marketplace: 'ozon',
         status: 'external_processing',
         wb_status: 'awaiting_registration',
       }),
-    ).toBe('awaiting_registration')
+    ).toBe('ozon_awaiting_registration')
+    const status = orderStatusForChip({
+      marketplace: 'ozon', status: 'external_processing', wb_status: 'awaiting_registration',
+    })
+    expect(renderToStaticMarkup(createElement(FbsStatusChip, { status }))).toContain('Ожидает регистрации')
     expect(
       orderStatusForChip({ marketplace: 'wb', status: 'external_processing', wb_status: 'waiting' }),
     ).toBe('external_processing')

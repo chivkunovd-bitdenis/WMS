@@ -266,7 +266,7 @@ export async function registerExtended(h) {
   })
   await run('tree-order-photo',async(page,f)=>{
     const table=page.getByTestId('fbs-cell-pick-table')
-    for(const header of ['Ячейка / тара / товар','ШК','Размер','Остаток в коробе','Собрать','Собрано'])await expect(table.getByRole('columnheader',{name:new RegExp(header.replaceAll(' ','\\s*'))})).toBeVisible()
+    for(const header of ['Ячейка / тара / товар','ШК','Размер','План','Осталось','Остаток в коробе','Собрано'])await expect(table.getByRole('columnheader',{name:new RegExp(header.replaceAll(' ','\\s*'))})).toBeVisible()
     const ids=await table.locator('[data-testid^="fbs-pick-item-cell:"]').evaluateAll(rows=>rows.map(r=>r.dataset.testid))
     assert.deepEqual(ids,[2,0,1].map(i=>`fbs-pick-item-cell:${f.sources[i].location_id}`),'Natural cell order A1 A2 A10')
     for(const s of f.sources)await expect(table.getByTestId(`fbs-pick-item-cell:${s.location_id}`)).toContainText('90 шт')

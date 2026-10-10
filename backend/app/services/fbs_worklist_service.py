@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import String, and_, exists, func, or_, select, union_all
+from sqlalchemy import Select, String, and_, exists, func, or_, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -299,20 +299,17 @@ def order_search_clause(term: str) -> ColumnElement[bool]:
     )
 
 
-async def _fetch_orders_page(
-    session: AsyncSession,
+def orders_worklist_statement(
     tenant_id: uuid.UUID,
     *,
-    seller_id: uuid.UUID | None,
-    marketplace: str | None,
-    status_group: str | None,
-    wb_warehouse_id: int | None,
-    search: str | None,
-    limit: int,
-    cursor: str | None,
+    seller_id: uuid.UUID | None = None,
+    marketplace: str | None = None,
+    status_group: str | None = None,
+    wb_warehouse_id: int | None = None,
+    search: str | None = None,
     server_now: datetime,
-    sort: str = "deadline",
-) -> tuple[list[FbsOrder], int | None]:
+) -> Select[tuple[FbsOrder]]:
+    """The complete worklist selection, before pagination or projection."""
     served_wb_binding = exists(
         select(FbsWarehouseBinding.id).where(
             FbsWarehouseBinding.tenant_id == FbsOrder.tenant_id,
@@ -367,6 +364,28 @@ async def _fetch_orders_page(
                 ),
             )
         )
+    return stmt
+
+
+async def _fetch_orders_page(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None,
+    marketplace: str | None,
+    status_group: str | None,
+    wb_warehouse_id: int | None,
+    search: str | None,
+    limit: int,
+    cursor: str | None,
+    server_now: datetime,
+    sort: str = "deadline",
+) -> tuple[list[FbsOrder], int | None]:
+    stmt = orders_worklist_statement(
+        tenant_id, seller_id=seller_id, marketplace=marketplace,
+        status_group=status_group, wb_warehouse_id=wb_warehouse_id,
+        search=search, server_now=server_now,
+    )
     # Count the same filtered set before pagination, only when the UI searches.
     total = (
         int(await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
@@ -561,6 +580,16 @@ async def _load_worklist_context(
     sticker_assets = await _load_sticker_assets(session, tenant_id, order_ids)
     # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
     ozon_photos = await load_ozon_primary_image_urls(session, tenant_id, product_ids)
+    supply_ids = {order.supply_id for order in orders if order.supply_id}
+    handed_at: dict[uuid.UUID, datetime | None] = {}
+    if supply_ids:
+        handed_at = {
+            supply_id: delivered_at for supply_id, delivered_at in await session.execute(
+                select(FbsSupply.id, FbsSupply.delivered_at).where(
+                    FbsSupply.tenant_id == tenant_id, FbsSupply.id.in_(supply_ids),
+                )
+            )
+        }
     return {
         "sellers": sellers,
         "warehouses": warehouses,
@@ -571,6 +600,7 @@ async def _load_worklist_context(
         "packed_positions": packed_positions,
         "cards": cards,
         "ozon_photos": ozon_photos,
+        "handed_at": handed_at,
         "availability": availability,
         "locations": locations,
         "markings": markings,
@@ -1114,6 +1144,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         ctx["products"].get(first_position.product_id) if is_ozon and first_position else product,
         ctx,
     )
+    # Writers store meta_details_json as a dict; a stored list carries no stage snapshot.
+    meta_details = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
     return {
         "id": str(order.id),
         "marketplace": order.marketplace,
@@ -1122,6 +1154,11 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
         "status": order.status,
         "wb_status": order.wb_status,
         "supplier_status": order.supplier_status,
+        "ozon_confirmed_stage": meta_details.get("ozon_confirmed_stage"),
+        "delivered_at": (
+            ctx.get("handed_at", {})[order.supply_id].isoformat()
+            if ctx.get("handed_at", {}).get(order.supply_id) else None
+        ),
         "seller": {
             "id": str(order.seller_id),
             "name": seller.name if seller else "Селлер не найден",
@@ -1196,6 +1233,10 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 ),
                 "sku": str(position.ozon_sku) if position.ozon_sku is not None else None,
                 **_product_label_metadata(ctx["products"].get(position.product_id), ctx),
+                "requires_honest_sign": bool(
+                    ctx["products"].get(position.product_id)
+                    and ctx["products"][position.product_id].requires_honest_sign
+                ),
                 "quantity": position.quantity,
                 "reserved_quantity": position.reserved_quantity,
                 "picked_quantity": position.picked_quantity,
@@ -1287,8 +1328,12 @@ def _build_metadata(
 ) -> dict[str, Any]:
     if order.marketplace == "ozon":
         from app.services.fbs_marking_service import build_order_metadata
+        from app.services.ozon_fbs_marking_gate_service import ozon_requirements_known
 
-        return build_order_metadata(order, markings)
+        return {
+            **build_order_metadata(order, markings),
+            "requirements_known": ozon_requirements_known(order),
+        }
     required = list(order.required_meta_json or [])
     optional = list(order.optional_meta_json or [])
     states: list[dict[str, Any]] = []
