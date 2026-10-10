@@ -284,6 +284,93 @@ async def test_create_box_and_scan_into_box(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_complete_receiving_closes_open_boxes_for_tsd_sorting(
+    async_client: AsyncClient,
+) -> None:
+    """TSD's existing sorting API must expose and place every received box."""
+    suffix = str(int(time.time() * 1000))
+    ah = await _admin_headers(async_client, suffix)
+    rid, pid, _sku = await _submitted_request(
+        async_client, ah, suffix, expected_qty=44
+    )
+    base = f"/operations/inbound-intake-requests/{rid}"
+
+    closed_box = await async_client.post(f"{base}/boxes", headers=ah)
+    assert closed_box.status_code == 201, closed_box.text
+    open_box = await async_client.post(f"{base}/boxes", headers=ah)
+    assert open_box.status_code == 201, open_box.text
+    boxes = (closed_box.json(), open_box.json())
+    for box in boxes:
+        filled = await async_client.put(
+            f"{base}/boxes/{box['id']}/lines/{pid}",
+            headers=ah,
+            json={"quantity": 22},
+        )
+        assert filled.status_code == 200, filled.text
+
+    closed = await async_client.post(
+        f"{base}/boxes/{closed_box.json()['id']}/close", headers=ah
+    )
+    assert closed.status_code == 200, closed.text
+    before_completion = await async_client.get(base, headers=ah)
+    assert before_completion.status_code == 200, before_completion.text
+    before_boxes = {box["id"]: box for box in before_completion.json()["boxes"]}
+    assert before_boxes[closed_box.json()["id"]]["intake_closed_at"] is not None
+    assert before_boxes[open_box.json()["id"]]["intake_closed_at"] is None
+
+    completed = await async_client.post(f"{base}/complete-receiving", headers=ah)
+    assert completed.status_code == 200, completed.text
+    body = completed.json()
+    assert body["status"] == "sorting"
+    assert body["sorting_remaining_qty"] == 44
+    assert body["lines"][0]["actual_qty"] == 44
+    completed_boxes = {box["id"]: box for box in body["boxes"]}
+    assert set(completed_boxes) == {box["id"] for box in boxes}
+    for box in completed_boxes.values():
+        assert box["intake_closed_at"] is not None
+        assert box["remaining_qty"] == 22
+        assert box["lines"][0]["quantity"] == 22
+
+    sorting_queue = await async_client.get(
+        "/operations/inbound-intake-requests", headers=ah
+    )
+    assert sorting_queue.status_code == 200, sorting_queue.text
+    queue_row = next(row for row in sorting_queue.json() if row["id"] == rid)
+    assert queue_row["sorting_remaining_qty"] == 44
+    sorting_request = await async_client.get(base, headers=ah)
+    assert sorting_request.status_code == 200, sorting_request.text
+    assert {box["id"] for box in sorting_request.json()["boxes"]} == set(completed_boxes)
+
+    warehouse_id = body["warehouse_id"]
+    location = await async_client.post(
+        f"/warehouses/{warehouse_id}/locations",
+        headers=ah,
+        json={"code": "A-22"},
+    )
+    assert location.status_code == 200, location.text
+    location_id = location.json()["id"]
+
+    for expected_remaining, box in zip((22, 0), boxes, strict=True):
+        placed = await async_client.post(
+            f"{base}/boxes/{box['id']}/putaway",
+            headers={**ah, "Content-Type": "application/json"},
+            json={"storage_location_id": location_id},
+        )
+        assert placed.status_code == 200, placed.text
+        assert placed.json()["sorting_remaining_qty"] == expected_remaining
+
+    assert placed.json()["status"] == "done"
+    balances = await async_client.get(
+        "/operations/inventory-balances/summary", headers=ah
+    )
+    assert balances.status_code == 200, balances.text
+    balance = next(row for row in balances.json() if row["product_id"] == pid)
+    assert balance["quantity"] == 44
+    assert balance["quantity_in_sorting"] == 0
+    assert balance["quantity_in_storage"] == 44
+
+
+@pytest.mark.asyncio
 async def test_complete_receiving_with_discrepancy(async_client: AsyncClient) -> None:
     """TC-NEW-IN-BE-03: complete-receiving sets has_discrepancy when fact ≠ plan."""
     suffix = str(int(time.time() * 1000))
